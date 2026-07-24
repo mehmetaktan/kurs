@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:"Helvetica Neue",Helvetica,"Segoe UI",Arial,sans-serif;color:#2f2d2a;background:#fbfaf8;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+a{color:#2f2d2a;text-decoration:none}
+a:hover{color:#000}
+input{font-family:inherit}
+button{font-family:inherit}
+::placeholder{color:#a8a39a}
+::-webkit-scrollbar{width:11px;height:11px}
+::-webkit-scrollbar-thumb{background:#dcd9d3;border-radius:6px;border:3px solid #fbfaf8}
+</style>
+</helmet>
+<div style="display:flex;height:100vh;min-width:1280px;overflow:hidden">
+
+  <aside style="width:216px;flex-shrink:0;background:#f2f1ee;border-right:1px solid #e2dfd9;display:flex;flex-direction:column">
+    <div style="padding:18px 18px 14px;border-bottom:1px solid #e6e3dd">
+      <div style="font-size:13px;font-weight:600;letter-spacing:.01em">DersTakip</div>
+      <div style="font-size:12px;color:#9a958d;margin-top:2px">Aydın Özel Ders</div>
+    </div>
+    <nav style="padding:10px 0;flex:1">
+      <a href="#" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin:1px 8px;border-radius:6px;font-size:13px;color:#4a4741" style-hover="background:#eae8e3"><span>Bugün</span></a>
+      <a href="#" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin:1px 8px;border-radius:6px;font-size:13px;color:#4a4741" style-hover="background:#eae8e3"><span>Takvim</span></a>
+      <a href="#" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin:1px 8px;border-radius:6px;font-size:13px;font-weight:600;color:#2f2d2a;background:#e5e2dc"><span>Öğrenciler</span></a>
+      <a href="#" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin:1px 8px;border-radius:6px;font-size:13px;color:#4a4741" style-hover="background:#eae8e3"><span>Gruplar</span></a>
+      <a href="#" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin:1px 8px;border-radius:6px;font-size:13px;color:#4a4741" style-hover="background:#eae8e3"><span>Ödemeler</span><sc-if value="{{ hasDebts }}"><span style="font-size:12px;font-weight:600;color:#a83a2b;background:#f4ddd7;border-radius:9px;padding:0 7px;line-height:18px">{{ debtCount }}</span></sc-if></a>
+      <a href="#" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin:1px 8px;border-radius:6px;font-size:13px;color:#4a4741" style-hover="background:#eae8e3"><span>Tanımlar</span></a>
+    </nav>
+    <div style="padding:12px 18px;border-top:1px solid #e6e3dd;font-size:12px;color:#9a958d">Sürüm 1.0 · Yerel</div>
+  </aside>
+
+  <main style="flex:1;display:flex;flex-direction:column;min-width:0;background:#fbfaf8">
+    <div style="padding:20px 28px 0;flex-shrink:0">
+      <div style="font-size:17px;font-weight:600">Öğrenciler</div>
+      <div style="font-size:13px;color:#736f68;margin-top:3px">Tüm kayıtlı öğrenciler ve durumları</div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:16px;padding:16px 28px 16px;border-bottom:1px solid #e7e5e0;flex-shrink:0">
+      <div style="position:relative;flex-shrink:0">
+        <input ref="{{ searchRef }}" value="{{ query }}" onChange="{{ onSearch }}" onKeyDown="{{ onSearchKey }}" autofocus placeholder="Öğrenci adı veya veli telefonu ara" style="width:300px;font-size:13px;padding:9px 74px 9px 12px;border:1px solid #dcd9d3;border-radius:7px;background:#fff;color:#2f2d2a;outline:none" style-focus="border-color:#b3ada3" />
+        <sc-if value="{{ showEnterHint }}"><span style="position:absolute;right:9px;top:50%;transform:translateY(-50%);font-size:11px;color:#736f68;background:#f2f1ee;border:1px solid #e2dfd9;border-radius:4px;padding:2px 6px;white-space:nowrap">↵ aç</span></sc-if>
+      </div>
+      <div style="display:flex;align-items:center;gap:7px;flex:1;flex-wrap:wrap">
+        <sc-for list="{{ chips }}" as="c" hint-placeholder-count="5">
+        <button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}<sc-if value="{{ c.showCount }}"><span style="color:#9a958d;font-variant-numeric:tabular-nums">{{ c.count }}</span></sc-if></button>
+        </sc-for>
+      </div>
+      <button onClick="{{ onNew }}" style="flex-shrink:0;font-size:13px;font-weight:600;color:#fbfaf8;background:#2f2d2a;border:none;border-radius:7px;padding:9px 16px;cursor:pointer" style-hover="background:#1f1d1b">Yeni öğrenci</button>
+    </div>
+
+    <div style="flex:1;overflow:auto;min-height:0">
+      <sc-if value="{{ hasStudents }}" hint-placeholder-val="{{ true }}">
+      <div style="padding:0 28px 24px">
+        <div style="display:grid;grid-template-columns:{{ cols }};gap:12px;align-items:center;padding:11px 12px;font-size:12px;color:#9a958d;border-bottom:1px solid #dcd9d3;position:sticky;top:0;background:#fbfaf8;z-index:1">
+          <div>Ad Soyad</div>
+          <div>Veli telefonu</div>
+          <div style="text-align:right">Ders</div>
+          <div style="text-align:right">Bakiye</div>
+          <div style="text-align:right">Kalan ders</div>
+          <div style="text-align:right">Son ders</div>
+          <div>Durum</div>
+          <div></div>
+        </div>
+
+        <sc-if value="{{ hasResults }}" hint-placeholder-val="{{ true }}">
+        <sc-for list="{{ rows }}" as="s" hint-placeholder-count="8">
+        <div onClick="{{ s.onOpen }}" style="{{ s.rowStyle }}" style-hover="background:#f4f2ef">
+          <div style="min-width:0;font-size:13px;color:#2f2d2a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ s.name }}</div>
+          <div style="font-size:13px;color:#736f68;font-variant-numeric:tabular-nums">{{ s.phone }}</div>
+          <div style="text-align:right;font-size:13px;color:#4a4741;font-variant-numeric:tabular-nums">{{ s.lessons }}</div>
+          <div style="text-align:right">
+            <sc-if value="{{ s.isDebt }}"><span style="font-size:13px;font-weight:600;color:#a83a2b;font-variant-numeric:tabular-nums">{{ s.balanceStr }}</span></sc-if>
+            <sc-if value="{{ s.notDebt }}"><span style="font-size:13px;color:#4a4741;font-variant-numeric:tabular-nums">{{ s.balanceStr }}</span></sc-if>
+          </div>
+          <div style="text-align:right">
+            <sc-if value="{{ s.isEnding }}"><span style="font-size:13px;font-weight:600;color:#b57314;font-variant-numeric:tabular-nums">{{ s.remainingStr }}</span></sc-if>
+            <sc-if value="{{ s.notEnding }}"><span style="font-size:13px;color:#4a4741;font-variant-numeric:tabular-nums">{{ s.remainingStr }}</span></sc-if>
+          </div>
+          <div style="text-align:right;font-size:13px;color:#736f68;font-variant-numeric:tabular-nums">{{ s.lastLesson }}</div>
+          <div>
+            <sc-if value="{{ s.isActive }}"><span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#4a4741"><span style="width:7px;height:7px;border-radius:50%;background:#5f8f6b;flex-shrink:0"></span>Aktif</span></sc-if>
+            <sc-if value="{{ s.notActive }}"><span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#9a958d"><span style="width:7px;height:7px;border-radius:50%;border:1.5px solid #b0aaa0;box-sizing:border-box;flex-shrink:0"></span>Pasif</span></sc-if>
+          </div>
+          <div style="text-align:right"><button onClick="{{ s.onPay }}" style="font-size:12px;font-weight:600;color:#4a4741;background:#efedea;border:1px solid #e2dfd9;border-radius:6px;padding:5px 10px;cursor:pointer" style-hover="background:#e5e2dc">Tahsilat al</button></div>
+        </div>
+        </sc-for>
+        </sc-if>
+
+        <sc-if value="{{ noResultsSearch }}">
+        <div style="padding:52px 4px;text-align:center">
+          <div style="font-size:13px;color:#2f2d2a">"{{ query }}" için sonuç bulunamadı</div>
+          <div style="font-size:12px;color:#9a958d;margin-top:5px">Ad ya da telefonun bir bölümünü yazmayı deneyin.</div>
+        </div>
+        </sc-if>
+        <sc-if value="{{ noResultsFilter }}">
+        <div style="padding:52px 4px;text-align:center">
+          <div style="font-size:13px;color:#2f2d2a">Bu filtrede öğrenci yok</div>
+          <div style="font-size:12px;color:#9a958d;margin-top:5px"><a href="#" onClick="{{ onClear }}" style="color:#736f68;text-decoration:underline">Tümünü göster</a></div>
+        </div>
+        </sc-if>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ firstUse }}">
+      <div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px">
+        <div style="width:52px;height:52px;border-radius:50%;background:#f2f1ee;border:1px solid #e2dfd9;display:flex;align-items:center;justify-content:center;font-size:22px;color:#b0aaa0">＋</div>
+        <div style="font-size:15px;font-weight:600;margin-top:16px">Henüz öğrenci kaydı yok</div>
+        <div style="font-size:13px;color:#9a958d;margin-top:6px;max-width:340px">İlk öğrenciyi ekleyin; ders, paket ve tahsilatları buradan tek yerden takip edin.</div>
+        <button onClick="{{ onNew }}" style="margin-top:18px;font-size:13px;font-weight:600;color:#fbfaf8;background:#2f2d2a;border:none;border-radius:7px;padding:9px 18px;cursor:pointer" style-hover="background:#1f1d1b">Yeni öğrenci ekle</button>
+      </div>
+      </sc-if>
+    </div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 28px;border-top:1px solid #e7e5e0;background:#f7f6f3;flex-shrink:0">
+      <div style="font-size:12px;color:#736f68"><span style="font-variant-numeric:tabular-nums">{{ filteredCount }}</span> öğrenci gösteriliyor<span style="color:#b0aaa0"> · {{ totalCount }} kayıt</span></div>
+      <div style="font-size:12px;color:#736f68">Toplam alacak <span style="font-weight:600;color:#a83a2b;font-variant-numeric:tabular-nums;margin-left:4px">{{ totalDueStr }}</span></div>
+    </div>
+  </main>
+
+  <sc-if value="{{ hasSelected }}">
+  <div onClick="{{ closeDrawer }}" style="position:fixed;inset:0;background:rgba(31,29,27,.28);display:flex;justify-content:flex-end;z-index:20">
+    <div onClick="{{ stop }}" style="width:396px;height:100%;background:#fbfaf8;border-left:1px solid #e2dfd9;box-shadow:-16px 0 40px -24px rgba(0,0,0,.3);display:flex;flex-direction:column">
+      <div style="display:flex;align-items:flex-start;gap:14px;padding:22px 24px 18px;border-bottom:1px solid #e7e5e0">
+        <div style="width:44px;height:44px;flex-shrink:0;border-radius:50%;background:#e5e2dc;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:#4a4741">{{ sel.initials }}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:16px;font-weight:600">{{ sel.name }}</div>
+          <div style="margin-top:5px">
+            <sc-if value="{{ sel.isActive }}"><span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#4a4741"><span style="width:7px;height:7px;border-radius:50%;background:#5f8f6b"></span>Aktif öğrenci</span></sc-if>
+            <sc-if value="{{ sel.notActive }}"><span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#9a958d"><span style="width:7px;height:7px;border-radius:50%;border:1.5px solid #b0aaa0;box-sizing:border-box"></span>Pasif öğrenci</span></sc-if>
+          </div>
+        </div>
+        <button onClick="{{ closeDrawer }}" style="flex-shrink:0;width:28px;height:28px;border:none;background:transparent;font-size:18px;color:#9a958d;cursor:pointer;border-radius:6px;line-height:1" style-hover="background:#eae8e3;color:#2f2d2a">×</button>
+      </div>
+
+      <div style="flex:1;overflow:auto;padding:20px 24px">
+        <div style="font-size:12px;color:#9a958d;margin-bottom:9px">İletişim</div>
+        <div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #edeae5;font-size:13px"><span style="color:#736f68">Veli</span><span style="color:#2f2d2a">{{ sel.parent }}</span></div>
+        <div style="display:flex;justify-content:space-between;padding:9px 0;font-size:13px"><span style="color:#736f68">Telefon</span><span style="color:#2f2d2a;font-variant-numeric:tabular-nums">{{ sel.phone }}</span></div>
+
+        <div style="font-size:12px;color:#9a958d;margin:20px 0 10px">Durum</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div style="border:1px solid #e7e5e0;border-radius:8px;padding:12px 13px;background:#fff">
+            <div style="font-size:11px;color:#9a958d">Bakiye</div>
+            <sc-if value="{{ sel.isDebt }}"><div style="font-size:17px;font-weight:600;color:#a83a2b;font-variant-numeric:tabular-nums;margin-top:4px">{{ sel.balanceStr }}</div></sc-if>
+            <sc-if value="{{ sel.notDebt }}"><div style="font-size:17px;font-weight:600;color:#2f2d2a;font-variant-numeric:tabular-nums;margin-top:4px">{{ sel.balanceStr }}</div></sc-if>
+          </div>
+          <div style="border:1px solid #e7e5e0;border-radius:8px;padding:12px 13px;background:#fff">
+            <div style="font-size:11px;color:#9a958d">Kalan ders</div>
+            <sc-if value="{{ sel.isEnding }}"><div style="font-size:17px;font-weight:600;color:#b57314;font-variant-numeric:tabular-nums;margin-top:4px">{{ sel.remainingStr }}</div></sc-if>
+            <sc-if value="{{ sel.notEnding }}"><div style="font-size:17px;font-weight:600;color:#2f2d2a;font-variant-numeric:tabular-nums;margin-top:4px">{{ sel.remainingStr }}</div></sc-if>
+          </div>
+          <div style="border:1px solid #e7e5e0;border-radius:8px;padding:12px 13px;background:#fff">
+            <div style="font-size:11px;color:#9a958d">Toplam ders</div>
+            <div style="font-size:17px;font-weight:600;color:#2f2d2a;font-variant-numeric:tabular-nums;margin-top:4px">{{ sel.lessons }}</div>
+          </div>
+          <div style="border:1px solid #e7e5e0;border-radius:8px;padding:12px 13px;background:#fff">
+            <div style="font-size:11px;color:#9a958d">Son ders</div>
+            <div style="font-size:15px;font-weight:600;color:#2f2d2a;font-variant-numeric:tabular-nums;margin-top:6px">{{ sel.lastLesson }}</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;padding:16px 24px;border-top:1px solid #e7e5e0">
+        <button style="flex:1;font-size:13px;font-weight:600;color:#fbfaf8;background:#2f2d2a;border:none;border-radius:7px;padding:10px;cursor:pointer" style-hover="background:#1f1d1b">Tahsilat al</button>
+        <button style="font-size:13px;font-weight:600;color:#4a4741;background:#efedea;border:1px solid #e2dfd9;border-radius:7px;padding:10px 16px;cursor:pointer" style-hover="background:#e5e2dc">Düzenle</button>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:800},&quot;mod&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dolu&quot;,&quot;bos&quot;],&quot;default&quot;:&quot;dolu&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Örnek veri&quot;},&quot;baslangicFiltre&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Tümü&quot;,&quot;Aktif&quot;,&quot;Pasif&quot;,&quot;Borçlu&quot;,&quot;Paketi bitiyor&quot;],&quot;default&quot;:&quot;Tümü&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Görünüm&quot;},&quot;satirYuksekligi&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;rahat&quot;,&quot;sıkı&quot;],&quot;default&quot;:&quot;rahat&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Görünüm&quot;}}">
+class Component extends DCLogic {
+  searchRef = React.createRef();
+  state = {
+    query: '',
+    filter: ({'Tümü':'all','Aktif':'active','Pasif':'passive','Borçlu':'debt','Paketi bitiyor':'ending'})[this.props.baslangicFiltre] || 'all',
+    selectedId: null,
+  };
+
+  componentDidMount() {
+    if (this.searchRef.current) this.searchRef.current.focus();
+    this._onKey = (e) => { if (e.key === 'Escape' && this.state.selectedId != null) this.setState({ selectedId: null }); };
+    window.addEventListener('keydown', this._onKey);
+  }
+  componentWillUnmount() { window.removeEventListener('keydown', this._onKey); }
+
+  renderVals() {
+    const empty = (this.props.mod ?? 'dolu') === 'bos';
+    const sikici = this.props.satirYuksekligi === 'sıkı';
+    const pad = sikici ? 9 : 13;
+    const cols = 'minmax(160px,1.6fr) 150px 96px 120px 96px 118px 108px 108px';
+    const rowBase = `display:grid;grid-template-columns:${cols};gap:12px;align-items:center;padding:${pad}px 12px;border-bottom:1px solid #e7e5e0;cursor:pointer`;
+
+    let all = [
+      { id:1,  name:'Mehmet Aslan',  parent:'Hasan Aslan',   phone:'0532 214 67 89', lessons:24, balance:-1200, remaining:2,  last:'22.07.2026', active:true },
+      { id:2,  name:'Zeynep Ak',     parent:'Fatma Ak',      phone:'0541 380 12 44', lessons:18, balance:-800,  remaining:5,  last:'21.07.2026', active:true },
+      { id:3,  name:'Deniz Yıldız',  parent:'Murat Yıldız',  phone:'0505 662 90 31', lessons:30, balance:-450,  remaining:8,  last:'23.07.2026', active:true },
+      { id:4,  name:'Ahmet Şahin',   parent:'Kemal Şahin',   phone:'0533 471 55 82', lessons:40, balance:0, remaining:1, last:'23.07.2026', active:true },
+      { id:5,  name:'Ceren Ünal',    parent:'Aylin Ünal',    phone:'0542 118 76 20', lessons:12, balance:350,  remaining:2,  last:'20.07.2026', active:true },
+      { id:6,  name:'Burak Doğan',   parent:'Serkan Doğan',  phone:'0538 903 44 17', lessons:22, balance:600,  remaining:2,  last:'19.07.2026', active:true },
+      { id:7,  name:'Elif Korkmaz',  parent:'Nalan Korkmaz', phone:'0555 240 88 63', lessons:16, balance:900,  remaining:12, last:'24.07.2026', active:true },
+      { id:8,  name:'Ali Vural',     parent:'Yusuf Vural',   phone:'0536 715 29 04', lessons:8,  balance:1200, remaining:20, last:'18.07.2026', active:true },
+      { id:9,  name:'Selin Arı',     parent:'Derya Arı',     phone:'0544 622 31 79', lessons:45, balance:200,  remaining:15, last:'24.07.2026', active:true },
+      { id:10, name:'Emre Çelik',    parent:'Barış Çelik',   phone:'0537 508 10 22', lessons:5,  balance:0,    remaining:0,  last:'02.05.2026', active:false },
+      { id:11, name:'Buse Aydın',    parent:'Gül Aydın',     phone:'0546 331 47 90', lessons:33, balance:750,  remaining:10, last:'23.07.2026', active:true },
+      { id:12, name:'Kaan Öztürk',   parent:'Levent Öztürk', phone:'0535 209 63 15', lessons:9,  balance:-300, remaining:4,  last:'15.07.2026', active:false },
+      { id:13, name:'Merve Şen',     parent:'Ozan Şen',      phone:'0543 774 52 08', lessons:27, balance:500,  remaining:6,  last:'22.07.2026', active:true },
+      { id:14, name:'Onur Kaplan',   parent:'Sinem Kaplan',  phone:'0539 486 19 37', lessons:14, balance:0,    remaining:3,  last:'21.07.2026', active:true },
+    ];
+    if (empty) all = [];
+
+    const tl = n => n.toLocaleString('tr-TR');
+    const balStr = b => b < 0 ? `−${tl(Math.abs(b))} TL` : `${tl(b)} TL`;
+    const isEnding = s => s.active && s.remaining <= 2;
+    const norm = s => (s || '').toLocaleLowerCase('tr-TR');
+
+    const countAll = all.length;
+    const countActive = all.filter(s => s.active).length;
+    const countPassive = all.filter(s => !s.active).length;
+    const countDebt = all.filter(s => s.balance < 0).length;
+    const countEnding = all.filter(isEnding).length;
+
+    const f = this.state.filter;
+    let list = all;
+    if (f === 'active') list = list.filter(s => s.active);
+    else if (f === 'passive') list = list.filter(s => !s.active);
+    else if (f === 'debt') list = list.filter(s => s.balance < 0);
+    else if (f === 'ending') list = list.filter(isEnding);
+
+    const q = norm(this.state.query.trim());
+    const qDigits = this.state.query.replace(/\D/g, '');
+    if (q) list = list.filter(s => norm(s.name).includes(q) || (qDigits && s.phone.replace(/\D/g, '').includes(qDigits)));
+
+    this._filtered = list;
+
+    const rows = list.map(s => ({
+      ...s,
+      rowStyle: rowBase,
+      lessons: String(s.lessons),
+      balanceStr: balStr(s.balance),
+      isDebt: s.balance < 0, notDebt: s.balance >= 0,
+      remainingStr: String(s.remaining),
+      isEnding: isEnding(s), notEnding: !isEnding(s),
+      lastLesson: s.last,
+      isActive: s.active, notActive: !s.active,
+      onOpen: () => this.setState({ selectedId: s.id }),
+      onPay: (e) => { if (e && e.stopPropagation) e.stopPropagation(); this.setState({ selectedId: s.id }); },
+    }));
+
+    const mkChip = (key, label, count) => {
+      const active = f === key;
+      const base = 'display:inline-flex;align-items:center;gap:6px;font-size:12.5px;padding:6px 12px;border-radius:16px;cursor:pointer;white-space:nowrap';
+      const skin = active ? 'background:#e5e2dc;border:1px solid #d8d4cd;color:#2f2d2a;font-weight:600' : 'background:#fff;border:1px solid #dcd9d3;color:#4a4741';
+      return { label, count: String(count), showCount: count > 0, style: `${base};${skin}`, onClick: () => this.setState({ filter: key }) };
+    };
+    const chips = [
+      mkChip('all', 'Tümü', countAll),
+      mkChip('active', 'Aktif', countActive),
+      mkChip('passive', 'Pasif', countPassive),
+      mkChip('debt', 'Borçlu', countDebt),
+      mkChip('ending', 'Paketi bitiyor', countEnding),
+    ];
+
+    const due = list.filter(s => s.balance < 0).reduce((a, s) => a + Math.abs(s.balance), 0);
+
+    const selRaw = all.find(s => s.id === this.state.selectedId) || null;
+    const sel = selRaw ? {
+      ...selRaw,
+      initials: selRaw.name.split(' ').map(w => w[0]).slice(0, 2).join(''),
+      lessons: String(selRaw.lessons),
+      balanceStr: balStr(selRaw.balance),
+      isDebt: selRaw.balance < 0, notDebt: selRaw.balance >= 0,
+      remainingStr: String(selRaw.remaining),
+      isEnding: isEnding(selRaw), notEnding: !isEnding(selRaw),
+      lastLesson: selRaw.last,
+      isActive: selRaw.active, notActive: !selRaw.active,
+    } : null;
+
+    const hasResults = list.length > 0;
+    const noResults = !hasResults && countAll > 0;
+
+    return {
+      query: this.state.query,
+      searchRef: this.searchRef,
+      onSearch: (e) => this.setState({ query: e.target.value }),
+      onSearchKey: (e) => { if (e.key === 'Enter' && this._filtered && this._filtered.length) { e.preventDefault(); this.setState({ selectedId: this._filtered[0].id }); } },
+      showEnterHint: q.length > 0 && list.length > 0,
+      onNew: () => {},
+      onClear: (e) => { if (e && e.preventDefault) e.preventDefault(); this.setState({ filter: 'all', query: '' }); if (this.searchRef.current) this.searchRef.current.focus(); },
+      cols, chips, rows,
+      hasStudents: countAll > 0, firstUse: countAll === 0,
+      hasResults,
+      noResultsSearch: noResults && q.length > 0,
+      noResultsFilter: noResults && q.length === 0,
+      filteredCount: String(list.length), totalCount: String(countAll),
+      totalDueStr: `${tl(due)} TL`,
+      hasDebts: countDebt > 0, debtCount: String(countDebt),
+      hasSelected: !!sel, sel,
+      closeDrawer: () => this.setState({ selectedId: null }),
+      stop: (e) => { if (e && e.stopPropagation) e.stopPropagation(); },
+    };
+  }
+}
+</script>
+</body>
+</html>

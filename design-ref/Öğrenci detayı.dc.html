@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:"Helvetica Neue",Helvetica,"Segoe UI",Arial,sans-serif;color:#2f2d2a;background:#fbfaf8;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+a{color:#2f2d2a;text-decoration:none}
+a:hover{color:#000}
+input,textarea,button{font-family:inherit}
+textarea{resize:none}
+::placeholder{color:#a8a39a}
+::-webkit-scrollbar{width:11px;height:11px}
+::-webkit-scrollbar-thumb{background:#dcd9d3;border-radius:6px;border:3px solid #fbfaf8}
+</style>
+</helmet>
+<div style="display:flex;height:100vh;min-width:1280px;overflow:hidden">
+
+  <aside style="width:216px;flex-shrink:0;background:#f2f1ee;border-right:1px solid #e2dfd9;display:flex;flex-direction:column">
+    <div style="padding:18px 18px 14px;border-bottom:1px solid #e6e3dd">
+      <div style="font-size:13px;font-weight:600;letter-spacing:.01em">DersTakip</div>
+      <div style="font-size:12px;color:#9a958d;margin-top:2px">Aydın Özel Ders</div>
+    </div>
+    <nav style="padding:10px 0;flex:1">
+      <a href="#" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin:1px 8px;border-radius:6px;font-size:13px;color:#4a4741" style-hover="background:#eae8e3"><span>Bugün</span></a>
+      <a href="#" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin:1px 8px;border-radius:6px;font-size:13px;color:#4a4741" style-hover="background:#eae8e3"><span>Takvim</span></a>
+      <a href="Öğrenciler.dc.html" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin:1px 8px;border-radius:6px;font-size:13px;font-weight:600;color:#2f2d2a;background:#e5e2dc"><span>Öğrenciler</span></a>
+      <a href="#" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin:1px 8px;border-radius:6px;font-size:13px;color:#4a4741" style-hover="background:#eae8e3"><span>Gruplar</span></a>
+      <a href="#" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin:1px 8px;border-radius:6px;font-size:13px;color:#4a4741" style-hover="background:#eae8e3"><span>Ödemeler</span><sc-if value="{{ hasDebts }}"><span style="font-size:12px;font-weight:600;color:#a83a2b;background:#f4ddd7;border-radius:9px;padding:0 7px;line-height:18px">{{ debtCount }}</span></sc-if></a>
+      <a href="#" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin:1px 8px;border-radius:6px;font-size:13px;color:#4a4741" style-hover="background:#eae8e3"><span>Tanımlar</span></a>
+    </nav>
+    <div style="padding:12px 18px;border-top:1px solid #e6e3dd;font-size:12px;color:#9a958d">Sürüm 1.0 · Yerel</div>
+  </aside>
+
+  <main style="flex:1;display:flex;flex-direction:column;min-width:0;background:#fbfaf8">
+
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 28px;flex-shrink:0">
+      <a href="Öğrenciler.dc.html" style="display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:#736f68" style-hover="color:#2f2d2a"><span style="font-size:14px">←</span>Öğrenciler</a>
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:#b0aaa0"><span style="border:1px solid #e2dfd9;border-radius:4px;padding:1px 6px">Esc</span>listeye dön</div>
+    </div>
+
+    <div style="display:flex;align-items:flex-start;gap:14px;padding:4px 28px 18px;border-bottom:1px solid #e7e5e0;flex-shrink:0">
+      <div style="width:46px;height:46px;flex-shrink:0;border-radius:50%;background:#e5e2dc;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;color:#4a4741">{{ initials }}</div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="font-size:19px;font-weight:600;letter-spacing:-.01em">{{ name }}</div>
+          <sc-if value="{{ isActive }}"><span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#4a4741"><span style="width:7px;height:7px;border-radius:50%;background:#5f8f6b"></span>Aktif</span></sc-if>
+          <sc-if value="{{ notActive }}"><span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#9a958d;background:#f2f1ee;border:1px solid #e2dfd9;border-radius:12px;padding:2px 9px"><span style="width:7px;height:7px;border-radius:50%;border:1.5px solid #b0aaa0;box-sizing:border-box"></span>Pasif</span></sc-if>
+        </div>
+        <div style="font-size:13px;color:#736f68;margin-top:5px">Veli <span style="color:#2f2d2a">{{ parent }}</span><span style="color:#c4bfb6;margin:0 8px">·</span><span style="color:#2f2d2a;font-variant-numeric:tabular-nums">{{ phone }}</span></div>
+      </div>
+      <div style="display:flex;gap:9px;flex-shrink:0">
+        <button onClick="{{ onEdit }}" style="font-size:13px;color:#4a4741;background:#efedea;border:1px solid #e2dfd9;border-radius:7px;padding:8px 14px;cursor:pointer" style-hover="background:#e5e2dc">Düzenle</button>
+        <sc-if value="{{ isActive }}"><button onClick="{{ onToggle }}" style="font-size:13px;color:#736f68;background:transparent;border:1px solid #dcd9d3;border-radius:7px;padding:8px 14px;cursor:pointer" style-hover="background:#f2f1ee;color:#2f2d2a">Pasifleştir</button></sc-if>
+        <sc-if value="{{ notActive }}"><button onClick="{{ onToggle }}" style="font-size:13px;color:#4a4741;background:#efedea;border:1px solid #e2dfd9;border-radius:7px;padding:8px 14px;cursor:pointer" style-hover="background:#e5e2dc">Aktifleştir</button></sc-if>
+      </div>
+    </div>
+
+    <!-- Özet şerit — kolon kuralı Grup detayı ekranında da AYNEN kullanılacak:
+         Bakiye kutusu baskın (1.5fr), Devam/Kalan eşit (1fr), Sıradaki (1.15fr);
+         kutu min genişlikleri sırasıyla 240/190/190/200px, sabit 14px boşluk. -->
+    <div style="display:grid;grid-template-columns:minmax(240px,1.5fr) minmax(190px,1fr) minmax(190px,1fr) minmax(200px,1.15fr);gap:14px;padding:18px 28px;border-bottom:1px solid #e7e5e0;flex-shrink:0;background:#faf9f6">
+
+      <div style="border:1px solid #e7e5e0;border-radius:10px;background:#fff;padding:15px 17px;min-height:118px;display:flex;flex-direction:column;justify-content:space-between">
+        <div style="font-size:11px;color:#9a958d;letter-spacing:.02em;text-transform:uppercase">Bakiye</div>
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:14px">
+          <div style="min-width:0">
+            <sc-if value="{{ isDebt }}"><div style="font-size:30px;font-weight:600;color:#a83a2b;font-variant-numeric:tabular-nums;letter-spacing:-.02em;line-height:1">{{ balanceStr }}</div></sc-if>
+            <sc-if value="{{ notDebt }}"><div style="font-size:30px;font-weight:600;color:#2f2d2a;font-variant-numeric:tabular-nums;letter-spacing:-.02em;line-height:1">{{ balanceStr }}</div></sc-if>
+            <div style="font-size:12px;color:#8f8a80;margin-top:7px">{{ balanceCaption }}</div>
+          </div>
+          <button onClick="{{ onCollect }}" style="flex-shrink:0;font-size:13px;font-weight:600;color:#fbfaf8;background:#2f2d2a;border:none;border-radius:7px;padding:9px 15px;cursor:pointer;white-space:nowrap" style-hover="background:#1f1d1b">Tahsilat al</button>
+        </div>
+      </div>
+
+      <div style="border:1px solid #e7e5e0;border-radius:10px;background:#fff;padding:15px 17px;min-height:118px;display:flex;flex-direction:column;justify-content:space-between">
+        <div style="font-size:11px;color:#9a958d;letter-spacing:.02em;text-transform:uppercase">Devam oranı</div>
+        <div>
+          <sc-if value="{{ attHas }}" hint-placeholder-val="{{ true }}">
+            <div style="font-size:30px;font-weight:600;color:#2f2d2a;font-variant-numeric:tabular-nums;letter-spacing:-.02em;line-height:1">{{ attRate }}</div>
+            <div style="font-size:12px;color:#736f68;margin-top:8px">{{ attTrend }}</div>
+          </sc-if>
+          <sc-if value="{{ attNone }}">
+            <div style="font-size:30px;font-weight:600;color:#cfcabf;line-height:1">—</div>
+            <div style="font-size:12px;color:#9a958d;margin-top:8px">{{ attEmpty }}</div>
+          </sc-if>
+        </div>
+      </div>
+
+      <div style="border:1px solid #e7e5e0;border-radius:10px;background:#fff;padding:15px 17px;min-height:118px;display:flex;flex-direction:column;justify-content:space-between">
+        <div style="font-size:11px;color:#9a958d;letter-spacing:.02em;text-transform:uppercase">Kalan ders</div>
+        <div>
+          <sc-if value="{{ remHas }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;align-items:baseline;gap:6px">
+              <sc-if value="{{ isEnding }}"><span style="font-size:30px;font-weight:600;color:#b57314;font-variant-numeric:tabular-nums;letter-spacing:-.02em;line-height:1">{{ remaining }}</span></sc-if>
+              <sc-if value="{{ notEnding }}"><span style="font-size:30px;font-weight:600;color:#2f2d2a;font-variant-numeric:tabular-nums;letter-spacing:-.02em;line-height:1">{{ remaining }}</span></sc-if>
+              <span style="font-size:13px;color:#9a958d">ders</span>
+            </div>
+            <sc-if value="{{ isEnding }}"><div style="font-size:12px;color:#b57314;margin-top:8px">{{ endDate }}</div></sc-if>
+            <sc-if value="{{ notEnding }}"><div style="font-size:12px;color:#736f68;margin-top:8px">{{ endDate }}</div></sc-if>
+          </sc-if>
+          <sc-if value="{{ remNone }}">
+            <div style="font-size:30px;font-weight:600;color:#cfcabf;line-height:1">—</div>
+            <div style="font-size:12px;color:#9a958d;margin-top:8px">{{ remEmpty }}</div>
+          </sc-if>
+        </div>
+      </div>
+
+      <div style="border:1px solid #e7e5e0;border-radius:10px;background:#fff;padding:15px 17px;min-height:118px;display:flex;flex-direction:column;justify-content:space-between">
+        <div style="font-size:11px;color:#9a958d;letter-spacing:.02em;text-transform:uppercase">Sıradaki ders</div>
+        <div>
+          <sc-if value="{{ nextHas }}" hint-placeholder-val="{{ true }}">
+            <div style="font-size:17px;font-weight:600;color:#2f2d2a;font-variant-numeric:tabular-nums;line-height:1.1">{{ nextWhen }}</div>
+            <div style="font-size:13px;color:#4a4741;margin-top:7px">{{ nextName }}</div>
+            <div style="font-size:12px;color:#9a958d;margin-top:2px">{{ nextTeacher }}</div>
+          </sc-if>
+          <sc-if value="{{ nextNone }}">
+            <div style="font-size:14px;color:#b0aaa0">Planlı ders yok</div>
+          </sc-if>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:26px;padding:0 28px;border-bottom:1px solid #e7e5e0;flex-shrink:0">
+      <div style="display:flex;gap:26px;flex:1">
+        <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="4">
+        <button onClick="{{ t.onClick }}" style="{{ t.style }}">{{ t.label }}<sc-if value="{{ t.showCount }}"><span style="{{ t.countStyle }};font-size:12px;font-variant-numeric:tabular-nums">{{ t.count }}</span></sc-if></button>
+        </sc-for>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:#b0aaa0">sekmeler<span style="border:1px solid #e2dfd9;border-radius:4px;padding:1px 6px">←</span><span style="border:1px solid #e2dfd9;border-radius:4px;padding:1px 6px">→</span></div>
+    </div>
+
+    <div style="flex:1;overflow:auto;min-height:0;padding:16px 28px 28px">
+
+      <sc-if value="{{ tab0 }}">
+        <sc-if value="{{ enrollHas }}" hint-placeholder-val="{{ true }}">
+        <div style="display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1.2fr) 120px 150px;gap:14px;align-items:center;padding:9px 12px;font-size:12px;color:#9a958d;border-bottom:1px solid #dcd9d3">
+          <div>Kurs / grup</div><div>Tarife</div><div>Başlangıç</div><div style="text-align:right">Taksit durumu</div>
+        </div>
+        <sc-for list="{{ enroll }}" as="e" hint-placeholder-count="3">
+        <div style="{{ e.rowStyle }}">
+          <div style="color:#2f2d2a">{{ e.course }}</div>
+          <div style="color:#736f68">{{ e.tarife }}</div>
+          <div style="color:#736f68;font-variant-numeric:tabular-nums">{{ e.start }}</div>
+          <div style="text-align:right"><span style="{{ e.taksitStyle }};font-variant-numeric:tabular-nums">{{ e.taksit }}</span></div>
+        </div>
+        </sc-for>
+        </sc-if>
+        <sc-if value="{{ enrollNone }}">
+        <div style="padding:46px 4px;text-align:center">
+          <div style="font-size:13px;color:#2f2d2a">Henüz kayıt yok</div>
+          <div style="font-size:12px;color:#9a958d;margin-top:5px">Öğrenciyi bir kurs veya gruba ekleyin; tarife ve taksitler burada görünür.</div>
+          <button onClick="{{ onAddEnroll }}" style="margin-top:16px;font-size:13px;font-weight:600;color:#fbfaf8;background:#2f2d2a;border:none;border-radius:7px;padding:9px 16px;cursor:pointer" style-hover="background:#1f1d1b">Kayıt ekle</button>
+        </div>
+        </sc-if>
+      </sc-if>
+
+      <sc-if value="{{ tab1 }}">
+        <sc-if value="{{ histHas }}" hint-placeholder-val="{{ true }}">
+        <div style="display:grid;grid-template-columns:110px minmax(0,1.6fr) 150px minmax(0,1fr);gap:14px;align-items:center;padding:9px 12px;font-size:12px;color:#9a958d;border-bottom:1px solid #dcd9d3">
+          <div>Tarih</div><div>Ders</div><div>Durum</div><div style="text-align:right">Telafi</div>
+        </div>
+        <sc-for list="{{ history }}" as="h" hint-placeholder-count="6">
+        <div style="{{ h.rowStyle }}">
+          <div style="color:#736f68;font-variant-numeric:tabular-nums">{{ h.date }}</div>
+          <div style="color:#2f2d2a">{{ h.lesson }}</div>
+          <div><span style="display:inline-flex;align-items:center;gap:7px;font-size:13px;color:{{ h.durColorLiteral }}"><span style="{{ h.dotStyle }}"></span>{{ h.durLabel }}</span></div>
+          <div style="text-align:right">
+            <sc-if value="{{ h.telafiPlan }}"><a href="#" onClick="{{ h.onTelafi }}" style="font-size:12px;font-weight:600;color:#4a4741;background:#efedea;border:1px solid #e2dfd9;border-radius:6px;padding:5px 10px" style-hover="background:#e5e2dc">Telafi planla</a></sc-if>
+            <sc-if value="{{ h.telafiDone }}"><span style="font-size:12px;color:#736f68;font-variant-numeric:tabular-nums">Telafi · {{ h.telafiDate }} ✓</span></sc-if>
+            <sc-if value="{{ h.telafiNone }}"><span style="font-size:13px;color:#cfcabf">—</span></sc-if>
+          </div>
+        </div>
+        </sc-for>
+        </sc-if>
+        <sc-if value="{{ histNone }}">
+        <div style="padding:46px 4px;text-align:center;font-size:13px;color:#9a958d">Henüz işlenmiş ders yok.</div>
+        </sc-if>
+      </sc-if>
+
+      <sc-if value="{{ tab2 }}">
+        <sc-if value="{{ payHas }}" hint-placeholder-val="{{ true }}">
+        <div style="display:grid;grid-template-columns:120px 140px minmax(0,1fr) minmax(0,1.2fr);gap:14px;align-items:center;padding:9px 12px;font-size:12px;color:#9a958d;border-bottom:1px solid #dcd9d3">
+          <div>Tarih</div><div style="text-align:right">Tutar</div><div>Ödeme tipi</div><div>Mahsup edildiği taksit</div>
+        </div>
+        <sc-for list="{{ payments }}" as="p" hint-placeholder-count="4">
+        <div style="{{ p.rowStyle }}">
+          <div style="color:#736f68;font-variant-numeric:tabular-nums">{{ p.date }}</div>
+          <div style="text-align:right;color:#2f2d2a;font-weight:600;font-variant-numeric:tabular-nums">{{ p.amountStr }}</div>
+          <div style="color:#4a4741">{{ p.type }}</div>
+          <div style="color:#736f68">{{ p.mahsup }}</div>
+        </div>
+        </sc-for>
+        <div style="display:flex;justify-content:flex-end;gap:24px;padding:12px 12px 0;font-size:13px;color:#736f68">Toplam tahsilat<span style="color:#2f2d2a;font-weight:600;font-variant-numeric:tabular-nums">{{ payTotalStr }}</span></div>
+        </sc-if>
+        <sc-if value="{{ payNone }}">
+        <div style="padding:46px 4px;text-align:center;font-size:13px;color:#9a958d">Henüz tahsilat kaydı yok.</div>
+        </sc-if>
+      </sc-if>
+
+      <sc-if value="{{ tab3 }}">
+        <div style="border:1px solid #e2dfd9;border-radius:9px;background:#fff;padding:11px 13px">
+          <textarea ref="{{ noteRef }}" value="{{ newNote }}" onChange="{{ onNoteChange }}" placeholder="Bu öğrenciyle ilgili bir not yazın…" rows="2" style="width:100%;border:none;outline:none;background:transparent;font-size:13px;color:#2f2d2a;line-height:1.5"></textarea>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;border-top:1px solid #edeae5;padding-top:9px">
+            <span style="font-size:12px;color:#9a958d">Girişler tarihiyle kaydedilir</span>
+            <button onClick="{{ onAddNote }}" style="font-size:12px;font-weight:600;color:#4a4741;background:#efedea;border:1px solid #e2dfd9;border-radius:6px;padding:6px 13px;cursor:pointer" style-hover="background:#e5e2dc">Not ekle</button>
+          </div>
+        </div>
+        <sc-if value="{{ notesHas }}" hint-placeholder-val="{{ true }}">
+        <div style="margin-top:6px">
+          <sc-for list="{{ notes }}" as="n" hint-placeholder-count="3">
+          <div style="padding:15px 2px;border-bottom:1px solid #e7e5e0">
+            <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px">
+              <span style="font-size:13px;font-weight:600;color:#2f2d2a">{{ n.author }}</span>
+              <span style="font-size:12px;color:#9a958d;font-variant-numeric:tabular-nums">{{ n.date }}</span>
+            </div>
+            <div style="font-size:13px;color:#4a4741;margin-top:5px;line-height:1.55;text-wrap:pretty">{{ n.text }}</div>
+          </div>
+          </sc-for>
+        </div>
+        </sc-if>
+        <sc-if value="{{ notesNone }}">
+        <div style="padding:36px 4px;text-align:center;font-size:13px;color:#9a958d">Henüz not eklenmemiş. İlk notu yukarıdan ekleyin.</div>
+        </sc-if>
+      </sc-if>
+
+    </div>
+  </main>
+
+  <sc-if value="{{ toast }}">
+  <div style="position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#2f2d2a;color:#fbfaf8;font-size:13px;padding:10px 17px;border-radius:8px;box-shadow:0 10px 30px -14px rgba(0,0,0,.55);z-index:40">{{ toastText }}</div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:800},&quot;durum&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;normal&quot;,&quot;sıfır bakiye&quot;,&quot;yeni öğrenci&quot;,&quot;pasif&quot;],&quot;default&quot;:&quot;normal&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Örnek veri&quot;},&quot;satirYuksekligi&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;rahat&quot;,&quot;sıkı&quot;],&quot;default&quot;:&quot;rahat&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Görünüm&quot;},&quot;baslangicSekme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Kayıtlar&quot;,&quot;Ders geçmişi&quot;,&quot;Ödemeler&quot;,&quot;Notlar&quot;],&quot;default&quot;:&quot;Kayıtlar&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Görünüm&quot;}}">
+class Component extends DCLogic {
+  noteRef = React.createRef();
+  state = {
+    activeTab: ({ 'Kayıtlar':0, 'Ders geçmişi':1, 'Ödemeler':2, 'Notlar':3 })[this.props.baslangicSekme] ?? 0,
+    newNote: '',
+    extraNotes: [],
+    toast: null,
+  };
+
+  componentDidMount() {
+    this._onKey = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); this.goBack(); return; }
+      const el = e.target;
+      const typing = el && (['input','textarea'].includes((el.tagName||'').toLowerCase()) || el.isContentEditable);
+      if (typing) return;
+      if (e.key === 'ArrowRight') { e.preventDefault(); this.setState(s => ({ activeTab: Math.min(3, s.activeTab + 1) })); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); this.setState(s => ({ activeTab: Math.max(0, s.activeTab - 1) })); }
+    };
+    window.addEventListener('keydown', this._onKey);
+  }
+  componentWillUnmount() { window.removeEventListener('keydown', this._onKey); if (this._t) clearTimeout(this._t); }
+
+  goBack() {
+    // Listeye döner; Öğrenciler ekranı arama/filtre bağlamını kendi durumunda korur.
+    window.location.href = 'Öğrenciler.dc.html';
+  }
+  flash(msg) {
+    this.setState({ toast: msg });
+    if (this._t) clearTimeout(this._t);
+    this._t = setTimeout(() => this.setState({ toast: null }), 2200);
+  }
+
+  data(durum) {
+    const N = {
+      student: { name:'Mehmet Aslan', parent:'Hasan Aslan', phone:'0532 214 67 89', active:true },
+      balance: -1200, balanceCaption: '12 gün gecikmiş',
+      attHas: true, attRate: '%92', attTrend: '↑ son 8 haftada +6 puan',
+      remHas: true, remaining: 2, ending: true, endDate: "≈ 31 Temmuz'da biter",
+      next: { when:'Yarın · 16:00', name:'Matematik · Grup A', teacher:'Ayşe Demir' },
+      enroll: [
+        { course:'Matematik · Grup A', tarife:'Aylık paket · 8 ders/ay', start:'12.02.2026', taksit:'2/4 ödendi', kind:'open' },
+        { course:'Fizik · Birebir', tarife:'Ders başı · 250 TL', start:'05.05.2026', taksit:'Peşin', kind:'paid' },
+        { course:'İngilizce · Grup B', tarife:'Dönemlik · 32 ders', start:'20.09.2025', taksit:'1/3 gecikmiş', kind:'late' },
+      ],
+      history: [
+        { date:'22.07.2026', lesson:'Matematik · Grup A', durum:'geldi' },
+        { date:'19.07.2026', lesson:'Fizik · Birebir', durum:'mazeretsiz', telafi:'plan' },
+        { date:'15.07.2026', lesson:'Matematik · Grup A', durum:'geldi' },
+        { date:'12.07.2026', lesson:'İngilizce · Grup B', durum:'mazeretli', telafi:'done', telafiDate:'18.07' },
+        { date:'08.07.2026', lesson:'Fizik · Birebir', durum:'iptal' },
+        { date:'05.07.2026', lesson:'Matematik · Grup A', durum:'geldi' },
+      ],
+      payments: [
+        { date:'01.07.2026', amount:1000, type:'Havale', mahsup:'Temmuz taksiti' },
+        { date:'02.06.2026', amount:1000, type:'Kart', mahsup:'Haziran taksiti' },
+        { date:'03.05.2026', amount:750, type:'Nakit', mahsup:'Mayıs taksiti' },
+        { date:'05.05.2026', amount:250, type:'Nakit', mahsup:'Fizik · peşinat' },
+      ],
+      notes: [
+        { date:'20.07.2026', author:'Ayşe Demir', text:'Türev konusunda hızlı ilerliyor; deneme sınavı öncesi ek soru seti verildi.' },
+        { date:'11.07.2026', author:'Ofis', text:'Veli, Ağustos taksitinin ay ortasına ertelenmesini talep etti.' },
+        { date:'28.06.2026', author:'Elif Kaya', text:'İngilizce grubunda konuşma pratiğinde çekingen; grup içi eşleştirme değiştirildi.' },
+      ],
+    };
+
+    if (durum === 'sıfır bakiye') {
+      return { ...N,
+        balance: 0, balanceCaption: 'Güncel · borç yok',
+        enroll: [
+          { course:'Matematik · Grup A', tarife:'Aylık paket · 8 ders/ay', start:'12.02.2026', taksit:'4/4 ödendi', kind:'paid' },
+          { course:'Fizik · Birebir', tarife:'Ders başı · 250 TL', start:'05.05.2026', taksit:'Peşin', kind:'paid' },
+          { course:'İngilizce · Grup B', tarife:'Dönemlik · 32 ders', start:'20.09.2025', taksit:'3/3 ödendi', kind:'paid' },
+        ],
+      };
+    }
+
+    if (durum === 'yeni öğrenci') {
+      return {
+        student: { name:'Rüya Toprak', parent:'Deniz Toprak', phone:'0544 903 17 25', active:true },
+        balance: 0, balanceCaption: 'Tarife henüz tanımlı değil',
+        attHas: false, attEmpty: 'Henüz ders işlenmedi',
+        remHas: false, remEmpty: 'Aktif kayıt yok',
+        next: null,
+        enroll: [], history: [], payments: [], notes: [],
+      };
+    }
+
+    if (durum === 'pasif') {
+      return {
+        student: { name:'Emre Çelik', parent:'Barış Çelik', phone:'0537 508 10 22', active:false },
+        balance: 0, balanceCaption: 'Borç yok',
+        attHas: true, attRate: '%74', attTrend: 'kayıt kapatıldı · son dönem',
+        remHas: false, remEmpty: 'Aktif paket yok',
+        next: null,
+        enroll: [
+          { course:'Matematik · Birebir', tarife:'Dönemlik · 24 ders', start:'10.10.2025', taksit:'Kapandı', kind:'closed' },
+        ],
+        history: [
+          { date:'02.05.2026', lesson:'Matematik · Birebir', durum:'geldi' },
+          { date:'28.04.2026', lesson:'Matematik · Birebir', durum:'geldi' },
+          { date:'24.04.2026', lesson:'Matematik · Birebir', durum:'mazeretli', telafi:'done', telafiDate:'27.04' },
+          { date:'20.04.2026', lesson:'Matematik · Birebir', durum:'geldi' },
+        ],
+        payments: [
+          { date:'15.04.2026', amount:1500, type:'Havale', mahsup:'Nisan taksiti' },
+          { date:'12.03.2026', amount:1500, type:'Kart', mahsup:'Mart taksiti' },
+        ],
+        notes: [
+          { date:'03.05.2026', author:'Ofis', text:'Aile şehir dışına taşındığı için kayıt donduruldu.' },
+        ],
+      };
+    }
+
+    return N;
+  }
+
+  renderVals() {
+    const durum = this.props.durum ?? 'normal';
+    const d = this.data(durum);
+    const sikici = this.props.satirYuksekligi === 'sıkı';
+    const pad = sikici ? 9 : 13;
+    const row = (cols) => `display:grid;grid-template-columns:${cols};gap:14px;align-items:center;padding:${pad}px 12px;border-bottom:1px solid #e7e5e0;font-size:13px`;
+    const enrollCols = 'minmax(0,1.7fr) minmax(0,1.2fr) 120px 150px';
+    const histCols = '110px minmax(0,1.6fr) 150px minmax(0,1fr)';
+    const payCols = '120px 140px minmax(0,1fr) minmax(0,1.2fr)';
+
+    const tl = n => n.toLocaleString('tr-TR');
+    const balStr = b => b < 0 ? `−${tl(Math.abs(b))} TL` : `${tl(b)} TL`;
+
+    const taksitSkin = { open:'color:#4a4741', paid:'color:#5f8f6b;font-weight:600', late:'color:#a83a2b;font-weight:600', closed:'color:#9a958d' };
+    const enroll = d.enroll.map(e => ({ ...e, rowStyle: row(enrollCols), taksitStyle: taksitSkin[e.kind] || 'color:#4a4741' }));
+
+    const durMap = {
+      geldi:      { label:'Geldi',      dot:'#5f8f6b', color:'#4a4741', hollow:false },
+      mazeretli:  { label:'Mazeretli',  dot:'#b57314', color:'#4a4741', hollow:false },
+      mazeretsiz: { label:'Mazeretsiz', dot:'#a83a2b', color:'#a83a2b', hollow:false },
+      iptal:      { label:'İptal',      dot:'#b0aaa0', color:'#9a958d', hollow:true },
+    };
+    const history = d.history.map(h => {
+      const m = durMap[h.durum];
+      const dotStyle = m.hollow
+        ? `width:7px;height:7px;border-radius:50%;border:1.5px solid ${m.dot};box-sizing:border-box;flex-shrink:0`
+        : `width:7px;height:7px;border-radius:50%;background:${m.dot};flex-shrink:0`;
+      return {
+        ...h, rowStyle: row(histCols),
+        durLabel: m.label, durColorLiteral: m.color, dotStyle,
+        telafiPlan: h.telafi === 'plan', telafiDone: h.telafi === 'done', telafiNone: !h.telafi,
+        telafiDate: h.telafiDate || '',
+        onTelafi: (e) => { if (e && e.preventDefault) e.preventDefault(); this.flash('Telafi planlama açılıyor…'); },
+      };
+    });
+
+    const payments = d.payments.map(p => ({ ...p, rowStyle: row(payCols), amountStr: `${tl(p.amount)} TL` }));
+    const payTotal = d.payments.reduce((s, p) => s + p.amount, 0);
+
+    const scenarioNotes = d.notes.map(n => ({ ...n }));
+    const notes = [...this.state.extraNotes, ...scenarioNotes];
+
+    const tabDefs = [
+      { label:'Kayıtlar', count:enroll.length },
+      { label:'Ders geçmişi', count:history.length },
+      { label:'Ödemeler', count:payments.length },
+      { label:'Notlar', count:notes.length },
+    ];
+    const ti = this.state.activeTab;
+    const tabs = tabDefs.map((t, i) => {
+      const active = i === ti;
+      const base = 'position:relative;display:inline-flex;align-items:center;gap:7px;padding:12px 2px;font-size:13px;background:none;border:none;cursor:pointer;white-space:nowrap';
+      const skin = active ? 'color:#2f2d2a;font-weight:600;box-shadow:inset 0 -2px 0 #2f2d2a' : 'color:#736f68';
+      return { label:t.label, count:String(t.count), showCount:t.count > 0, style:`${base};${skin}`, countStyle: active ? 'color:#9a958d' : 'color:#b0aaa0', onClick:() => this.setState({ activeTab:i }) };
+    });
+
+    const isDebt = d.balance < 0;
+    const isEnding = d.remHas && d.ending && d.remaining <= 2;
+
+    return {
+      hasDebts: true, debtCount: '4',
+
+      initials: d.student.name.split(' ').map(w => w[0]).slice(0, 2).join(''),
+      name: d.student.name, parent: d.student.parent, phone: d.student.phone,
+      isActive: d.student.active, notActive: !d.student.active,
+      onEdit: () => this.flash('Düzenleme paneli açılıyor…'),
+      onToggle: () => this.flash(d.student.active ? 'Öğrenci pasifleştirildi' : 'Öğrenci yeniden aktifleştirildi'),
+
+      balanceStr: balStr(d.balance), isDebt, notDebt: !isDebt, balanceCaption: d.balanceCaption,
+      onCollect: () => this.flash('Tahsilat penceresi açılıyor…'),
+
+      attHas: !!d.attHas, attNone: !d.attHas,
+      attRate: d.attRate, attTrend: d.attTrend, attEmpty: d.attEmpty,
+
+      remHas: !!d.remHas, remNone: !d.remHas,
+      remaining: String(d.remaining), isEnding, notEnding: !isEnding,
+      endDate: d.endDate, remEmpty: d.remEmpty,
+
+      nextHas: !!d.next, nextNone: !d.next,
+      nextWhen: d.next ? d.next.when : '', nextName: d.next ? d.next.name : '', nextTeacher: d.next ? d.next.teacher : '',
+
+      tabs, tab0: ti === 0, tab1: ti === 1, tab2: ti === 2, tab3: ti === 3,
+
+      enroll, enrollHas: enroll.length > 0, enrollNone: enroll.length === 0,
+      onAddEnroll: () => this.flash('Yeni kayıt penceresi açılıyor…'),
+
+      history, histHas: history.length > 0, histNone: history.length === 0,
+
+      payments, payHas: payments.length > 0, payNone: payments.length === 0,
+      payTotalStr: `${tl(payTotal)} TL`,
+
+      noteRef: this.noteRef,
+      newNote: this.state.newNote,
+      onNoteChange: (e) => this.setState({ newNote: e.target.value }),
+      onAddNote: () => {
+        const t = this.state.newNote.trim();
+        if (!t) { if (this.noteRef.current) this.noteRef.current.focus(); return; }
+        this.setState(s => ({ extraNotes: [{ date:'24.07.2026', author:'Ofis', text:t }, ...s.extraNotes], newNote:'' }));
+      },
+      notes, notesHas: notes.length > 0, notesNone: notes.length === 0,
+
+      toast: this.state.toast, toastText: this.state.toast,
+    };
+  }
+}
+</script>
+</body>
+</html>

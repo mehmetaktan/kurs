@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:"Helvetica Neue",Helvetica,"Segoe UI",Arial,sans-serif;color:#2f2d2a;background:#fbfaf8;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+a{color:#2f2d2a;text-decoration:none}
+a:hover{color:#000}
+input{font-family:inherit}
+button{font-family:inherit}
+::placeholder{color:#a8a39a}
+::-webkit-scrollbar{width:11px;height:11px}
+::-webkit-scrollbar-thumb{background:#dcd9d3;border-radius:6px;border:3px solid #fbfaf8}
+</style>
+</helmet>
+<div style="display:flex;height:100vh;min-width:1280px;overflow:hidden">
+
+  <aside style="width:216px;flex-shrink:0;background:#f2f1ee;border-right:1px solid #e2dfd9;display:flex;flex-direction:column">
+    <div style="padding:18px 18px 14px;border-bottom:1px solid #e6e3dd">
+      <div style="font-size:13px;font-weight:600;letter-spacing:.01em">DersTakip</div>
+      <div style="font-size:12px;color:#9a958d;margin-top:2px">Aydın Özel Ders</div>
+    </div>
+    <nav style="padding:10px 0;flex:1">
+      <a href="#" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin:1px 8px;border-radius:6px;font-size:13px;font-weight:600;color:#2f2d2a;background:#e5e2dc"><span>Bugün</span></a>
+      <a href="#" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin:1px 8px;border-radius:6px;font-size:13px;color:#4a4741" style-hover="background:#eae8e3"><span>Takvim</span></a>
+      <a href="#" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin:1px 8px;border-radius:6px;font-size:13px;color:#4a4741" style-hover="background:#eae8e3"><span>Öğrenciler</span></a>
+      <a href="#" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin:1px 8px;border-radius:6px;font-size:13px;color:#4a4741" style-hover="background:#eae8e3"><span>Gruplar</span></a>
+      <a href="#" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin:1px 8px;border-radius:6px;font-size:13px;color:#4a4741" style-hover="background:#eae8e3"><span>Ödemeler</span><sc-if value="{{ hasDebts }}"><span style="font-size:12px;font-weight:600;color:#a83a2b;background:#f4ddd7;border-radius:9px;padding:0 7px;line-height:18px">{{ debtCount }}</span></sc-if></a>
+      <a href="#" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin:1px 8px;border-radius:6px;font-size:13px;color:#4a4741" style-hover="background:#eae8e3"><span>Tanımlar</span></a>
+    </nav>
+    <div style="padding:12px 18px;border-top:1px solid #e6e3dd;font-size:12px;color:#9a958d">Sürüm 1.0 · Yerel</div>
+  </aside>
+
+  <main style="flex:1;display:flex;flex-direction:column;min-width:0;background:#fbfaf8">
+    <header style="display:flex;align-items:flex-end;justify-content:space-between;padding:20px 28px 16px;border-bottom:1px solid #e7e5e0;flex-shrink:0">
+      <div>
+        <div style="font-size:17px;font-weight:600">Bugün</div>
+        <div style="font-size:13px;color:#736f68;margin-top:3px;font-variant-numeric:tabular-nums">{{ dateStr }} · {{ weekday }}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="position:relative">
+          <input placeholder="Öğrenci, grup veya ders ara" style="width:264px;font-size:13px;padding:8px 60px 8px 12px;border:1px solid #dcd9d3;border-radius:7px;background:#fff;color:#2f2d2a;outline:none" style-focus="border-color:#b3ada3" />
+          <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:12px;color:#b0aaa0;border:1px solid #e2dfd9;border-radius:4px;padding:1px 5px">Ctrl K</span>
+        </div>
+        <button style="font-size:13px;font-weight:600;color:#fbfaf8;background:#2f2d2a;border:none;border-radius:7px;padding:9px 16px;cursor:pointer" style-hover="background:#1f1d1b">Yeni ders</button>
+      </div>
+    </header>
+
+    <div style="flex:1;overflow:auto;padding:22px 28px 34px">
+      <div style="display:grid;grid-template-columns:minmax(0,1.7fr) minmax(322px,0.9fr);gap:32px;align-items:start;max-width:1320px">
+
+        <section>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;padding-bottom:9px;border-bottom:1px solid #dcd9d3">
+            <div style="font-size:13px;font-weight:600">Bugünkü dersler</div>
+            <div style="font-size:12px;color:#9a958d"><span>{{ lessonCountStr }}</span><sc-if value="{{ hasMissing }}"><span style="color:#b57314"> · {{ missingCount }} yoklama bekliyor</span></sc-if></div>
+          </div>
+
+          <sc-if value="{{ hasLessons }}" hint-placeholder-val="{{ true }}">
+          <div>
+            <sc-if value="{{ showCols }}">
+            <div style="display:grid;grid-template-columns:54px minmax(0,1fr) 128px 84px 190px;gap:12px;padding:9px 4px 6px;font-size:12px;color:#9a958d;border-bottom:1px solid #e7e5e0">
+              <div>Saat</div><div>Ders</div><div>Öğretmen</div><div>Öğrenci</div><div>Yoklama</div>
+            </div>
+            </sc-if>
+
+            <sc-for list="{{ lessonsPast }}" as="lesson" hint-placeholder-count="3">
+            <div style="{{ lesson.rowStyle }}">
+              <div style="font-size:13px;color:#736f68;font-variant-numeric:tabular-nums">{{ lesson.time }}</div>
+              <div style="min-width:0">
+                <div style="font-size:13px;color:#2f2d2a">{{ lesson.subject }}<span style="color:#9a958d"> · {{ lesson.sub }}</span></div>
+                <div style="font-size:12px;color:#9a958d;margin-top:1px">{{ lesson.kind }}</div>
+              </div>
+              <div style="font-size:13px;color:#4a4741">{{ lesson.teacher }}</div>
+              <div style="font-size:13px;color:#4a4741;font-variant-numeric:tabular-nums">{{ lesson.countStr }}</div>
+              <div>
+                <sc-if value="{{ lesson.isDone }}"><div style="display:flex;align-items:center;gap:6px;font-size:13px;color:#736f68"><span style="color:#8f8a80">✓</span>{{ lesson.att }}</div></sc-if>
+                <sc-if value="{{ lesson.isMissing }}"><div style="display:flex;align-items:center;gap:9px"><button style="font-size:12px;font-weight:600;color:#8a5710;background:#f2e0c4;border:none;border-radius:6px;padding:5px 11px;cursor:pointer" style-hover="background:#ecd5ac">Yoklama al</button><span style="font-size:12px;color:#b57314">girilmedi</span></div></sc-if>
+                <sc-if value="{{ lesson.isUpcoming }}"><div style="font-size:13px;color:#b3ada3">Bekleniyor</div></sc-if>
+              </div>
+            </div>
+            </sc-for>
+
+            <sc-if value="{{ showNow }}">
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 4px">
+              <div style="font-size:12px;color:#b57314;font-weight:600;font-variant-numeric:tabular-nums">15:40</div>
+              <div style="flex:1;height:1px;background:#ecdcc1"></div>
+              <div style="font-size:12px;color:#c0bab0">şimdi</div>
+            </div>
+            </sc-if>
+
+            <sc-for list="{{ lessonsUp }}" as="lesson" hint-placeholder-count="2">
+            <div style="{{ lesson.rowStyle }}">
+              <div style="font-size:13px;color:#736f68;font-variant-numeric:tabular-nums">{{ lesson.time }}</div>
+              <div style="min-width:0">
+                <div style="font-size:13px;color:#2f2d2a">{{ lesson.subject }}<span style="color:#9a958d"> · {{ lesson.sub }}</span></div>
+                <div style="font-size:12px;color:#9a958d;margin-top:1px">{{ lesson.kind }}</div>
+              </div>
+              <div style="font-size:13px;color:#4a4741">{{ lesson.teacher }}</div>
+              <div style="font-size:13px;color:#4a4741;font-variant-numeric:tabular-nums">{{ lesson.countStr }}</div>
+              <div><div style="font-size:13px;color:#b3ada3">Bekleniyor</div></div>
+            </div>
+            </sc-for>
+          </div>
+          </sc-if>
+
+          <sc-if value="{{ noLessons }}">
+          <div style="padding:40px 4px;text-align:center;font-size:13px;color:#9a958d">Bugün planlanmış ders yok.</div>
+          </sc-if>
+        </section>
+
+        <div style="display:flex;flex-direction:column;gap:26px">
+
+          <section>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;padding-bottom:9px;border-bottom:1px solid #dcd9d3">
+              <div style="font-size:13px;font-weight:600">Borcu olan öğrenciler</div>
+              <sc-if value="{{ hasDebts }}"><div style="font-size:12px;color:#9a958d">{{ debtMeta }}</div></sc-if>
+            </div>
+            <sc-if value="{{ hasDebts }}" hint-placeholder-val="{{ true }}">
+            <div>
+              <sc-for list="{{ debts }}" as="debt" hint-placeholder-count="3">
+              <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:baseline;padding:11px 4px;border-bottom:1px solid #e7e5e0">
+                <div style="font-size:13px;color:#2f2d2a">{{ debt.name }}</div>
+                <div style="text-align:right;white-space:nowrap"><span style="font-size:13px;font-weight:600;color:#a83a2b;font-variant-numeric:tabular-nums">{{ debt.amountStr }}</span><span style="font-size:12px;color:#9a958d;margin-left:10px">{{ debt.daysStr }} gecikti</span></div>
+              </div>
+              </sc-for>
+            </div>
+            </sc-if>
+            <sc-if value="{{ noDebts }}">
+            <div style="padding:24px 4px;text-align:center;font-size:13px;color:#9a958d">Gecikmiş ödemesi olan öğrenci yok.</div>
+            </sc-if>
+          </section>
+
+          <section>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;padding-bottom:9px;border-bottom:1px solid #dcd9d3">
+              <div style="font-size:13px;font-weight:600">Paketi bitmek üzere</div>
+              <sc-if value="{{ hasPkgs }}"><div style="font-size:12px;color:#9a958d">{{ pkgMeta }}</div></sc-if>
+            </div>
+            <sc-if value="{{ hasPkgs }}" hint-placeholder-val="{{ true }}">
+            <div>
+              <sc-for list="{{ pkgs }}" as="pkg" hint-placeholder-count="3">
+              <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:baseline;padding:11px 4px;border-bottom:1px solid #e7e5e0">
+                <div style="font-size:13px;color:#2f2d2a">{{ pkg.name }}</div>
+                <div style="white-space:nowrap"><span style="font-size:13px;font-weight:600;color:#b57314;font-variant-numeric:tabular-nums">{{ pkg.remaining }}</span><span style="font-size:13px;color:#736f68"> ders kaldı</span></div>
+              </div>
+              </sc-for>
+            </div>
+            </sc-if>
+            <sc-if value="{{ noPkgs }}">
+            <div style="padding:24px 4px;text-align:center;font-size:13px;color:#9a958d">Paketi bitmek üzere olan öğrenci yok.</div>
+            </sc-if>
+          </section>
+
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 4px 0;border-top:1px solid #e7e5e0">
+            <sc-if value="{{ backupOk }}"><div style="font-size:12px;color:#9a958d">Son yedekleme: {{ backupText }} · otomatik</div></sc-if>
+            <sc-if value="{{ backupWarn }}"><div style="font-size:12px;color:#b57314">Son yedekleme: {{ backupText }} · gecikti</div></sc-if>
+            <a href="#" style="font-size:12px;color:#736f68" style-hover="color:#2f2d2a">Şimdi yedekle</a>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:800},&quot;mod&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dolu&quot;,&quot;bos&quot;],&quot;default&quot;:&quot;dolu&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Örnek veri&quot;},&quot;yedeklemeUyarisi&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Örnek veri&quot;},&quot;sutunBasliklari&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Görünüm&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const mod = this.props.mod ?? 'dolu';
+    const empty = mod === 'bos';
+    const showCols = this.props.sutunBasliklari ?? true;
+    const backupWarn = this.props.yedeklemeUyarisi ?? false;
+
+    const days = ['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'];
+    const d = new Date(2026, 6, 24);
+    const p2 = n => String(n).padStart(2, '0');
+    const dateStr = `${p2(d.getDate())}.${p2(d.getMonth() + 1)}.${d.getFullYear()}`;
+    const weekday = days[d.getDay()];
+
+    const rowBase = 'display:grid;grid-template-columns:54px minmax(0,1fr) 128px 84px 190px;gap:12px;align-items:center;padding:11px 4px;border-bottom:1px solid #e7e5e0;font-size:13px';
+    const mk = o => ({ ...o, rowStyle: o.isMissing ? rowBase + ';background:#faf3e8;box-shadow:inset 3px 0 0 #d59029' : rowBase });
+
+    let past = [
+      mk({ time:'09:00', subject:'Matematik', sub:'Grup A', kind:'Grup', teacher:'Ayşe Demir', countStr:'6 öğrenci', isDone:true, isMissing:false, isUpcoming:false, att:'6/6 katıldı' }),
+      mk({ time:'11:00', subject:'İngilizce', sub:'Zeynep Ak', kind:'Birebir', teacher:'Elif Kaya', countStr:'1 öğrenci', isDone:true, isMissing:false, isUpcoming:false, att:'1/1 katıldı' }),
+      mk({ time:'13:30', subject:'Fizik', sub:'Grup B', kind:'Grup', teacher:'Mehmet Yılmaz', countStr:'5 öğrenci', isDone:false, isMissing:true, isUpcoming:false, att:'' }),
+      mk({ time:'14:30', subject:'Kimya', sub:'Deniz Yıldız', kind:'Birebir', teacher:'Selin Arı', countStr:'1 öğrenci', isDone:false, isMissing:true, isUpcoming:false, att:'' }),
+    ];
+    let up = [
+      mk({ time:'16:00', subject:'Matematik', sub:'Grup C', kind:'Grup', teacher:'Ayşe Demir', countStr:'4 öğrenci', isDone:false, isMissing:false, isUpcoming:true, att:'' }),
+      mk({ time:'17:30', subject:'İngilizce', sub:'Grup A', kind:'Grup', teacher:'Elif Kaya', countStr:'6 öğrenci', isDone:false, isMissing:false, isUpcoming:true, att:'' }),
+    ];
+    let debtsRaw = [
+      { name:'Mehmet Aslan', amount:1200, daysStr:'12 gün' },
+      { name:'Zeynep Ak', amount:800, daysStr:'5 gün' },
+      { name:'Deniz Yıldız', amount:450, daysStr:'2 gün' },
+    ];
+    let pkgs = [
+      { name:'Ahmet Şahin', remaining:1 },
+      { name:'Ceren Ünal', remaining:2 },
+      { name:'Burak Doğan', remaining:2 },
+    ];
+
+    if (empty) { past = []; up = []; debtsRaw = []; pkgs = []; }
+
+    const tl = n => n.toLocaleString('tr-TR');
+    const debts = debtsRaw.map(x => ({ name:x.name, amountStr:`${tl(x.amount)} TL`, daysStr:x.daysStr }));
+    const debtTotal = debtsRaw.reduce((s, x) => s + x.amount, 0);
+
+    const missingCount = past.filter(l => l.isMissing).length;
+    const lessonCount = past.length + up.length;
+    const hasPast = past.length > 0;
+    const hasUp = up.length > 0;
+
+    return {
+      dateStr, weekday, showCols,
+      lessonsPast: past, lessonsUp: up,
+      hasLessons: lessonCount > 0, noLessons: lessonCount === 0,
+      showNow: hasPast && hasUp,
+      lessonCountStr: `${lessonCount} ders`,
+      missingCount, hasMissing: missingCount > 0,
+      debts, hasDebts: debts.length > 0, noDebts: debts.length === 0,
+      debtCount: debts.length,
+      debtMeta: `${debts.length} öğrenci · ${tl(debtTotal)} TL`,
+      pkgs, hasPkgs: pkgs.length > 0, noPkgs: pkgs.length === 0,
+      pkgMeta: `${pkgs.length} öğrenci`,
+      backupWarn, backupOk: !backupWarn,
+      backupText: backupWarn ? '3 gün önce' : 'Bugün 08:14',
+    };
+  }
+}
+</script>
+</body>
+</html>

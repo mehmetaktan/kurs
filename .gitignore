@@ -1,0 +1,46 @@
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
+
+# Rust / Tauri
+target/
+src-tauri/target/
+src-tauri/gen/
+
+# SQLite (geliştirme veritabanları asla commit edilmez)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Yedekler
+backups/
+*.bak
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Editör
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+
+# Gizli
+.env
+.env.*
+!.env.example
+
+# Claude Code yerel ayarları (komutlar ve CLAUDE.md commit edilir)
+.claude/settings.local.json

@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:"Helvetica Neue",Helvetica,"Segoe UI",Arial,sans-serif;color:#2f2d2a;background:#fbfaf8;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+a{color:#2f2d2a;text-decoration:none}
+a:hover{color:#000}
+input,button,select{font-family:inherit}
+select{-webkit-appearance:none;appearance:none}
+::placeholder{color:#a8a39a}
+::-webkit-scrollbar{width:11px;height:11px}
+::-webkit-scrollbar-thumb{background:#dcd9d3;border-radius:6px;border:3px solid #fbfaf8}
+</style>
+</helmet>
+<div style="display:flex;height:100vh;min-width:1280px;overflow:hidden">
+
+  <aside style="width:216px;flex-shrink:0;background:#f2f1ee;border-right:1px solid #e2dfd9;display:flex;flex-direction:column">
+    <div style="padding:18px 18px 14px;border-bottom:1px solid #e6e3dd">
+      <div style="font-size:13px;font-weight:600;letter-spacing:.01em">DersTakip</div>
+      <div style="font-size:12px;color:#9a958d;margin-top:2px">Aydın Özel Ders</div>
+    </div>
+    <nav style="padding:10px 0;flex:1">
+      <a href="Bugun.dc.html" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin:1px 8px;border-radius:6px;font-size:13px;color:#4a4741" style-hover="background:#eae8e3"><span>Bugün</span></a>
+      <a href="#" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin:1px 8px;border-radius:6px;font-size:13px;font-weight:600;color:#2f2d2a;background:#e5e2dc"><span>Takvim</span></a>
+      <a href="Öğrenciler.dc.html" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin:1px 8px;border-radius:6px;font-size:13px;color:#4a4741" style-hover="background:#eae8e3"><span>Öğrenciler</span></a>
+      <a href="#" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin:1px 8px;border-radius:6px;font-size:13px;color:#4a4741" style-hover="background:#eae8e3"><span>Gruplar</span></a>
+      <a href="#" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin:1px 8px;border-radius:6px;font-size:13px;color:#4a4741" style-hover="background:#eae8e3"><span>Ödemeler</span><sc-if value="{{ hasDebts }}"><span style="font-size:12px;font-weight:600;color:#a83a2b;background:#f4ddd7;border-radius:9px;padding:0 7px;line-height:18px">{{ debtCount }}</span></sc-if></a>
+      <a href="#" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin:1px 8px;border-radius:6px;font-size:13px;color:#4a4741" style-hover="background:#eae8e3"><span>Tanımlar</span></a>
+    </nav>
+    <div style="padding:12px 18px;border-top:1px solid #e6e3dd;font-size:12px;color:#9a958d">Sürüm 1.0 · Yerel</div>
+  </aside>
+
+  <main style="flex:1;display:flex;flex-direction:column;min-width:0;background:#fbfaf8">
+
+    <div style="display:flex;align-items:center;gap:14px;padding:14px 24px;border-bottom:1px solid #e7e5e0;flex-shrink:0">
+      <div style="display:flex;align-items:center;border:1px solid #dcd9d3;border-radius:8px;overflow:hidden;background:#fff">
+        <button onClick="{{ onPrev }}" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:17px;color:#4a4741;background:none;border:none;cursor:pointer" style-hover="background:#f2f1ee">‹</button>
+        <button onClick="{{ onToday }}" style="font-size:12.5px;color:#4a4741;background:none;border:none;border-left:1px solid #e7e5e0;border-right:1px solid #e7e5e0;padding:0 13px;height:32px;cursor:pointer" style-hover="background:#f2f1ee">Bugün</button>
+        <button onClick="{{ onNext }}" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:17px;color:#4a4741;background:none;border:none;cursor:pointer" style-hover="background:#f2f1ee">›</button>
+      </div>
+      <div style="font-size:15px;font-weight:600;letter-spacing:-.01em;white-space:nowrap">{{ rangeLabel }}</div>
+      <div style="flex:1"></div>
+      <div style="position:relative">
+        <select value="{{ teacherVal }}" onChange="{{ onTeacher }}" style="font-size:13px;color:#4a4741;background:#fff;border:1px solid #dcd9d3;border-radius:7px;padding:8px 30px 8px 12px;cursor:pointer;outline:none" style-focus="border-color:#b3ada3">
+          <sc-for list="{{ teacherOpts }}" as="o" hint-placeholder-count="6"><option value="{{ o.v }}">{{ o.label }}</option></sc-for>
+        </select>
+        <span style="position:absolute;right:11px;top:50%;transform:translateY(-50%);font-size:10px;color:#9a958d;pointer-events:none">▾</span>
+      </div>
+      <div style="display:flex;border:1px solid #dcd9d3;border-radius:8px;overflow:hidden;background:#fff">
+        <button onClick="{{ onWeek }}" style="{{ weekBtnStyle }}">Hafta</button>
+        <button onClick="{{ onDay }}" style="{{ dayBtnStyle }}">Gün</button>
+      </div>
+      <button onClick="{{ onAdd }}" style="font-size:13px;font-weight:600;color:#fbfaf8;background:#2f2d2a;border:none;border-radius:7px;padding:9px 15px;cursor:pointer;white-space:nowrap">＋ Ders ekle</button>
+    </div>
+
+    <div style="flex:1;position:relative;min-height:0;display:flex;flex-direction:column">
+      <div style="flex:1;overflow:auto;min-height:0">
+
+        <div style="display:flex;position:sticky;top:0;z-index:5;background:#faf9f6;min-width:100%">
+          <div style="{{ cornerStyle }}"></div>
+          <sc-for list="{{ cols }}" as="c" hint-placeholder-count="7">
+          <div style="{{ c.headerStyle }}">
+            <div style="display:flex;align-items:center;gap:6px;min-width:0">
+              <sc-if value="{{ c.showDot }}"><span style="width:8px;height:8px;border-radius:50%;background:{{ c.dotColor }};flex-shrink:0"></span></sc-if>
+              <span style="{{ c.headTopStyle }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.headTop }}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;margin-top:2px">
+              <span style="font-size:11px;color:#9a958d;font-variant-numeric:tabular-nums;white-space:nowrap">{{ c.headSub }}</span>
+              <sc-if value="{{ c.holiday }}"><span style="font-size:10px;color:#8f8a80;background:#efece6;border:1px solid #e2dfd9;border-radius:9px;padding:0 7px;white-space:nowrap">{{ c.holidayText }}</span></sc-if>
+            </div>
+          </div>
+          </sc-for>
+        </div>
+
+        <div style="display:flex;min-width:100%">
+          <div style="{{ gutterStyle }}">
+            <sc-for list="{{ hours }}" as="h" hint-placeholder-count="15"><div style="{{ h.style }}">{{ h.label }}</div></sc-for>
+          </div>
+          <sc-for list="{{ cols }}" as="c" hint-placeholder-count="7">
+          <div ref="{{ c.setRef }}" style="{{ c.bodyStyle }}">
+            <sc-if value="{{ c.hasShade }}"><div style="{{ c.shadeStyle }}"></div></sc-if>
+            <sc-if value="{{ c.holiday }}"><div style="{{ c.hatchStyle }}"><div style="margin-top:16px;font-size:11px;color:#8f8a80;background:#fbfaf8;border:1px solid #e2dfd9;border-radius:12px;padding:3px 11px;white-space:nowrap">{{ c.holidayText }} · ders bırakılamaz</div></div></sc-if>
+            <sc-if value="{{ c.showTarget }}"><div style="{{ c.targetStyle }}"></div></sc-if>
+            <sc-if value="{{ c.showNow }}"><div style="position:absolute;left:0;right:0;top:{{ c.nowTop }}px;height:1.5px;background:#d59029;z-index:7"></div><div style="position:absolute;left:-3px;top:{{ c.nowDot }}px;width:7px;height:7px;border-radius:50%;background:#d59029;z-index:8"></div></sc-if>
+            <sc-if value="{{ c.showNowLabel }}"><div style="position:absolute;right:3px;top:{{ c.nowLabelTop }}px;font-size:9.5px;font-weight:600;color:#b57314;background:#fbfaf8;padding:0 4px;border-radius:4px;z-index:8">şimdi</div></sc-if>
+            <sc-for list="{{ c.blocks }}" as="b" hint-placeholder-count="0">
+            <div onPointerDown="{{ b.onDown }}" style="{{ b.style }}">
+              <sc-if value="{{ b.conflict }}"><span style="position:absolute;top:3px;right:3px;width:15px;height:15px;border-radius:50%;background:#cf7a4a;color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;line-height:1;z-index:2">!</span></sc-if>
+              <div style="font-size:11px;color:#736f68;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden">{{ b.timeStr }}</div>
+              <div style="display:flex;align-items:center;gap:5px;margin-top:1px">
+                <span style="font-size:12px;font-weight:600;color:#2f2d2a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">{{ b.title }}</span>
+                <sc-if value="{{ b.tagShow }}"><span style="flex-shrink:0;font-size:9.5px;font-weight:600;border-radius:8px;padding:0 6px;line-height:15px;{{ b.tagStyle }}">{{ b.tagText }}</span></sc-if>
+              </div>
+              <sc-if value="{{ b.showMeta }}">
+              <div style="display:flex;align-items:center;gap:5px;margin-top:3px">
+                <span style="width:6px;height:6px;border-radius:50%;background:{{ b.dotColor }};flex-shrink:0"></span>
+                <span style="font-size:11px;color:#8f8a80;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ b.teacher }} · {{ b.occ }}</span>
+              </div>
+              </sc-if>
+            </div>
+            </sc-for>
+          </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <sc-if value="{{ overlayShow }}">
+      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(251,250,248,.74);z-index:12">
+        <div style="text-align:center;max-width:370px;padding:28px 32px;background:#fff;border:1px solid #e7e5e0;border-radius:12px;box-shadow:0 18px 44px -26px rgba(0,0,0,.35)">
+          <div style="width:46px;height:46px;margin:0 auto 14px;border-radius:50%;background:#f2f1ee;border:1px solid #e2dfd9;display:flex;align-items:center;justify-content:center;font-size:20px;color:#b0aaa0">{{ overlayIcon }}</div>
+          <div style="font-size:15px;font-weight:600;color:#2f2d2a">{{ overlayTitle }}</div>
+          <div style="font-size:13px;color:#9a958d;margin-top:8px;line-height:1.55;text-wrap:pretty">{{ overlayText }}</div>
+          <div style="display:flex;gap:10px;justify-content:center;margin-top:20px">
+            <sc-if value="{{ overlayAdd }}"><button onClick="{{ onAdd }}" style="font-size:13px;font-weight:600;color:#fbfaf8;background:#2f2d2a;border:none;border-radius:7px;padding:9px 16px;cursor:pointer" style-hover="background:#1f1d1b">Ders ekle</button></sc-if>
+            <sc-if value="{{ overlayTemplate }}"><button onClick="{{ onTemplate }}" style="font-size:13px;font-weight:600;color:#4a4741;background:#efedea;border:1px solid #e2dfd9;border-radius:7px;padding:9px 16px;cursor:pointer" style-hover="background:#e5e2dc">Şablondan oluştur</button></sc-if>
+            <sc-if value="{{ overlayClear }}"><button onClick="{{ onClearFilter }}" style="font-size:13px;font-weight:600;color:#4a4741;background:#efedea;border:1px solid #e2dfd9;border-radius:7px;padding:9px 16px;cursor:pointer" style-hover="background:#e5e2dc">Filtreyi temizle</button></sc-if>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:14px 18px;flex-wrap:wrap;padding:9px 24px;border-top:1px solid #e7e5e0;background:#f7f6f3;flex-shrink:0">
+      <span style="display:inline-flex;align-items:center;gap:7px;font-size:11px;color:#736f68"><span style="width:18px;height:12px;border-radius:3px;background:#e8e3db;border:1px solid #d8d3ca"></span>Grup</span>
+      <span style="display:inline-flex;align-items:center;gap:7px;font-size:11px;color:#736f68"><span style="width:18px;height:12px;border-radius:3px;background:#fff;border:1px solid #d8d3ca"></span>Birebir</span>
+      <span style="display:inline-flex;align-items:center;gap:7px;font-size:11px;color:#736f68"><span style="width:18px;height:12px;border-radius:3px;background:#fff;border:1px dashed #b0aaa0"></span>Telafi / tek seferlik</span>
+      <span style="display:inline-flex;align-items:center;gap:7px;font-size:11px;color:#736f68"><span style="width:18px;height:12px;border-radius:3px;background:#f9f1e4;border:1px solid #e6c893;box-shadow:inset 3px 0 0 #d59029"></span>Yoklama girilmedi</span>
+      <span style="display:inline-flex;align-items:center;gap:7px;font-size:11px;color:#736f68"><span style="width:18px;height:12px;border-radius:3px;background:#e8e3db;border:1px solid #d8d3ca;opacity:.5"></span>Geçmiş</span>
+      <span style="display:inline-flex;align-items:center;gap:7px;font-size:11px;color:#736f68"><span style="width:15px;height:15px;border-radius:50%;background:#cf7a4a;color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center">!</span>Çakışma</span>
+      <span style="display:inline-flex;align-items:center;gap:7px;font-size:11px;color:#736f68"><span style="width:18px;height:12px;border-radius:3px;background-image:repeating-linear-gradient(45deg,#efece6 0,#efece6 3px,#e0dbd2 3px,#e0dbd2 6px);border:1px solid #e2dfd9"></span>Tatil / kapalı</span>
+      <div style="width:1px;height:22px;background:#dcd9d3"></div>
+      <span style="font-size:11px;color:#9a958d">Küçük boyut — grup / öğrenci detayında:</span>
+      <div style="width:150px;border:1px solid #d8d3ca;background:#e8e3db;border-radius:6px;padding:3px 7px">
+        <div style="font-size:9.5px;color:#736f68;font-variant-numeric:tabular-nums">16:00–17:30</div>
+        <div style="font-size:11px;font-weight:600;color:#2f2d2a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Matematik · Grup C</div>
+        <div style="display:flex;align-items:center;gap:4px;margin-top:1px"><span style="width:5px;height:5px;border-radius:50%;background:#5f8f6b"></span><span style="font-size:10px;color:#8f8a80">Ayşe Demir · 4/6</span></div>
+      </div>
+      <div style="width:150px;border:1px solid #d8d3ca;background:#fff;border-radius:6px;padding:3px 7px">
+        <div style="font-size:9.5px;color:#736f68;font-variant-numeric:tabular-nums">17:30–18:30</div>
+        <div style="font-size:11px;font-weight:600;color:#2f2d2a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Kimya · Birebir</div>
+        <div style="display:flex;align-items:center;gap:4px;margin-top:1px"><span style="width:5px;height:5px;border-radius:50%;background:#9079a6"></span><span style="font-size:10px;color:#8f8a80">Selin Arı · Deniz Y.</span></div>
+      </div>
+    </div>
+  </main>
+
+  <sc-if value="{{ confirmShow }}">
+  <div style="position:fixed;inset:0;background:rgba(31,29,27,.3);display:flex;align-items:center;justify-content:center;z-index:30">
+    <div style="width:384px;background:#fbfaf8;border-radius:12px;border:1px solid #e2dfd9;box-shadow:0 24px 60px -30px rgba(0,0,0,.5);padding:22px 24px">
+      <div style="font-size:15px;font-weight:600">Dersi taşı</div>
+      <div style="font-size:13px;color:#2f2d2a;margin-top:9px;font-weight:600">{{ confirmName }}</div>
+      <div style="margin-top:12px;display:flex;flex-direction:column;gap:5px">
+        <div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:#9a958d">Eski</span><span style="color:#736f68;font-variant-numeric:tabular-nums">{{ confirmFrom }}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:#9a958d">Yeni</span><span style="color:#2f2d2a;font-weight:600;font-variant-numeric:tabular-nums">{{ confirmTo }}</span></div>
+      </div>
+      <div style="font-size:12px;color:#9a958d;margin-top:15px;line-height:1.5;text-wrap:pretty">Bu ders haftalık şablonda tekrar ediyor. Değişiklik nasıl uygulansın?</div>
+      <div style="display:flex;flex-direction:column;gap:9px;margin-top:14px">
+        <button onClick="{{ onMoveOnce }}" style="text-align:left;background:#2f2d2a;border:none;border-radius:8px;padding:11px 14px;cursor:pointer" style-hover="background:#1f1d1b"><div style="font-size:13px;font-weight:600;color:#fbfaf8">Sadece bu ders</div><div style="font-size:11px;color:#c9c5bd;margin-top:2px">Yalnızca {{ confirmDateShort }} tarihli ders taşınır</div></button>
+        <button onClick="{{ onMoveFuture }}" style="text-align:left;background:#efedea;border:1px solid #e2dfd9;border-radius:8px;padding:11px 14px;cursor:pointer" style-hover="background:#e5e2dc"><div style="font-size:13px;font-weight:600;color:#4a4741">Bu ve sonraki dersler</div><div style="font-size:11px;color:#9a958d;margin-top:2px">Şablon güncellenir, geçmiş dersler korunur</div></button>
+      </div>
+      <div style="text-align:center;margin-top:13px"><a href="#" onClick="{{ onCancelMove }}" style="font-size:12px;color:#736f68" style-hover="color:#2f2d2a">Vazgeç</a></div>
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ toast }}">
+  <div style="position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#2f2d2a;color:#fbfaf8;font-size:13px;padding:10px 17px;border-radius:8px;box-shadow:0 10px 30px -14px rgba(0,0,0,.55);z-index:40">{{ toastText }}</div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:800},&quot;durum&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;normal&quot;,&quot;ilk kullanım&quot;,&quot;tam tatil&quot;,&quot;filtre sonuçsuz&quot;],&quot;default&quot;:&quot;normal&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Örnek veri&quot;},&quot;gorunum&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Hafta&quot;,&quot;Gün&quot;],&quot;default&quot;:&quot;Hafta&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Görünüm&quot;},&quot;satirYuksekligi&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;rahat&quot;,&quot;sıkı&quot;],&quot;default&quot;:&quot;rahat&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Görünüm&quot;}}">
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.TODAY = new Date(2026, 6, 24);
+    this.NOW = 15 * 60 + 40;
+    this.START = 480; this.END = 1320;
+    this.state = {
+      view: (props.gorunum === 'Gün') ? 'day' : 'week',
+      anchorTs: this.TODAY.getTime(),
+      teacher: (props.durum === 'filtre sonuçsuz') ? 4 : 'all',
+      pos: {},
+      drag: null,
+      confirm: null,
+      toast: null,
+    };
+    this._cols = {};
+    this._colMeta = {};
+  }
+  componentDidMount() {
+    this._mv = this.onMove.bind(this);
+    this._up = this.onUp.bind(this);
+    this._onKey = (e) => {
+      const el = e.target;
+      if (el && ['input', 'textarea', 'select'].includes((el.tagName || '').toLowerCase())) return;
+      if (e.key === 'ArrowLeft') { e.preventDefault(); this.nav(-1); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); this.nav(1); }
+    };
+    window.addEventListener('keydown', this._onKey);
+  }
+  componentWillUnmount() {
+    window.removeEventListener('keydown', this._onKey);
+    window.removeEventListener('pointermove', this._mv);
+    window.removeEventListener('pointerup', this._up);
+    if (this._t) clearTimeout(this._t);
+  }
+
+  flash(m) { this.setState({ toast: m }); if (this._t) clearTimeout(this._t); this._t = setTimeout(() => this.setState({ toast: null }), 2200); }
+  nav(dir) { const step = this.state.view === 'week' ? 7 : 1; const d = new Date(this.state.anchorTs); d.setDate(d.getDate() + dir * step); this.setState({ anchorTs: d.getTime() }); }
+  snap(m) { return Math.round(m / 30) * 30; }
+  hit(e) {
+    for (const k in this._cols) {
+      const el = this._cols[k]; if (!el) continue;
+      const r = el.getBoundingClientRect();
+      if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) return { key: k, r };
+    }
+    return null;
+  }
+  onDownFn(e, l) {
+    if (e.button && e.button !== 0) return;
+    e.preventDefault();
+    const rect = e.currentTarget.getBoundingClientRect();
+    this._down = {
+      id: l.id, x: e.clientX, y: e.clientY,
+      grabMin: (e.clientY - rect.top) / this._pxmin,
+      dur: l.e - l.s,
+      origin: { day: l.day, teacher: l.teacher, s: l.s, e: l.e },
+    };
+    window.addEventListener('pointermove', this._mv);
+    window.addEventListener('pointerup', this._up);
+  }
+  onMove(e) {
+    if (!this._down) return;
+    const dist = Math.hypot(e.clientX - this._down.x, e.clientY - this._down.y);
+    if (!this.state.drag && dist < 5) return;
+    const hit = this.hit(e);
+    let to = null, valid = false;
+    if (hit) {
+      const meta = this._colMeta[hit.key];
+      if (meta && !meta.holiday) {
+        const dur = this._down.dur;
+        let s = this.snap(this.START + (e.clientY - hit.r.top) / this._pxmin - this._down.grabMin);
+        s = Math.max(this.START, Math.min(this.END - dur, s));
+        const teacher = (meta.dropTeacher == null) ? this._down.origin.teacher : meta.dropTeacher;
+        to = { day: meta.dropDay, teacher, s, e: s + dur };
+        valid = true;
+      }
+    }
+    this.setState({ drag: { id: this._down.id, to: valid ? to : null, valid, origin: this._down.origin } });
+  }
+  onUp() {
+    window.removeEventListener('pointermove', this._mv);
+    window.removeEventListener('pointerup', this._up);
+    const down = this._down; this._down = null;
+    const dg = this.state.drag;
+    if (!dg) { if (down) this.openAttendance(down.id); return; }
+    const to = dg.to, o = dg.origin;
+    const changed = to && (to.s !== o.s || to.day !== o.day || to.teacher !== o.teacher);
+    if (dg.valid && changed) this.setState({ confirm: { id: dg.id, to, from: o } });
+    else this.setState({ drag: null });
+  }
+  openAttendance(id) {
+    const l = this._byId[id]; if (!l) return;
+    this.flash(l.__ended ? 'Yoklama paneli açılıyor…' : 'Ders kartı açılıyor…');
+  }
+  applyMove(scope) {
+    const c = this.state.confirm; if (!c) return;
+    const to = c.to;
+    this.setState(s => ({ pos: { ...s.pos, [c.id]: { day: to.day, teacher: to.teacher, s: to.s, e: to.e } }, drag: null, confirm: null }));
+    this.flash(scope === 'future' ? 'Bu ve sonraki dersler taşındı' : 'Yalnızca bu ders taşındı');
+  }
+
+  renderVals() {
+    const durum = this.props.durum || 'normal';
+    const sikici = this.props.satirYuksekligi === 'sıkı';
+    const SLOT = sikici ? 22 : 30;
+    const pxmin = SLOT / 30; this._pxmin = pxmin;
+    const START = this.START, END = this.END, totalH = (END - START) * pxmin;
+    const p2 = n => String(n).padStart(2, '0');
+    const fmt = m => `${p2(Math.floor(m / 60))}:${p2(m % 60)}`;
+    const monShort = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
+    const dayShort = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
+    const dayFull = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
+    const teachers = [
+      { name: 'Ayşe Demir', subj: 'Matematik', color: '#5f8f6b' },
+      { name: 'Elif Kaya', subj: 'İngilizce', color: '#6a86a8' },
+      { name: 'Mehmet Yılmaz', subj: 'Fizik', color: '#b57314' },
+      { name: 'Selin Arı', subj: 'Kimya', color: '#9079a6' },
+      { name: 'Caner Ay', subj: 'Rehberlik', color: '#8a8079' },
+    ];
+
+    let base = durum === 'ilk kullanım' ? [] : [
+      { id: 1, day: 0, s: 540, e: 630, kind: 'group', teacher: 0, subj: 'Matematik', grp: 'Grup A', cap: 6, filled: 6, att: 'done' },
+      { id: 2, day: 0, s: 660, e: 720, kind: 'solo', teacher: 1, subj: 'İngilizce', student: 'Zeynep Ak', att: 'done' },
+      { id: 3, day: 0, s: 960, e: 1050, kind: 'group', teacher: 2, subj: 'Fizik', grp: 'Grup B', cap: 6, filled: 5, att: 'done' },
+      { id: 4, day: 1, s: 600, e: 690, kind: 'group', teacher: 3, subj: 'Kimya', grp: 'Grup', cap: 6, filled: 4, att: 'done' },
+      { id: 5, day: 1, s: 960, e: 1020, kind: 'solo', teacher: 0, subj: 'Matematik', student: 'Ahmet Şahin', att: 'done' },
+      { id: 6, day: 1, s: 990, e: 1050, kind: 'group', teacher: 0, subj: 'Matematik', grp: 'Grup C', cap: 6, filled: 4, att: 'done' },
+      { id: 7, day: 1, s: 1080, e: 1140, kind: 'group', teacher: 1, subj: 'İngilizce', grp: 'Grup B', cap: 6, filled: 6, att: 'done' },
+      { id: 8, day: 2, s: 570, e: 660, kind: 'group', teacher: 0, subj: 'Matematik', grp: 'Grup A', cap: 6, filled: 6, att: 'done' },
+      { id: 9, day: 2, s: 840, e: 900, kind: 'solo', teacher: 2, subj: 'Fizik', student: 'Deniz Yıldız', att: 'done', oneOff: true },
+      { id: 10, day: 2, s: 1020, e: 1110, kind: 'group', teacher: 1, subj: 'İngilizce', grp: 'Grup A', cap: 6, filled: 5, att: 'done' },
+      { id: 11, day: 3, s: 660, e: 720, kind: 'solo', teacher: 3, subj: 'Kimya', student: 'Deniz Yıldız', att: 'done' },
+      { id: 12, day: 3, s: 810, e: 870, kind: 'group', teacher: 2, subj: 'Fizik', grp: 'Grup B', cap: 6, filled: 5, att: 'missing' },
+      { id: 13, day: 3, s: 960, e: 1050, kind: 'group', teacher: 0, subj: 'Matematik', grp: 'Grup A', cap: 6, filled: 6, att: 'done' },
+      { id: 14, day: 4, s: 540, e: 600, kind: 'solo', teacher: 1, subj: 'İngilizce', student: 'Zeynep Ak', att: 'done' },
+      { id: 15, day: 4, s: 810, e: 900, kind: 'group', teacher: 2, subj: 'Fizik', grp: 'Grup B', cap: 6, filled: 6, att: 'missing' },
+      { id: 16, day: 4, s: 960, e: 1050, kind: 'group', teacher: 0, subj: 'Matematik', grp: 'Grup C', cap: 6, filled: 4, att: null },
+      { id: 17, day: 4, s: 1050, e: 1110, kind: 'solo', teacher: 3, subj: 'Kimya', student: 'Deniz Yıldız', att: null },
+      { id: 18, day: 5, s: 600, e: 690, kind: 'group', teacher: 0, subj: 'Matematik', grp: 'Grup A', cap: 6, filled: 5, att: null },
+      { id: 19, day: 5, s: 720, e: 780, kind: 'solo', teacher: 1, subj: 'İngilizce', student: 'Zeynep Ak', att: null, oneOff: true },
+    ];
+    const baseById = {}; base.forEach(l => baseById[l.id] = l);
+    const holidaySet = durum === 'tam tatil' ? new Set([0, 1, 2, 3, 4, 5, 6]) : new Set([6]);
+
+    const anchor = new Date(this.state.anchorTs);
+    const monday = (() => { const x = new Date(anchor); const wd = (x.getDay() + 6) % 7; x.setDate(x.getDate() - wd); x.setHours(0, 0, 0, 0); return x; })();
+    const addDays = (dt, n) => { const x = new Date(dt); x.setDate(x.getDate() + n); return x; };
+    const key = dt => dt.getFullYear() * 10000 + (dt.getMonth() + 1) * 100 + dt.getDate();
+    const todayKey = key(this.TODAY);
+    const anchorDayIdx = (anchor.getDay() + 6) % 7;
+
+    const pos = this.state.pos, drag = this.state.drag;
+    const eff = l => { let r = { ...l, ...(pos[l.id] || {}) }; if (drag && drag.id === l.id && drag.to) r = { ...r, day: drag.to.day, teacher: drag.to.teacher, s: drag.to.s, e: drag.to.e }; return r; };
+    const effList = base.map(eff);
+    this._byId = {}; effList.forEach(l => this._byId[l.id] = l);
+    const view = this.state.view;
+    const tf = this.state.teacher;
+
+    const assignLanes = items => {
+      const sorted = [...items].sort((a, b) => a.s - b.s || a.e - b.e);
+      const res = {};
+      let cur = [], curEnd = -1;
+      const flush = () => {
+        if (!cur.length) return;
+        const lanes = [];
+        for (const it of cur) {
+          let placed = -1;
+          for (let i = 0; i < lanes.length; i++) { if (it.s >= lanes[i]) { placed = i; lanes[i] = it.e; break; } }
+          if (placed < 0) { placed = lanes.length; lanes.push(it.e); }
+          it._lane = placed;
+        }
+        for (const it of cur) res[it.id] = { lane: it._lane, lanes: lanes.length };
+        cur = []; curEnd = -1;
+      };
+      for (const it of sorted) { if (cur.length && it.s >= curEnd) flush(); cur.push(it); curEnd = Math.max(curEnd, it.e); }
+      flush();
+      return res;
+    };
+
+    const buildBlocks = (list, colDate, holiday) => {
+      if (holiday || !list.length) return [];
+      const dk = key(colDate), isToday = dk === todayKey;
+      const lanes = assignLanes(list);
+      return list.map(l => {
+        const ended = dk < todayKey || (isToday && l.e <= this.NOW);
+        this._byId[l.id].__ended = ended;
+        const missing = ended && l.att === 'missing';
+        const doneFaded = ended && l.att !== 'missing';
+        const isSolo = l.kind === 'solo';
+        const ln = lanes[l.id], nlanes = ln.lanes, li = ln.lane;
+        const top = (l.s - START) * pxmin, h = Math.max((l.e - l.s) * pxmin - 3, 18);
+        const leftPct = (li / nlanes) * 100, wPct = 100 / nlanes;
+        const conflict = list.some(o => o.id !== l.id && o.teacher === l.teacher && o.s < l.e && o.e > l.s);
+        let bg, bd;
+        if (missing) { bg = '#f9f1e4'; bd = '#e6c893'; }
+        else if (isSolo) { bg = '#ffffff'; bd = '#d8d3ca'; }
+        else { bg = '#e8e3db'; bd = '#d8d3ca'; }
+        const border = l.oneOff ? 'dashed' : 'solid';
+        const dragging = drag && drag.id === l.id;
+        let st = `position:absolute;top:${top}px;height:${h}px;left:calc(${leftPct}% + 2px);width:calc(${wPct}% - 4px);box-sizing:border-box;border-radius:7px;border:1px ${border} ${bd};background:${bg};padding:4px 7px;overflow:hidden;user-select:none;touch-action:none;cursor:${dragging ? 'grabbing' : 'grab'};z-index:${dragging ? 40 : 3};`;
+        if (missing) st += 'box-shadow:inset 3px 0 0 #d59029;';
+        if (conflict) st += 'outline:1.5px solid #cf7a4a;outline-offset:-2px;';
+        if (dragging) st += 'box-shadow:0 14px 28px -10px rgba(0,0,0,.5);opacity:.96;';
+        else if (doneFaded) st += 'opacity:.5;';
+        const compact = nlanes >= 2 || h < 44;
+        const t = teachers[l.teacher];
+        let tagText = '', tagStyle = '';
+        if (missing) { tagText = 'Yoklama'; tagStyle = 'background:#f0d49a;color:#7a4e10;'; }
+        else if (l.oneOff) { tagText = 'Telafi'; tagStyle = 'background:#efece7;color:#736f68;'; }
+        return {
+          id: l.id, style: st, timeStr: `${fmt(l.s)}–${fmt(l.e)}`,
+          title: isSolo ? `${l.subj} · Birebir` : `${l.subj} · ${l.grp}`,
+          occ: isSolo ? l.student : `${l.filled}/${l.cap}`,
+          teacher: t.name, dotColor: t.color, showMeta: !compact,
+          tagText, tagShow: !!tagText, tagStyle, conflict,
+          onDown: (e) => this.onDownFn(e, l),
+        };
+      });
+    };
+
+    const targetKey = drag && drag.valid && drag.to ? (view === 'week' ? 'd' + drag.to.day : 't' + drag.to.teacher) : null;
+    const targetTop = drag && drag.to ? (drag.to.s - START) * pxmin : 0;
+    const targetH = drag && drag.to ? (drag.to.e - drag.to.s) * pxmin : 0;
+    const holidayText = durum === 'tam tatil' ? 'Tatil' : 'Kapalı';
+    const shadeBg = 'rgba(120,110,95,.05)';
+    const hatchStyle = 'position:absolute;inset:0;background-image:repeating-linear-gradient(45deg,#efece6 0,#efece6 6px,#e5e1d9 6px,#e5e1d9 12px);opacity:.75;display:flex;align-items:flex-start;justify-content:center;z-index:4;pointer-events:none;';
+    const bodyBase = `position:relative;flex:1 1 0;min-width:128px;height:${totalH}px;border-right:1px solid #e7e5e0;background-image:repeating-linear-gradient(to bottom,#f2efea 0,#f2efea 1px,transparent 1px,transparent ${SLOT}px),repeating-linear-gradient(to bottom,#e7e3dc 0,#e7e3dc 1px,transparent 1px,transparent ${2 * SLOT}px);`;
+
+    this._colMeta = {};
+    const mkCol = (colKey, headTop, headSub, isToday, holiday, showDot, dotColor, blocks, colDate, dropDay, dropTeacher) => {
+      this._colMeta[colKey] = { holiday, dropDay, dropTeacher };
+      const dk = colDate ? key(colDate) : 0;
+      const shadeH = holiday ? 0 : (dk && dk < todayKey ? totalH : (dk === todayKey ? Math.max(0, (this.NOW - START) * pxmin) : 0));
+      const showNow = !holiday && dk === todayKey;
+      return {
+        key: colKey, headTop, headSub, showDot, dotColor,
+        headerStyle: `flex:1 1 0;min-width:128px;box-sizing:border-box;padding:7px 10px;border-right:1px solid #e7e5e0;border-bottom:1px solid #dcd9d3;background:${isToday ? '#efece5' : '#faf9f6'};`,
+        headTopStyle: `font-size:12px;font-weight:${isToday ? 700 : 600};color:${isToday ? '#2f2d2a' : '#4a4741'}`,
+        holiday, holidayText,
+        bodyStyle: bodyBase, hatchStyle,
+        hasShade: shadeH > 0, shadeStyle: `position:absolute;left:0;right:0;top:0;height:${shadeH}px;background:${shadeBg};z-index:1;pointer-events:none;`,
+        showNow, nowTop: (this.NOW - START) * pxmin, nowDot: (this.NOW - START) * pxmin - 3, nowLabelTop: (this.NOW - START) * pxmin - 8,
+        showTarget: colKey === targetKey, targetStyle: `position:absolute;left:2px;right:2px;top:${targetTop}px;height:${targetH}px;border:1.5px dashed #b57314;border-radius:7px;background:rgba(181,115,20,.09);z-index:2;pointer-events:none;`,
+        blocks,
+        setRef: (el) => { if (el) this._cols[colKey] = el; },
+      };
+    };
+
+    let cols = [];
+    if (view === 'week') {
+      for (let i = 0; i < 7; i++) {
+        const colDate = addDays(monday, i), dk = key(colDate), holiday = holidaySet.has(i);
+        const list = effList.filter(l => l.day === i && (tf === 'all' || l.teacher === tf));
+        const blocks = buildBlocks(list, colDate, holiday);
+        cols.push(mkCol('d' + i, dayShort[i], `${colDate.getDate()} ${monShort[colDate.getMonth()]}`, dk === todayKey, holiday, false, null, blocks, colDate, i, null));
+      }
+    } else {
+      const colDate = anchor, dayHoliday = holidaySet.has(anchorDayIdx);
+      let idxs = (tf !== 'all') ? [tf] : [0, 1, 2, 3, 4].filter(ti => effList.some(l => l.day === anchorDayIdx && l.teacher === ti));
+      if (!idxs.length) idxs = (tf !== 'all') ? [tf] : [0];
+      for (const ti of idxs) {
+        const list = effList.filter(l => l.day === anchorDayIdx && l.teacher === ti);
+        const blocks = buildBlocks(list, colDate, dayHoliday);
+        cols.push(mkCol('t' + ti, teachers[ti].name, `${list.length} ders`, false, dayHoliday, true, teachers[ti].color, blocks, colDate, anchorDayIdx, ti));
+      }
+    }
+    // now-label only on first now-column
+    let labeled = false;
+    cols.forEach(c => { c.showNowLabel = c.showNow && !labeled; if (c.showNow) labeled = true; });
+
+    const hours = [];
+    for (let hh = 8; hh <= 22; hh++) {
+      const top = (hh * 60 - START) * pxmin;
+      hours.push({ label: `${p2(hh)}:00`, style: `position:absolute;left:0;right:7px;top:${top}px;transform:translateY(-6px);text-align:right;font-size:11px;color:#a29c92;font-variant-numeric:tabular-nums` });
+    }
+
+    // range label
+    let rangeLabel;
+    if (view === 'week') {
+      const sun = addDays(monday, 6);
+      rangeLabel = monday.getMonth() === sun.getMonth()
+        ? `${monday.getDate()}–${sun.getDate()} ${monShort[monday.getMonth()]} ${sun.getFullYear()}`
+        : `${monday.getDate()} ${monShort[monday.getMonth()]} – ${sun.getDate()} ${monShort[sun.getMonth()]} ${sun.getFullYear()}`;
+    } else {
+      rangeLabel = `${dayFull[anchorDayIdx]}, ${anchor.getDate()} ${monShort[anchor.getMonth()]} ${anchor.getFullYear()}`;
+    }
+
+    // overlays
+    const filterEmptyGlobal = (typeof tf === 'number') && effList.filter(l => l.teacher === tf).length === 0;
+    const anyBlocks = cols.some(c => c.blocks.length > 0);
+    let overlay = null;
+    if (durum === 'ilk kullanım') overlay = { icon: '＋', title: 'Bu hafta için program tanımlı değil', text: 'Haftalık ders programı henüz oluşturulmadı. İlk dersi ekleyin ya da önceki bir haftayı şablon olarak kullanın.', add: true, template: true, clear: false };
+    else if (durum === 'tam tatil') overlay = { icon: '✕', title: 'Bu hafta tamamen tatil', text: 'Seçili hafta kuruma kapalı olarak işaretli. Ders planlanamaz; tatil tanımını Tanımlar bölümünden düzenleyebilirsiniz.', add: false, template: false, clear: false };
+    else if (filterEmptyGlobal) overlay = { icon: '⌕', title: `${teachers[tf].name} için ders yok`, text: 'Seçili öğretmenin bu takvimde planlı dersi bulunmuyor. Filtreyi temizleyerek tüm öğretmenleri görebilirsiniz.', add: false, template: false, clear: true };
+    else if (view === 'day' && !anyBlocks) {
+      const dayHoliday = holidaySet.has(anchorDayIdx);
+      overlay = dayHoliday
+        ? { icon: '✕', title: 'Bu gün kapalı', text: 'Seçili gün tatil/kapalı olarak işaretli. Bu güne ders bırakılamaz.', add: false, template: false, clear: false }
+        : { icon: '＋', title: 'Bu gün için ders yok', text: 'Seçili günde planlı ders bulunmuyor. Yeni bir ders ekleyebilirsiniz.', add: true, template: false, clear: false };
+    }
+
+    // confirm
+    const c = this.state.confirm;
+    let confirmName = '', confirmFrom = '', confirmTo = '', confirmDateShort = '';
+    if (c) {
+      const bl = baseById[c.id] || this._byId[c.id];
+      confirmName = bl.kind === 'solo' ? `${bl.subj} · Birebir (${bl.student})` : `${bl.subj} · ${bl.grp}`;
+      const tName = ti2 => teachers[ti2] ? teachers[ti2].name : '';
+      confirmFrom = `${dayFull[c.from.day]} ${fmt(c.from.s)} · ${tName(c.from.teacher)}`;
+      confirmTo = `${dayFull[c.to.day]} ${fmt(c.to.s)}–${fmt(c.to.e)} · ${tName(c.to.teacher)}`;
+      const cd = addDays(monday, c.to.day);
+      confirmDateShort = `${cd.getDate()} ${monShort[cd.getMonth()]}`;
+    }
+
+    const segActive = 'font-size:12.5px;padding:7px 14px;border:none;cursor:pointer;background:#2f2d2a;color:#fbfaf8;font-weight:600';
+    const segIdle = 'font-size:12.5px;padding:7px 14px;border:none;cursor:pointer;background:#fff;color:#4a4741';
+
+    return {
+      hasDebts: true, debtCount: '4',
+      rangeLabel,
+      onPrev: () => this.nav(-1), onNext: () => this.nav(1), onToday: () => this.setState({ anchorTs: this.TODAY.getTime() }),
+      teacherVal: tf === 'all' ? 'all' : String(tf),
+      teacherOpts: [{ v: 'all', label: 'Tüm öğretmenler' }, ...teachers.map((t, i) => ({ v: String(i), label: t.name }))],
+      onTeacher: (e) => { const v = e.target.value; this.setState({ teacher: v === 'all' ? 'all' : Number(v) }); },
+      onClearFilter: () => this.setState({ teacher: 'all' }),
+      weekBtnStyle: view === 'week' ? segActive : segIdle,
+      dayBtnStyle: (view === 'day' ? segActive : segIdle) + ';border-left:1px solid #dcd9d3',
+      onWeek: () => this.setState({ view: 'week' }), onDay: () => this.setState({ view: 'day' }),
+      onAdd: () => this.flash('Yeni ders penceresi açılıyor…'),
+      onTemplate: () => this.flash('Şablon seçimi açılıyor…'),
+
+      cornerStyle: `flex:0 0 56px;box-sizing:border-box;border-right:1px solid #e7e5e0;border-bottom:1px solid #dcd9d3;background:#faf9f6;`,
+      gutterStyle: `flex:0 0 56px;box-sizing:border-box;position:relative;height:${totalH}px;border-right:1px solid #e7e5e0;background:#fbfaf8;`,
+      hours, cols,
+
+      overlayShow: !!overlay,
+      overlayIcon: overlay ? overlay.icon : '', overlayTitle: overlay ? overlay.title : '', overlayText: overlay ? overlay.text : '',
+      overlayAdd: overlay ? overlay.add : false, overlayTemplate: overlay ? overlay.template : false, overlayClear: overlay ? overlay.clear : false,
+
+      confirmShow: !!c, confirmName, confirmFrom, confirmTo, confirmDateShort,
+      onMoveOnce: () => this.applyMove('once'), onMoveFuture: () => this.applyMove('future'),
+      onCancelMove: (e) => { if (e && e.preventDefault) e.preventDefault(); this.setState({ drag: null, confirm: null }); },
+
+      toast: this.state.toast, toastText: this.state.toast,
+    };
+  }
+}
+</script>
+</body>
+</html>
