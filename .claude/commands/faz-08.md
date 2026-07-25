@@ -4,7 +4,8 @@ description: Faz 8 — Tahsilat, borçlu listesi, cari ekstre ve makbuz PDF
 
 # Faz 8 — Tahsilat & Makbuz
 
-Önce oku: `CLAUDE.md`, `docs/DURUM.md`, `docs/VERI-MODELI.md`.
+Önce oku: `CLAUDE.md`, `docs/DURUM.md`, `docs/VERI-MODELI.md`, `docs/PRD.md`,
+`docs/KARARLAR.md` (ADR-014, **ADR-018**).
 
 ---
 
@@ -12,20 +13,33 @@ description: Faz 8 — Tahsilat, borçlu listesi, cari ekstre ve makbuz PDF
 
 - Öğrenci seç, tutar, tarih, yöntem (Nakit / Havale / Kart), açıklama
 - Ödeme `ledger_entry`'ye **alacak** satırı olarak işlenir
-- Ödeme bir pakete bağlanabilir
+- **Açık taksitlere mahsup** (`payment_allocation`) — tasarımın "Mahsup edildiği taksit"
+  kolonunun kaynağı. Mahsup otomatik önerilir, **en eski vadeden başlayarak** (R4.6),
+  elle değiştirilebilir. Mahsup toplamı ödemeyi aşamaz (K-9).
+- Otomatik mahsup **bütün açık taksitleri** kapsar — vadesi gelmiş **ve gelmemiş**.
+  Aksi hâlde avans birikir ve bakiye ile borçlu listesi birbirini tutmaz.
 - Kısmi ödeme desteklenir
-- Fazla ödeme → alacaklı bakiye, sonraki döneme devreder
-- Ödeme düzeltme ve silme: defter tutarlılığı bozulmayacak şekilde
-  (silme değil düzeltme kaydı mı, yoksa soft delete mi — karar ver ve ADR yaz)
+- Fazla ödeme → avans; ekranda açıkça yazılır (R4.7): *"420 TL avans olarak kalacak."*
+- **Çift tık koruması zorunlu** (PRD K-19): Kaydet ilk tıklamada kilitlenir ve makbuz
+  numarası modal **açılırken** rezerve edilir. Şema indeksi bunu yakalayamaz — çift tık
+  iki ayrı `payment` satırı üretir, ikisi de geçerlidir.
+- **Tahsilat düzeltilmez, silinmez** — karar alındı, yeniden tartışılmıyor (ADR-014, R4.10).
+  İptal akışı `VERI-MODELI.md §4` "Tahsilat iptal edilirse defterde ve mahsupta ne olur"
+  bölümünde satır satır tanımlı: ters kayıt + `payment_allocation` satırlarının arşivlenmesi,
+  tek transaction. **`payment.deleted_at` asla doldurulmaz** (makbuz numarası serbest kalır).
 
 ## 2. Borçlu listesi
 
 **Kurs sahibinin ay sonu en çok kullanacağı ekran.** Hızlı ve net olmalı.
-- Bakiyesi eksi olan öğrenciler
-- Tutara ve gecikme süresine göre sıralama
+- Kaynak **`v_student_debt`** (ADR-018) — `v_student_overdue` değil.
+  Denetimde çıkan hata: taksit tabanlı liste **ders başı ödeyen öğrencileri hiç göstermiyordu**.
+- Tutara ve gecikme süresine göre sıralama; gecikme gün sayısı Rust'ta, `today` bind edilerek
+- **Arşivlenmiş borçlu bu listede ve toplam alacakta görünür** (ADR-005 gerekçesi);
+  Bugün ekranında görünmez
 - Veli telefonu görünür ve kopyalanabilir
 - Satırdan tek tıkla tahsilat alma
 - Toplam alacak tutarı üstte
+- Filtreler: Gecikmiş · Bu ay vadesi gelen (`v_installment_open`) · Avansı olan
 
 ## 3. Cari ekstre
 

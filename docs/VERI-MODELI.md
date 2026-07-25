@@ -18,14 +18,17 @@ ADR-006 (fiyat snapshot), ADR-011…ADR-016 (bu fazda alındı).
 | **K4** | Paket deftere **taksit taksit, vadesi geldikçe** yazılır | Satışta tek kalem tam tutar / ders başına tahakkuk | Gecikme hesabı vade tarihi ister; dönemlik paket alan öğrenciyi gün 1'de tüm tutar kadar borçlu göstermek kullanıcıyı yanıltır. Ayrıntı: §3. |
 | **K5** | `ledger_entry` **append-only** — düzeltme = ters kayıt | UPDATE / soft delete | Defterin tek işi kendini açıklamak (ADR-004). Değişebilen satır bunu bozar. |
 | **K6** | Tarih/saat **yerel duvar saati metni**, UTC yok | UTC + timezone dönüşümü | Tek makine, tek ülke. UTC'ye çevirirsek yaz saati değişiminde 16:00 dersi 15:00'e kayar. |
+| **K7** | Borcun tek kaynağı **defter** (ADR-018) | Borçlu listesini `installment`'tan üretmek | İki rakip "borç" tanımı doğuyordu: ders başı ödeyen öğrenci hiç `installment` satırı üretmediği için borçlu listesinde hiç görünmüyordu. |
+| **K8** | Türkçe metin kolonlarında **SQL'de `ORDER BY` yok** (ADR-020) | `COLLATE` ya da Rust'a kayıtlı özel collation | SQLite'ta `localeCompare('tr')` karşılığı yok. Özel collation `CREATE TABLE`'a yazılırsa `.db` başka araçla açılamaz — ADR-019 kurtarma riski. |
+| **K9** | Aranabilir metin kolonlarında **Rust'ta üretilen `search_name`** | `lower()` ile sorgu anında normalleştirme | SQLite'ın `lower()`'ı ASCII-only: `'İ'` küçülmez, `'I'` → `'i'` olur (Türkçe'de `'ı'` olmalı). Davranış tutarsız: `Ilkbahar` bulunur, `İngilizce` bulunmaz. |
 
 ### Ortak sözleşme
 
 Her tabloda (ADR-005):
 
 ```sql
-created_at TEXT NOT NULL DEFAULT (datetime('now')),
-updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
+updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
 deleted_at TEXT                      -- NULL = canlı. Kullanıcıya "Arşivlendi" denir.
 ```
 
@@ -33,6 +36,33 @@ deleted_at TEXT                      -- NULL = canlı. Kullanıcıya "Arşivlend
 - Bütün tarihler `TEXT`: `'YYYY-MM-DD'` veya `'YYYY-MM-DD HH:MM'`. Sıralanabilir, karşılaştırılabilir.
 - Bütün "canlı kayıt" indeksleri kısmi: `WHERE deleted_at IS NULL`.
 - `PRAGMA foreign_keys = ON` her bağlantıda. `PRAGMA journal_mode = WAL`.
+
+> ### ⚠️ `'now'` kuralı — SQL içinde çıplak `'now'` kullanılmaz
+>
+> SQLite'ın `datetime('now')` / `date('now')` / `julianday('now')` fonksiyonları **`TZ` ortam
+> değişkeninden bağımsız olarak daima UTC** döner. Türkiye UTC+3 olduğu için gece 00:00–03:00
+> arasında bunlar **bir önceki günü** verir. Doğrulandı:
+>
+> ```
+> yerel duvar saati            : 2026-07-25 02:14 +03
+> datetime('now')              : 2026-07-24 23:14      ← bir önceki gün
+> datetime('now','localtime')  : 2026-07-25 02:14
+> ```
+>
+> Bu K6'nın (ADR-017) tam tersidir. Kural:
+>
+> 1. **Kullanıcıya görünen hiçbir hesap SQLite saatini okumaz.** "Bugün" bir sorgu parametresidir,
+>    Rust'ta `chrono::Local::now().date_naive()` ile üretilip **bind edilir**. Kalıp zaten kurulu:
+>    `accrue_due_installments(today)`. Aynı kalıbı borçlu listesi ve gecikme gün sayısı da izler.
+>    Yan fayda: testler CI makinesinin saat dilimine bağlı olmaktan çıkar.
+> 2. `'now'` yalnızca **denetim sütunlarının `DEFAULT`'unda** ve daima `'localtime'` ile kullanılır.
+>    `strftime` biçimi seçildi çünkü çıplak `datetime()` saniye de üretir ve yukarıdaki
+>    "`'YYYY-MM-DD HH:MM'`" sözleşmesini bozardı.
+> 3. `'localtime'` içeren bir ifade **indekslenemez** (SQLite bunu deterministik saymaz). İleride
+>    `created_at` üzerine indeks gerekirse ham sütun üzerinden alınır.
+>
+> Bu kuralın asıl işi bugünkü iki hatayı düzeltmek değil, aynı hatanın Faz 7/8/9'da yeni
+> sorgularda yeniden doğmasını engellemek.
 
 ---
 
@@ -51,7 +81,7 @@ yüksek `version`'a bakar, eksik migration'ları sırayla uygular.
 CREATE TABLE schema_migration (
   version     INTEGER PRIMARY KEY,
   name        TEXT NOT NULL,
-  applied_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  applied_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
   checksum    TEXT NOT NULL              -- migration dosyasının SHA-256'sı
 );
 ```
@@ -71,8 +101,8 @@ kararların her biri için tablo açmamak. Kenar çubuğundaki "Aydın Özel Der
 CREATE TABLE setting (
   key         TEXT PRIMARY KEY,
   value       TEXT NOT NULL,
-  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
+  updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
   deleted_at  TEXT
 );
 ```
@@ -82,6 +112,8 @@ CREATE TABLE setting (
 | `institution_name` | `Aydın Özel Ders` | kenar çubuğu başlığı, makbuz başlığı |
 | `day_start` / `day_end` | `08:00` / `22:00` | takvim dikey aralığı |
 | `slot_minutes` | `30` | takvimde sürükleme kilitlenmesi |
+| `default_session_minutes` | `60` | branşta `default_min` yoksa ders süresi (PRD S4) |
+| `session_horizon_weeks` | `16` | haftalık şablondan kaç hafta ileriye seans üretilir (§1.14) |
 | `weekly_closed_days` | `7` | haftalık kapalı gün (1=Pzt … 7=Paz) |
 | `row_density` | `comfortable` | listelerde satır yüksekliği |
 | `absence_excused_consumes_lesson` | `0` | **ADR-016** — mazeretli hak düşürmez |
@@ -110,8 +142,8 @@ CREATE TABLE teacher (
   email       TEXT,
   is_active   INTEGER NOT NULL DEFAULT 1,
   sort_order  INTEGER NOT NULL DEFAULT 0,
-  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
+  updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
   deleted_at  TEXT
 );
 CREATE INDEX ix_teacher_active ON teacher(is_active) WHERE deleted_at IS NULL;
@@ -120,6 +152,19 @@ CREATE INDEX ix_teacher_active ON teacher(is_active) WHERE deleted_at IS NULL;
 > **MVP sadeleştirmesi (ADR-011).** Takvimdeki öğretmen filtresi ve Gün görünümünün
 > öğretmen-başına-sütun düzeni arayüzde **kurulmaz**. Gün görünümü tek geniş sütundur.
 > Şema değişmez; ikinci öğretmen eklenirse bu ekranlar açılır.
+
+**Bu satırı kim yazıyor.** Tek öğretmen satırı `001_initial.sql` içinde, **migration'ın
+başlangıç verisi** olarak yazılır — seed'de değil:
+
+```sql
+INSERT INTO teacher (id, full_name, color) VALUES (1, 'Öğretmen', '#5f8f6b');
+```
+
+Seed yalnızca geliştirmede çalışıyor (`faz-02.md §6`); orada bırakılırsa kurs sahibinin
+gerçek makinesinde `teacher` tablosu **sonsuza kadar boş kalır** ve öğretmen alanı olan
+5 tablo ile 4 ekran karşılıksız olur. Ad, Tanımlar → Genel ekranından değiştirilebilir.
+
+`institution_name`'den türetilmez: o bir **kurum** adı ("Aydın Özel Ders"), kişi adı değil.
 
 ---
 
@@ -130,16 +175,22 @@ CREATE INDEX ix_teacher_active ON teacher(is_active) WHERE deleted_at IS NULL;
 
 ```sql
 CREATE TABLE subject (
-  id          INTEGER PRIMARY KEY,
-  name        TEXT NOT NULL,
-  color       TEXT,
-  sort_order  INTEGER NOT NULL DEFAULT 0,
-  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
-  deleted_at  TEXT
+  id            INTEGER PRIMARY KEY,
+  name          TEXT NOT NULL,
+  search_name   TEXT NOT NULL,     -- K9: Rust'ta üretilen Türkçe küçültme
+  color         TEXT,
+  default_min   INTEGER,           -- varsayılan ders süresi (dk); NULL = setting'teki genel varsayılan
+  sort_order    INTEGER NOT NULL DEFAULT 0,
+  created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
+  updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
+  deleted_at    TEXT
 );
-CREATE UNIQUE INDEX ux_subject_name ON subject(name) WHERE deleted_at IS NULL;
+-- Tekillik search_name üzerinde: "İngilizce" ve "ingilizce" aynı branştır.
+CREATE UNIQUE INDEX ux_subject_name ON subject(search_name) WHERE deleted_at IS NULL;
 ```
+
+`default_min` PRD S4'ün cevabının yeri (tasarımda hem 60 hem 90 dk ders var). Branşa özel
+değer yoksa `setting.default_session_minutes` kullanılır.
 
 ---
 
@@ -160,8 +211,8 @@ CREATE TABLE student (
   is_active     INTEGER NOT NULL DEFAULT 1,
   enrolled_on   TEXT,
   note          TEXT,
-  created_at    TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
+  updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
   deleted_at    TEXT
 );
 CREATE INDEX ix_student_search ON student(search_name) WHERE deleted_at IS NULL;
@@ -192,8 +243,8 @@ CREATE TABLE guardian (
   phone_digits      TEXT,
   email             TEXT,
   last_reminded_at  TEXT,          -- ADR-009: MVP'de hiç yazılmaz
-  created_at        TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at        TEXT NOT NULL DEFAULT (datetime('now')),
+  created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
+  updated_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
   deleted_at        TEXT
 );
 CREATE INDEX ix_guardian_phone ON guardian(phone_digits) WHERE deleted_at IS NULL;
@@ -213,8 +264,8 @@ CREATE TABLE student_guardian (
   guardian_id  INTEGER NOT NULL REFERENCES guardian(id),
   relation     TEXT,                       -- 'Anne' | 'Baba' | 'Diğer'
   is_primary   INTEGER NOT NULL DEFAULT 0,
-  created_at   TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
+  updated_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
   deleted_at   TEXT
 );
 CREATE UNIQUE INDEX ux_sg         ON student_guardian(student_id, guardian_id)
@@ -234,20 +285,31 @@ olan bir varlık. Tasarım ders bloğunda `4/6` (dolu/kapasite) gösteriyor.
 
 ```sql
 CREATE TABLE study_group (
-  id          INTEGER PRIMARY KEY,
-  name        TEXT NOT NULL,                    -- 'Grup A'
-  subject_id  INTEGER NOT NULL REFERENCES subject(id),
-  teacher_id  INTEGER REFERENCES teacher(id),
-  capacity    INTEGER NOT NULL DEFAULT 6 CHECK (capacity > 0),
-  starts_on   TEXT,
-  ends_on     TEXT,
-  is_active   INTEGER NOT NULL DEFAULT 1,
-  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
-  deleted_at  TEXT
+  id           INTEGER PRIMARY KEY,
+  name         TEXT NOT NULL,                    -- 'Grup A'
+  search_name  TEXT NOT NULL,                    -- K9
+  subject_id   INTEGER NOT NULL REFERENCES subject(id),
+  teacher_id   INTEGER REFERENCES teacher(id),
+  capacity     INTEGER NOT NULL DEFAULT 6 CHECK (capacity > 0),
+  starts_on    TEXT,
+  ends_on      TEXT,
+  is_active    INTEGER NOT NULL DEFAULT 1,
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
+  updated_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
+  deleted_at   TEXT
 );
-CREATE UNIQUE INDEX ux_group_name ON study_group(subject_id, name) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX ux_group_name ON study_group(subject_id, search_name) WHERE deleted_at IS NULL;
 ```
+
+> **`search_name` neden `subject` ve `study_group`'ta da var (K9).** Bugün ekranının arama
+> kutusu *"Öğrenci, **grup veya ders** ara"* diyor ve E20 sonuçları üç grup hâlinde listeliyor.
+> Bu sütunlar olmadan kullanıcı `ingilizce` yazınca `İngilizce` branşını **bulamıyor**, ama
+> ASCII `I` ile başlayan `Ilkbahar Grubu`'nu **buluyor** — aynı harfle iki farklı davranış.
+> Tekillik indeksleri de `name`'den `search_name`'e taşındı: asıl kazanç bu, mükerrer branş
+> kaydı (`Matematik` / `matematik`) artık şema seviyesinde engelleniyor.
+>
+> Ek arama indeksi (`ix_subject_search` vb.) **eklenmedi**: 15 satırlık bir tabloda kazanç yok,
+> her yazmaya maliyet ekler. `student` farklıdır — orada `ix_student_search` yerinde kalır.
 
 ---
 
@@ -273,8 +335,8 @@ CREATE TABLE enrollment (
   end_on          TEXT,                                       -- NULL = devam ediyor
   status          TEXT NOT NULL DEFAULT 'active'
                   CHECK (status IN ('active','paused','closed')),
-  created_at      TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
+  created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
+  updated_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
   deleted_at      TEXT,
   CHECK (end_on IS NULL OR end_on >= start_on)
 );
@@ -285,6 +347,16 @@ CREATE INDEX ix_enr_group   ON enrollment(study_group_id, start_on, end_on)
 
 `unit_price` ADR-006 gereği kayıt anındaki tarifenin kopyasıdır. Eylül'de zam yapılınca
 Mart'ın raporu değişmez.
+
+> **Çakışan kayıt aralığı yasaktır.** ADR-013 "çakışmayan iki `enrollment` satırı" varsayıyor
+> ama şemada bunu zorlayan hiçbir şey yoktu. Aynı öğrenci + aynı branş + aynı grup (ya da
+> ikisi de birebir) için tarih aralıkları çakışan iki canlı kayıt, birebir tahakkukta
+> `AmbiguousEnrollment` hatasına ve yoklama transaction'ının düşmesine yol açar.
+>
+> SQLite'ta aralık çakışmasını kısıtla ifade etmek mümkün değil (`EXCLUDE` yok). Kural
+> repository katmanında, **kayıt yazılmadan önce** doğrulanır ve `§6`'da testi vardır.
+> Kullanıcıya gösterilen hata: *"Bu öğrencinin bu branşta zaten açık bir kaydı var.
+> Önce onu kapatmak ister misiniz?"*
 
 ---
 
@@ -310,8 +382,8 @@ CREATE TABLE price_rule (
   default_installments  INTEGER NOT NULL DEFAULT 1 CHECK (default_installments >= 1),
   valid_from            TEXT NOT NULL,
   valid_to              TEXT,
-  created_at            TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at            TEXT NOT NULL DEFAULT (datetime('now')),
+  created_at            TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
+  updated_at            TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
   deleted_at            TEXT,
   CHECK (pricing_model <> 'package'
          OR (lesson_count IS NOT NULL AND total_price IS NOT NULL))
@@ -341,8 +413,8 @@ CREATE TABLE package (
   valid_until    TEXT,
   status         TEXT NOT NULL DEFAULT 'active'
                  CHECK (status IN ('active','exhausted','expired','cancelled')),
-  created_at     TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at     TEXT NOT NULL DEFAULT (datetime('now')),
+  created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
+  updated_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
   deleted_at     TEXT
 );
 CREATE INDEX ix_pkg_student ON package(student_id, status) WHERE deleted_at IS NULL;
@@ -368,8 +440,8 @@ CREATE TABLE package_usage (
   reason         TEXT NOT NULL
                  CHECK (reason IN ('attendance','cancellation_restore','manual')),
   memo           TEXT,
-  created_at     TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at     TEXT NOT NULL DEFAULT (datetime('now')),
+  created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
+  updated_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
   deleted_at     TEXT
 );
 CREATE UNIQUE INDEX ux_pkgusage_att ON package_usage(attendance_id, delta)
@@ -401,8 +473,8 @@ CREATE TABLE installment (
   amount            INTEGER NOT NULL CHECK (amount > 0),
   label             TEXT,                     -- 'Temmuz taksiti'
   accrued_entry_id  INTEGER REFERENCES ledger_entry(id),   -- deftere yazılınca dolar
-  created_at        TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at        TEXT NOT NULL DEFAULT (datetime('now')),
+  created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
+  updated_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
   deleted_at        TEXT,
   CHECK (package_id IS NOT NULL OR enrollment_id IS NOT NULL)
 );
@@ -440,8 +512,8 @@ CREATE TABLE session_series (
   duration_min    INTEGER NOT NULL CHECK (duration_min > 0),
   starts_on       TEXT NOT NULL,
   ends_on         TEXT,                                 -- NULL = süresiz
-  created_at      TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
+  created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
+  updated_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
   deleted_at      TEXT,
   CHECK ((student_id IS NOT NULL) <> (study_group_id IS NOT NULL))
 );
@@ -456,6 +528,26 @@ tasarımın *"Şablon güncellenir, geçmiş dersler korunur"* vaadinin şemadak
 
 **"Sadece bu ders"** ise seriye dokunmaz, yalnızca ilgili `session` satırının
 `starts_at`/`ends_at`'ini günceller.
+
+#### Seanslar ne kadar ileriye üretilir
+
+`ends_on = NULL` "süresiz" demek, ama seanslar sonsuza kadar üretilemez. Ufuk tanımlı olmazsa
+takvim birkaç ay sonra **sessizce boşalır** ve Bugün ekranı *"Haftalık ders programı henüz
+oluşturulmadı"* (R1.7) yanlış boş-durum metnini gösterir — oysa program var, seans üretilmemiştir.
+
+- Ufuk `setting.session_horizon_weeks` (varsayılan `16`) ile tanımlanır.
+- Uygulama her açılışta, `accrue_due_installments` ile aynı yerde, eksik seansları üretir:
+  her canlı seri için ufuk sonuna kadar olan boşluklar doldurulur.
+- Üretim **idempotent** olmak zorunda; aynı seri + aynı başlangıç anı iki kez yazılamaz:
+
+```sql
+CREATE UNIQUE INDEX ux_session_series_slot ON session(series_id, starts_at)
+  WHERE series_id IS NOT NULL AND deleted_at IS NULL;
+```
+
+- Kapalı günlere (`closed_day`, `setting.weekly_closed_days`) düşen slotlar üretilmez.
+- Elle taşınmış ya da iptal edilmiş bir seans **yeniden üretilmez** — indeks bunu zaten
+  engeller, çünkü satır hâlâ orada (`status='cancelled'`, `deleted_at` NULL).
 
 ---
 
@@ -485,8 +577,8 @@ CREATE TABLE session (
   attendance_taken_at       TEXT,                 -- NULL = "yoklama girilmedi"
   cancel_reason             TEXT,
   note                      TEXT,
-  created_at                TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at                TEXT NOT NULL DEFAULT (datetime('now')),
+  created_at                TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
+  updated_at                TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
   deleted_at                TEXT,
   CHECK ((student_id IS NOT NULL) <> (study_group_id IS NOT NULL)),
   CHECK (ends_at > starts_at)
@@ -541,8 +633,8 @@ CREATE TABLE attendance (
               CHECK (status IN ('pending','present','excused','unexcused','cancelled')),
   marked_at   TEXT,
   note        TEXT,
-  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
+  updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
   deleted_at  TEXT
 );
 CREATE UNIQUE INDEX ux_att         ON attendance(session_id, student_id) WHERE deleted_at IS NULL;
@@ -612,8 +704,8 @@ CREATE TABLE payment (
   method      TEXT NOT NULL CHECK (method IN ('cash','card','transfer')),
   receipt_no  TEXT,
   note        TEXT,
-  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
+  updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
   deleted_at  TEXT
 );
 CREATE UNIQUE INDEX ux_receipt ON payment(receipt_no)
@@ -637,8 +729,8 @@ CREATE TABLE payment_allocation (
   payment_id      INTEGER NOT NULL REFERENCES payment(id),
   installment_id  INTEGER NOT NULL REFERENCES installment(id),
   amount          INTEGER NOT NULL CHECK (amount > 0),
-  created_at      TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
+  created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
+  updated_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
   deleted_at      TEXT
 );
 CREATE UNIQUE INDEX ux_alloc ON payment_allocation(payment_id, installment_id)
@@ -675,15 +767,23 @@ CREATE TABLE ledger_entry (
   payment_id      INTEGER REFERENCES payment(id),
   reverses_id     INTEGER REFERENCES ledger_entry(id),
   memo            TEXT,
-  created_at      TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
-  deleted_at      TEXT
+  created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
+  updated_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
+  deleted_at      TEXT CHECK (deleted_at IS NULL),   -- şema tekdüzeliği için var, DAİMA NULL
+  -- kind='reversal' ⟺ reverses_id dolu. Çift yönlü: 'adjustment' reverses_id taşıyamaz,
+  -- 'reversal' de hedefsiz olamaz.
+  CHECK ((kind = 'reversal') = (reverses_id IS NOT NULL))
 );
 CREATE INDEX ix_ledger_student ON ledger_entry(student_id, entry_date) WHERE deleted_at IS NULL;
 CREATE UNIQUE INDEX ux_ledger_attendance ON ledger_entry(attendance_id)
   WHERE attendance_id IS NOT NULL AND kind = 'session_charge' AND deleted_at IS NULL;
 CREATE UNIQUE INDEX ux_ledger_installment ON ledger_entry(installment_id)
   WHERE installment_id IS NOT NULL AND kind = 'installment_charge' AND deleted_at IS NULL;
+CREATE UNIQUE INDEX ux_ledger_payment ON ledger_entry(payment_id)
+  WHERE payment_id IS NOT NULL AND kind = 'payment' AND deleted_at IS NULL;
+-- Bir satır en fazla BİR kez ters kaydedilir
+CREATE UNIQUE INDEX ux_ledger_reverses ON ledger_entry(reverses_id)
+  WHERE reverses_id IS NOT NULL AND deleted_at IS NULL;
 ```
 
 #### İşaret kuralı (K3)
@@ -707,19 +807,69 @@ Arayüzde eksi işareti **U+2212 (`−`)**, tire değil.
 Yazılan satır güncellenmez, silinmez. Yanlışsa `reversal` yazılır. Şema bunu da mühürler:
 
 ```sql
+-- Sütun listesi YOK: UPDATE'in tamamı kapalı. Sütun listesi yazılırsa listede olmayan
+-- her sütun (özellikle deleted_at) açıkta kalır ve ileride eklenen sütunla delik yeniden açılır.
 CREATE TRIGGER trg_ledger_immutable
-BEFORE UPDATE OF student_id, entry_date, kind, amount ON ledger_entry
+BEFORE UPDATE ON ledger_entry
 BEGIN SELECT RAISE(ABORT, 'ledger_entry_is_immutable'); END;
 
 CREATE TRIGGER trg_ledger_no_delete
 BEFORE DELETE ON ledger_entry
 BEGIN SELECT RAISE(ABORT, 'ledger_entry_is_immutable'); END;
+
+-- Ters kaydın tutarı orijinalin tam tersi ve aynı öğrenciye ait olmalı.
+-- '<>' değil 'IS NOT': hedef satır bulunamazsa NULL üretip sessizce geçmesin.
+CREATE TRIGGER trg_ledger_reversal_valid
+BEFORE INSERT ON ledger_entry
+WHEN NEW.kind = 'reversal'
+BEGIN
+  SELECT RAISE(ABORT, 'reversal_amount_mismatch')
+  WHERE NEW.amount IS NOT (SELECT -amount FROM ledger_entry WHERE id = NEW.reverses_id)
+     OR NEW.student_id IS NOT (SELECT student_id FROM ledger_entry WHERE id = NEW.reverses_id);
+END;
 ```
 
-`deleted_at` sütunu şema tekdüzeliği için var ama **her zaman NULL kalır**.
+`deleted_at` sütunu şema tekdüzeliği için var ve **her zaman NULL kalır** — bunu artık bir
+vaat değil, tablo tanımındaki `CHECK (deleted_at IS NULL)` zorluyor.
 
-İki kısmi `UNIQUE` indeks çifte tahakkuku imkânsız kılar: aynı yoklamadan iki kez borç,
-aynı taksitten iki kez borç yazılamaz.
+> **Neden ikisi birden gerekli (denetimde çalıştırılarak doğrulandı).** Sütunsuz tetikleyici
+> tek başına yetmez: `INSERT ... (deleted_at) VALUES ('2026-05-01')` — yani "doğuştan silinmiş"
+> satır — hâlâ geçiyordu. `CHECK` tek başına da yetmez: `memo`, `installment_id`, `reverses_id`
+> değişimini durdurmuyordu. Sütun **kaldırılamaz**: ADR-005 ve `§0` "her tabloda `deleted_at`"
+> diyor, ayrıca `deleted_at IS NULL` süzen 6+ sorgu ve kısmi indeks kırılırdı.
+>
+> Kapatılan delik şuydu: bütün view'lar `deleted_at IS NULL` süzdüğü için **tek bir UPDATE**
+> muhasebe kaydını yok ediyordu — ters kayıt yazmadan, iz bırakmadan. Üstelik
+> `installment.accrued_entry_id` dolu kaldığı için tahakkuk fonksiyonu o taksidi bir daha
+> yazmıyordu: borç **kalıcı olarak** kayboluyordu. ADR-005'in "hard delete yok" kuralı burada
+> soft delete kılığında hard delete'e dönüşüyordu.
+
+**Dört kısmi `UNIQUE` indeks** çifte kaydı imkânsız kılar: aynı yoklamadan iki kez borç, aynı
+taksitten iki kez borç, aynı tahsilattan iki kez alacak, aynı satırdan iki kez ters kayıt
+yazılamaz. Dördüncüsü (`ux_ledger_reverses`) çift tıkla oluşan **karşılıksız alacağı** kapatır;
+paket tarafında aynı kural `ux_pkgusage_att` ile zaten mühürlüydü, defter tarafı açıktaydı.
+
+> `ux_ledger_reverses`'e bilerek `kind` filtresi konmadı — ama `kind` filtreli bir sürüm de
+> denendi ve **fazla dar** olduğu için elendi: aynı `payment` satırına bağlı iki kısmi iadeyi
+> bloke ediyordu. Yukarıdaki hâli `CHECK ((kind = 'reversal') = (reverses_id IS NOT NULL))`
+> ile birlikte doğru davranıyor: `reverses_id` yalnızca ters kayıtlarda dolu olabildiği için
+> filtreye gerek kalmıyor.
+
+**Tahsilat da mühürlü.** `payment` satırı defterdeki karşılığından koparılamamalı:
+
+```sql
+CREATE TRIGGER trg_payment_immutable
+BEFORE UPDATE OF student_id, paid_on, amount, deleted_at ON payment
+BEGIN SELECT RAISE(ABORT, 'payment_is_immutable'); END;
+
+CREATE TRIGGER trg_payment_no_delete
+BEFORE DELETE ON payment
+BEGIN SELECT RAISE(ABORT, 'payment_is_immutable'); END;
+```
+
+`receipt_no`, `method` ve `note` düzeltilebilir kalır — tutar, tarih, öğrenci ve arşiv durumu
+kalmaz. Ayrı bir `voided_at` sütunu **eklenmedi**: iptal durumu ters kayıttan türetiliyor,
+aynı olguyu iki yerde tutmak ADR-004'ün "tek doğruluk kaynağı defter" ilkesine aykırı olurdu.
 
 ---
 
@@ -735,8 +885,8 @@ CREATE TABLE student_note (
   teacher_id  INTEGER REFERENCES teacher(id),   -- NULL = 'Ofis'
   body        TEXT NOT NULL,
   noted_on    TEXT NOT NULL,
-  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
+  updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
   deleted_at  TEXT
 );
 CREATE INDEX ix_note_student ON student_note(student_id, noted_on) WHERE deleted_at IS NULL;
@@ -755,8 +905,8 @@ CREATE TABLE closed_day (
   id          INTEGER PRIMARY KEY,
   day         TEXT NOT NULL,           -- 'YYYY-MM-DD'
   label       TEXT NOT NULL,           -- 'Ramazan Bayramı'
-  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
+  updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
   deleted_at  TEXT
 );
 CREATE UNIQUE INDEX ux_closed_day ON closed_day(day) WHERE deleted_at IS NULL;
@@ -779,8 +929,8 @@ CREATE TABLE backup_log (
   is_auto     INTEGER NOT NULL DEFAULT 1,
   ok          INTEGER NOT NULL DEFAULT 1,
   error       TEXT,
-  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
+  updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M','now','localtime')),
   deleted_at  TEXT
 );
 CREATE INDEX ix_backup_taken ON backup_log(taken_at) WHERE deleted_at IS NULL;
@@ -790,30 +940,76 @@ CREATE INDEX ix_backup_taken ON backup_log(taken_at) WHERE deleted_at IS NULL;
 
 ### 1.23 View'lar
 
+Beş view iki zincir oluşturuyor: **bakiye/borç** (defter tabanlı, ADR-018) ve **ders hakkı**.
+
 ```sql
--- Öğrenci bakiyesi (negatif = borçlu)
+-- Öğrenci bakiyesi (negatif = borçlu).
+-- ARŞİVLENMİŞ ÖĞRENCİ DE SAYILIR — filtre yok, bunun yerine is_live bayrağı var.
 CREATE VIEW v_student_balance AS
-SELECT s.id AS student_id,
+SELECT s.id                   AS student_id,
+       (s.deleted_at IS NULL) AS is_live,
        COALESCE(SUM(l.amount), 0) AS balance_kurus
 FROM student s
 LEFT JOIN ledger_entry l ON l.student_id = s.id AND l.deleted_at IS NULL
-WHERE s.deleted_at IS NULL
 GROUP BY s.id;
 
--- Aktif paketlerin kalan ders hakkı
+-- Ters kayıtları netleyen taban görünüm: ters kaydın kendisi de, ters kaydedilmiş
+-- orijinal satır da düşer. Geriye yalnızca "hâlâ geçerli" hareketler kalır.
+CREATE VIEW v_ledger_effective AS
+SELECT l.* FROM ledger_entry l
+WHERE l.deleted_at IS NULL
+  AND l.kind <> 'reversal'
+  AND NOT EXISTS (SELECT 1 FROM ledger_entry r
+                  WHERE r.reverses_id = l.id AND r.deleted_at IS NULL);
+
+-- Deftere yazılmış her borç satırı, KENDİ vadesiyle.
+-- Taksit borcunda vade = installment.due_on (tahakkuk günü değil — uygulama geç
+-- açılırsa entry_date kayar). Ders başı borçta vade = ders günü (PRD §4).
+CREATE VIEW v_open_charge AS
+SELECT l.id         AS entry_id,
+       l.student_id,
+       COALESCE(i.due_on, l.entry_date) AS due_on,
+       -l.amount    AS charge_kurus
+FROM v_ledger_effective l
+LEFT JOIN installment i ON i.id = l.installment_id AND i.deleted_at IS NULL
+WHERE l.amount < 0;
+
+-- BORÇLU LİSTESİNİN TEK KAYNAĞI (ADR-018).
+-- Tutar defterden; vade, ödemelerin en eskiden başlayarak mahsup edildiği
+-- varsayımıyla (FIFO) ilk kapanmamış borcun vadesidir.
+CREATE VIEW v_student_debt AS
+WITH credit AS (
+  SELECT student_id, SUM(amount) AS credit_kurus
+  FROM v_ledger_effective WHERE amount > 0 GROUP BY student_id
+),
+charge AS (
+  SELECT student_id, due_on, charge_kurus,
+         SUM(charge_kurus) OVER (PARTITION BY student_id
+                                 ORDER BY due_on, entry_id) AS running_kurus
+  FROM v_open_charge
+)
+SELECT c.student_id,
+       MAX(0, SUM(c.charge_kurus) - COALESCE(MAX(cr.credit_kurus), 0)) AS debt_kurus,
+       MIN(CASE WHEN c.running_kurus > COALESCE(cr.credit_kurus, 0)
+                THEN c.due_on END)                                     AS oldest_due_on
+FROM charge c
+LEFT JOIN credit cr ON cr.student_id = c.student_id
+GROUP BY c.student_id;
+
+-- Paketlerin kalan ders hakkı. status'e GÜVENMEZ (aşağıya bak).
 CREATE VIEW v_package_remaining AS
-SELECT p.id AS package_id, p.student_id,
+SELECT p.id AS package_id, p.student_id, p.valid_until, p.status,
        p.lesson_count + COALESCE(SUM(u.delta), 0) AS remaining
 FROM package p
 LEFT JOIN package_usage u ON u.package_id = p.id AND u.deleted_at IS NULL
-WHERE p.deleted_at IS NULL AND p.status = 'active'
+WHERE p.deleted_at IS NULL AND p.status <> 'cancelled'
 GROUP BY p.id;
 
--- Vadesi geçmiş borç ve en eski gecikme (Bugün ekranı)
-CREATE VIEW v_student_overdue AS
-SELECT i.student_id,
-       MIN(i.due_on)                              AS oldest_due_on,
-       SUM(i.amount - COALESCE(a.paid, 0))        AS overdue_kurus
+-- Taksit/vade ekranları için (E14 "Bu ay vadesi gelen" çipi, paket detayı "2/4 ödendi").
+-- BORÇLU LİSTESİ BUNDAN ÜRETİLMEZ — ADR-018. Vade filtresi yok: "bugün" Rust'tan bind edilir.
+CREATE VIEW v_installment_open AS
+SELECT i.id, i.student_id, i.package_id, i.seq, i.due_on, i.label,
+       i.amount - COALESCE(a.paid, 0) AS open_kurus
 FROM installment i
 LEFT JOIN (
   SELECT installment_id, SUM(amount) AS paid
@@ -821,14 +1017,53 @@ LEFT JOIN (
   GROUP BY installment_id
 ) a ON a.installment_id = i.id
 WHERE i.deleted_at IS NULL
-  AND i.due_on <= date('now')
-  AND i.amount > COALESCE(a.paid, 0)
-GROUP BY i.student_id;
+  AND i.amount > COALESCE(a.paid, 0);
 ```
 
-`v_student_overdue` doğrudan Bugün ekranındaki
-*"Mehmet Aslan — 1.200 TL — 12 gün gecikti"* satırını üretir
-(`julianday('now') - julianday(oldest_due_on)`).
+#### Neden borçlu listesi defterden okuyor (ADR-018)
+
+Eski `v_student_overdue` yalnızca `installment` tablosundan besleniyordu. Ders başı
+(`per_session`) ödeyen öğrencinin borcu ise `ledger_entry(session_charge)` olarak doğuyor ve
+**hiç `installment` satırı üretmiyor**. Sonuç: aylardır ödemeyen ders başı öğrenci Bugün
+ekranında ve Ödemeler rozetinde hiç görünmüyor, ama Öğrenciler ekranında kırmızı `−1.000 TL`
+olarak duruyordu — aynı öğrenci, iki ekran, iki farklı borç.
+
+Kilit gözlem: **defterdeki her negatif satır tanımı gereği vadesi gelmiş borçtur.**
+`session_charge` işlendiği gün yazılır; `installment_charge` ADR-015 gereği yalnızca vadesi
+geldiğinde yazılır. Dolayısıyla tutar için `installment` tablosuna hiç gerek yok — tek eksik
+parça vade tarihiydi, o da `v_open_charge` ile her borç satırına iliştirildi.
+
+`julianday('now')` ile hesaplanan gecikme gün sayısı da kaldırıldı (`§0` `'now'` kuralı):
+
+```
+gecikme_gun = (today - oldest_due_on).num_days()    // Rust, saf tarih farkı, saat yok
+```
+
+#### Arşivlenmiş öğrenci hangi listede sayılır
+
+| Liste | Arşivlenmiş öğrenci | Neden |
+|---|---|---|
+| Borçlu listesi, toplam alacak, cari ekstre | **sayılır** | ADR-005'in gerekçesi: *"silinen öğrencinin geçmiş tahsilatları muhasebe kaydı olarak durmak zorunda."* Borç arşivlemekle yok olmaz; PRD K-14 zaten borçlu öğrenciyi arşivlerken onay istiyor. |
+| Bugün ekranı, takvim, yoklama, "Paketi bitmek üzere" | sayılmaz | Program ekranları yalnızca canlı kayıtla ilgilenir. |
+
+Bu yüzden `v_student_balance` **filtre uygulamaz**, `is_live` bayrağı döndürür; süzme kararı
+repository katmanında, listeye göre verilir. Önceki sürüm `WHERE s.deleted_at IS NULL` ile
+arşivlenen borçluyu toplam alacaktan da düşürüyordu.
+
+#### `package.status` neden hesaba katılmıyor
+
+`status` alanını `'exhausted'` / `'expired'` yapan bir mekanizma tanımlı değildi;
+`v_package_remaining` ise yalnızca `status = 'active'` paketleri sayıyordu. Status hiç
+güncellenmezse kalan hak eksiye düşer, yeni satılan paket hiç kullanılmaz ve o dersler için
+**borç da yazılmaz** — öğrenci bedava ders alır.
+
+Çözüm, ADR-004'ün ilkesiyle aynı: **türetilebilir değere iş mantığı bağlanmaz.**
+
+- **"Aktif paket" bir sorgudur, bir sütun değildir:**
+  `remaining > 0 AND (valid_until IS NULL OR valid_until >= :today)`
+- `status` yalnızca `'cancelled'` için bağlayıcıdır (satış iptali — bu bir olay, türetilemez).
+  `'exhausted'` / `'expired'` **yalnızca rapor etiketidir**; `consume_package` bunları
+  günceller ama hiçbir hesap onlara dayanmaz. Güncellenmese de kimse yanlış sonuç almaz.
 
 ---
 
@@ -845,8 +1080,20 @@ package → installment → package_usage
 session_series → session → attendance
 payment → payment_allocation → ledger_entry
 student_note → closed_day → backup_log
-view'lar → trigger'lar
+view'lar → trigger'lar → başlangıç verisi
 ```
+
+View'lar birbirine dayandığı için sıra bağlayıcı:
+
+```
+v_student_balance
+v_ledger_effective → v_open_charge → v_student_debt
+v_package_remaining
+v_installment_open
+```
+
+**Başlangıç verisi** (seed değil — üretimde de yazılır, `001_initial.sql`'in sonunda):
+`§1.2`'deki 14 `setting` varsayılanı ve `§1.3`'teki tek `teacher` satırı.
 
 `session.makeup_for_attendance_id` ile `attendance.session_id` arasında döngüsel bağımlılık
 var. SQLite yabancı anahtarları tablo yaratma anında değil **yazma anında** doğruladığı için
@@ -925,6 +1172,56 @@ seansı işlendiğinde **ikinci kez borç yazılmaz ve ikinci kez hak düşmez**
 hakkı zaten mazeretli olduğu için hiç düşmemişti. Telafi seansı kendisi normal bir ders gibi
 işlenir; ama `is_makeup = 1` olduğu için tahakkuk fonksiyonu onu atlar.
 
+### Yoklama düzeltilirse ne yazılır
+
+> PRD §7 "Yoklama düzeltme ✅ geri alınabilir" diyor. Bunun **nasıl** yazıldığı tanımlı değildi
+> ve akla gelen ilk yol (ikinci bir `session_charge`) `ux_ledger_attendance` indeksine çarpıyor.
+
+Gerçek akış: kullanıcı yanlışlıkla "Geldi" işaretler → düzeltir "Mazeretli" yapar → veli itiraz
+eder, tekrar "Geldi" yapılır. Üçüncü adımda ikinci bir `session_charge` yazılamaz.
+
+**Kısmi UNIQUE indeksler değişmez** (PRD K-4/K-5 korunur). Düzeltme, ADR-014'ün zaten öngördüğü
+mekanizmayla — **ters kaydın tersiyle** — yazılır:
+
+| Adım | Defter | Paket |
+|---|---|---|
+| 1. "Geldi" | `session_charge(−250, attendance_id=A)` | `package_usage(A, delta=−1)` |
+| 2. "Mazeretli"ye düzeltilir | `reversal(+250, reverses_id=1)` | `package_usage(A, delta=+1, reason='cancellation_restore')` |
+| 3. Tekrar "Geldi" | `reversal(−250, reverses_id=2)` | ⚠ aşağıya bak |
+
+Defter tarafı ek DDL gerektirmiyor: `ux_ledger_attendance` yalnızca `kind='session_charge'`
+satırlarını süzüyor, ters kayıtlar serbest. `ux_ledger_reverses` her satırın en fazla bir kez
+ters kaydedilmesini sağladığı için zincir dallanamaz — 2. adım iki kez yazılamaz.
+
+> ⚠️ **Faz 6'ya devredilen açık nokta.** `ux_pkgusage_att` `(attendance_id, delta)` üzerinde
+> tekil olduğu için 3. adımda ikinci bir `delta=−1` satırı yazılamaz. Ders hakkı tarafında
+> düzeltme zinciri şu an **iki adımda tıkanıyor.** İki seçenek var — kararı Faz 6 verecek:
+> (a) indekse bir `cycle` sütunu eklemek, (b) `package_usage`'ı da ters-kayıt zinciri modeline
+> geçirmek. Faz 2'de DDL **olduğu gibi** yazılır; bu satır Faz 6'nın girdisidir.
+
+### Tahsilat iptal edilirse defterde ve mahsupta ne olur
+
+> PRD R4.10: *"Tahsilat silinemez — iptal = ters kayıt + makbuzun iptal işaretlenmesi."*
+> Ters kaydın `payment_allocation` tarafında ne olacağı tanımlı değildi ve bu, iptal edilen
+> tahsilatın öğrenciyi **borçlu listesinden düşürmesine** yol açıyordu.
+
+Tek transaction içinde:
+
+1. `ledger_entry(kind='reversal', amount = −payment.amount, payment_id=<p>, reverses_id=<orijinal payment satırı>)`
+   — orijinal satır silinmez (K5).
+2. O tahsilatın **tüm `payment_allocation` satırları arşivlenir** (`deleted_at` yazılır).
+   `v_installment_open` zaten `deleted_at IS NULL` süzdüğü için taksit kendiliğinden yeniden
+   açık hâle gelir.
+3. **`payment.deleted_at` asla doldurulmaz.** `ux_receipt` kısmi indeksi `deleted_at IS NULL`
+   filtreli olduğu için arşivlenen bir tahsilatın makbuz numarası yeniden kullanılabilir hâle
+   gelir ve PRD §7'nin *"bir kez verilen numara yeniden kullanılmaz"* kuralı kırılır
+   (denetimde doğrulandı: aynı numara iki kez yazılabildi). `trg_payment_immutable` bunu
+   şema seviyesinde de engeller.
+4. Makbuzdaki "İPTAL" damgası saklanan bir alandan değil, **ters kaydın varlığından** türetilir.
+
+`v_student_debt` defterden okuduğu için 1. adım tek başına borcu geri getirir; 2. adım
+taksit/vade ekranlarının doğru kalması içindir.
+
 ---
 
 ## 5. Üç senaryo, SQL ile
@@ -934,21 +1231,41 @@ işlenir; ama `is_makeup = 1` olduğu için tahakkuk fonksiyonu onu atlar.
 Kurulum: `enrollment(pricing_model='per_session', unit_price=25000)` → 250 ₺/ders.
 Mart'ta 4 ders işlendi (hepsi `present`), 15.03'te 600 ₺ tahsilat alındı.
 
+> ⚠️ **Bu tahakkuk tek bir `INSERT ... SELECT` olarak yazılamaz.** İlk taslak öyleydi ve
+> denetimde iki ayrı sessiz arıza ürettiği görüldü:
+>
+> 1. **JOIN eşleşmezse sorgu 0 satır yazar ve hata vermez.** Ders işlenmiş, öğrenci
+>    borçlanmamıştır — kullanıcı bunu asla öğrenmez. Tek seferlik deneme dersinde ya da
+>    kayıt tarihi seansı kapsamadığında tam olarak bu olur.
+> 2. **İki `enrollment` eşleşirse** (fiyat zammı için ikincisi açılıp eskisi kapatılmayı
+>    unutulmuşsa) sorgu iki satır üretir, `ux_ledger_attendance` hata verir ve PRD R2.4 gereği
+>    **tüm yoklama transaction'ı düşer** — kullanıcı 5 kişilik grubun yoklamasını kaydedemez.
+
+Doğrusu: fiyat kaynağı **önce açıkça çözülür**, sonra tek satır yazılır. Rust'ta, `§6`
+sözleşmesinde:
+
+```
+fn resolve_unit_price(attendance_id) -> Result<i64, PriceNotFound>
+  1. Eşleşen canlı `enrollment` (birebir, aynı branş, aralık içi, per_session) → unit_price
+     Birden fazla eşleşme → Err(AmbiguousEnrollment)   // sessizce ilkini seçme
+  2. Yoksa: session.unit_price (tek seferlik ders / deneme dersi snapshot'ı)
+  3. Yoksa: Err(PriceNotFound) — sessiz geçilmez
+```
+
+`PriceNotFound` kullanıcıya PRD §8 dilinde sorulur:
+*"Bu ders için tarife bulunamadı. Ders başı ücret yazılsın mı?"* — yani K-7 ile aynı dil.
+
+Fiyat çözüldükten sonra yazılan satır:
+
 ```sql
--- Ders işlenince tek transaction içinde yazılan borç satırı:
+-- Ders işlenince tek transaction içinde yazılan borç satırı.
+-- :unit_price yukarıdaki fonksiyondan gelir; sorgu artık enrollment'a JOIN ETMEZ.
 INSERT INTO ledger_entry (student_id, entry_date, kind, amount, attendance_id, memo)
-SELECT a.student_id, s.session_date, 'session_charge', -e.unit_price, a.id,
+SELECT a.student_id, s.session_date, 'session_charge', -:unit_price, a.id,
        sub.name || ' · Birebir'
 FROM attendance a
-JOIN session     s ON s.id  = a.session_id
+JOIN session     s ON s.id   = a.session_id
 JOIN subject   sub ON sub.id = s.subject_id
-JOIN enrollment  e ON e.student_id     = a.student_id
-                  AND e.study_group_id IS NULL
-                  AND e.subject_id     = s.subject_id
-                  AND e.pricing_model  = 'per_session'
-                  AND e.deleted_at IS NULL
-                  AND e.start_on <= s.session_date
-                  AND (e.end_on IS NULL OR s.session_date <= e.end_on)
 WHERE a.id = :attendance_id
   AND a.status IN ('present', 'unexcused')      -- ADR-016
   AND s.is_makeup = 0;
@@ -1043,16 +1360,28 @@ CLAUDE.md: *"Para ile ilgili her fonksiyonun testi olur. Bu pazarlık konusu de�
 
 | fonksiyon | test etmesi gereken |
 |---|---|
-| `student_balance(student_id)` | boş defter = 0; işaret yönü; arşivlenmiş satır sayılmaz |
+| `student_balance(student_id)` | boş defter = 0; işaret yönü; **arşivlenmiş öğrencinin bakiyesi kaybolmaz** (`is_live=0` ile döner) |
+| `student_debt(today)` | **ders başı öğrenci listede çıkar** (ADR-018); avanslı öğrenci çıkmaz; ters kaydedilmiş borç çıkmaz; FIFO vade doğru — 4×250 borç + 600 ödeme → borç 400, en eski vade 3. dersin günü |
+| `resolve_unit_price(attendance_id)` | eşleşen kayıt yoksa **hata döner, 0 yazmaz**; iki eşleşmede `AmbiguousEnrollment`; `session.unit_price` yedeği çalışır |
 | `charge_session(attendance_id)` | ikinci çağrı `UNIQUE` ihlali verir; `excused` borç yazmaz; telafi seansı atlanır |
-| `accrue_due_installments(today)` | idempotent; vadesi gelmemiş taksit yazılmaz |
-| `record_payment(...)` | mahsup toplamı ödemeyi aşamaz; artan avans olarak kalır |
-| `cancel_session(session_id)` | ders başında ters kayıt; pakette hak iadesi; iki kez iptal iki iade yapmaz |
-| `package_remaining(package_id)` | negatife düşmez; iade sonrası doğru |
-| `consume_package(attendance_id)` | paket yoksa hata; birden fazla aktif pakette en eskisini kullanır |
+| `correct_attendance(attendance_id, yeni_durum)` | düzeltme zinciri ters kayıtla yazılır, ikinci `session_charge` denenmez; üç adımlık zincir (Geldi → Mazeretli → Geldi) defterde doğru bakiye bırakır |
+| `accrue_due_installments(today)` | idempotent; vadesi gelmemiş taksit yazılmaz; `today` **parametredir**, `date('now')` kullanılmaz |
+| `record_payment(...)` | mahsup toplamı ödemeyi aşamaz; otomatik mahsup **bütün açık taksitleri** kapsar (vadesi gelmiş + gelmemiş, `due_on` artan); artan avans olarak kalır ve `v_student_debt` ile `v_student_balance` çelişmez |
+| `void_payment(payment_id)` | ters kayıt yazılır; `payment_allocation` satırları arşivlenir; taksit yeniden açılır; **öğrenci borçlu listesine geri döner**; `payment.deleted_at` dolmaz |
+| `cancel_session(session_id)` | ders başında ters kayıt; pakette hak iadesi; iki kez iptal iki iade yapmaz (`ux_ledger_reverses`) |
+| `package_remaining(package_id)` | negatife düşmez; iade sonrası doğru; **`status` güncellenmemiş olsa da doğru** |
+| `consume_package(attendance_id)` | paket yoksa hata; birden fazla aktif pakette en eskisini kullanır; tükenmiş paket seçilmez |
+| `generate_sessions(today)` | ufka kadar üretir; idempotent (`ux_session_series_slot`); kapalı güne üretmez; iptal edilmiş seansı diriltmez |
+| `assert_no_enrollment_overlap(...)` | aynı öğrenci + branş için çakışan aralık reddedilir |
+| `backup_now()` / `restore(path)` | `VACUUM INTO` ile alınan yedek **açık bağlantıyla dolu çıkar** (ADR-019); geri yükleme `-wal`/`-shm` bırakmaz |
 | `format_kurus(i64)` / `parse_kurus(&str)` | `123456` ↔ `"1.234,56"`; negatifte U+2212 |
+| `sort_tr(&[&str])` | `Çınar < Demir`, `İnce < Kaya`, `ışık < iyi` (ADR-020) |
 
 Testler in-memory SQLite üzerinde, gerçek migration'lar uygulanarak çalışır (ADR-002).
+
+**Hiçbir testte tarih SQLite'tan okunmaz** (`§0` `'now'` kuralı). `today` her zaman
+parametredir; aksi hâlde testler CI makinesinin saat dilimine bağlı olur ve macOS'ta geçip
+Windows CI'da düşer.
 
 ---
 

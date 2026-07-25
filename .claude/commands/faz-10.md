@@ -13,10 +13,19 @@ verisini kaybederse geri getirecek kimse yok. Ciddiye al.
 
 ## 1. Otomatik yedekleme
 
-- Her açılışta ve günde bir kez veritabanının **tarihli kopyası**
+> **ADR-019 kilitli: yedek `VACUUM INTO` ile alınır, veritabanı dosyası KOPYALANMAZ.**
+> Şema WAL modunda; commit edilmiş veri checkpoint olana kadar `.db` dosyasında değil
+> `.db-wal` dosyasındadır. "Şimdi yedekle" tanımı gereği uygulama açıkken basılır — sadece
+> `.db` kopyalanırsa **yedek boş çıkar** ve `PRAGMA integrity_check` buna `ok` der.
+> Bu senaryonun sonu tam veri kaybı.
+
+- Her açılışta ve günde bir kez `VACUUM INTO` ile **tarihli tek dosya**
 - Son 30 yedek saklanır, eskiler silinir
 - Yedek alma sırasında uygulama kilitlenmez
-- Yedek dosyası bozuk mu diye açılışta doğrulanır
+- **Yedek doğrulaması "dosya bozuk mu" değildir** — boş yedek bozuk değildir, geçerlidir.
+  Doğrulama: yedeği aç, beklenen tabloları ve makul satır sayılarını kontrol et
+  (ör. `student` ve `ledger_entry` sayısı canlı veritabanınınkiyle tutuyor mu).
+- Her yedek `backup_log`'a yazılır (Bugün ekranının yedekleme şeridi buradan okur)
 
 ## 2. Yedekleme ekranı (Ayarlar altında)
 
@@ -24,7 +33,13 @@ verisini kaybederse geri getirecek kimse yok. Ciddiye al.
 - Elle yedek al
 - **Yedekten geri yükle:** çift onaylı, ve geri yüklemeden önce mevcut veritabanını
   otomatik yedekle (yanlış yedeği seçerse kurtarılabilsin)
+- ⚠️ **Geri yükleme `-wal` ve `-shm` dosyalarını da silmek zorunda.** Yalnızca `.db` üzerine
+  yazılırsa SQLite yanındaki eski `-wal`'ı uygular ve kullanıcı yedeği geri yükler, **ekranda
+  hiçbir şey değişmez** — üstelik hata da almaz. Kullanıcının tek kurtarma yolu budur;
+  geri yüklemeyi gerçekten test et, varsayma.
 - Yedeği USB / bulut klasörüne kopyalama — bilgisayar bozulursa veri gitmesin
+- Yedek klasörü **kullanıcının bulabileceği bir yerde** olsun (Belgeler altı gibi),
+  `%APPDATA%\Roaming` içinde değil — orası gizli klasör ve OneDrive kapsamı dışında kalabilir
 
 ## 3. Ayarlar ekranı
 

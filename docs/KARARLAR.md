@@ -17,6 +17,10 @@ Format: her ADR'de **Karar / Gerekçe / Sonuç / Durum**.
 
 **Durum.** Kabul edildi.
 
+> **Not (2026-07-25).** Gerekçedeki *"yedekleme dosyayı kopyalamaya indirgeniyor"* ifadesi
+> **ADR-019** ile netleştirildi: WAL modunda çalışan bir veritabanının `.db` dosyasını
+> kopyalamak boş yedek üretir. Sonuç kullanıcı açısından aynı (tek dosya), yöntem farklı.
+
 ---
 
 ## ADR-002 — Veri erişimi Rust komut katmanında
@@ -206,5 +210,59 @@ Format: her ADR'de **Karar / Gerekçe / Sonuç / Durum**.
 **Gerekçe.** Tek makine, tek ülke, sunucu yok. UTC'ye çevirirsek yaz saati uygulaması değiştiğinde 16:00'daki ders 15:00'e kayar — kurs sahibinin gözünde program kendiliğinden bozulmuş olur. Metin biçimi sıralanabilir ve karşılaştırılabilir olduğu için indeksleme de sorun değil.
 
 **Sonuç.** `session.session_date` sütunu `substr(starts_at, 1, 10)` ile türetilir ve takvim sorgularında kullanılır. Uygulama başka bir zaman dilimine taşınırsa saatler olduğu gibi kalır — istenen davranış budur.
+
+**Durum.** Kabul edildi.
+
+> **Uygulama notu (2026-07-25 denetimi).** SQLite'ın `datetime('now')` fonksiyonu `TZ` ortam
+> değişkeninden bağımsız olarak **daima UTC** döner — yani bu kararın şemadaki ilk uygulaması
+> kararın tersiydi. Kural: **SQL içinde `'now'` çıplak kullanılmaz.** Kullanıcıya görünen hiçbir
+> hesap SQLite saatini okumaz; tarih Rust'tan `chrono::Local` ile bind edilir. Yalnızca denetim
+> sütunlarının `DEFAULT`'unda `'localtime'` ile kullanılır. Ayrıntı: `docs/VERI-MODELI.md §0`.
+
+---
+
+## ADR-018 — Borçlu listesinin tek kaynağı defterdir
+
+**Karar.** *"Kim ne kadar borçlu?"* sorusu **yalnızca `ledger_entry`'den** cevaplanır. Borç tutarı bakiyenin negatif kısmıdır. Vade, borç satırının kendi vadesidir: taksit borcunda `installment.due_on`, ders başı borcunda `entry_date` (ders günü). Borçlu listesi, Bugün ekranındaki borç bölümü ve menüdeki borç rozeti `v_student_debt` zincirinden okur. Eski `v_student_overdue` view'ı, daralan görevini yansıtan `v_installment_open` adıyla yeniden yazılır: yalnızca taksit/vade ekranları (E14 "Bu ay vadesi gelen" çipi, paket detayındaki `2/4 ödendi`). Vade filtresi de içinden çıkarılır — "bugün" Rust'tan bind edilir.
+
+**Gerekçe.** ADR-004 bakiyeyi zaten deftere bağlamıştı; borçlu listesini `installment` tablosuna bağlamak **ikinci bir borç tanımı** yarattı. Ders başı (`per_session`) ödeyen öğrenci hiç `installment` satırı üretmediği için aylarca ödemese bile borçlu listesinde hiç görünmüyordu — aynı öğrenci Öğrenciler ekranında kırmızı `−1.000 TL`, Bugün ekranında yoktu. PRD §0 bu sorunun yanlış cevaplanmasını "uygulama başarısızdır" olarak tanımlıyor. Ters yönde de bozuktu: mahsup edilmemiş (avans) tahsilat bakiyeyi sıfırlarken view hâlâ borç gösteriyordu.
+
+**Sonuç.** İki rakip view yerine defter tabanlı tek zincir: `v_ledger_effective` (ters kayıtları netler) → `v_open_charge` (her borç kendi vadesiyle) → `v_student_debt` (FIFO yaşlandırma). `installment` tablosu vade ve mahsup ekranlarında yerinde kalır. Tahsilat iptal edilirse ilgili `payment_allocation` satırları arşivlenir, taksit kendiliğinden yeniden açılır.
+
+**Durum.** Kabul edildi.
+
+---
+
+## ADR-019 — Yedekleme `VACUUM INTO` ile alınır, dosya kopyalanmaz
+
+**Karar.** Yedek `VACUUM INTO 'hedef.db'` ile üretilir; veritabanı dosyası kopyalanmaz. Geri yükleme hedefteki `-wal` ve `-shm` dosyalarını da temizleyen tek bir işlemdir ve **işlemden önce mevcut veritabanının otomatik kopyasını alır**. Yedek doğrulaması "dosya bozuk mu" değil, "beklenen tablolar ve makul satır sayıları var mı" sorusudur.
+
+**Gerekçe.** Şema `PRAGMA journal_mode = WAL` kullanıyor. WAL'da commit edilmiş veri, checkpoint olana kadar ana `.db` dosyasında değil `.db-wal` dosyasında durur. "Şimdi yedekle" düğmesi tanımı gereği uygulama açıkken basılır; yalnızca `.db` kopyalanırsa yedek **boş çıkar**. Daha kötüsü `PRAGMA integrity_check` bu dosyayı `ok` der — dosya bozuk değil, geçerli ve boş. Aynı arıza ters yönde de var: geri yüklemede eski `-wal` yerinde kalırsa SQLite onu uygular ve kullanıcı yedeği geri yükler, ekranda hiçbir şey değişmez. Kullanıcı teknik değil, tek başına çalışıyor ve verisini kurtaracak kimsesi yok; bu senaryonun sonu tam veri kaybı.
+
+**Sonuç.** Kullanıcı açısından hiçbir şey değişmiyor — yedek hâlâ tek bir dosya. ADR-001'in gerekçesindeki "dosyayı kopyala" ifadesi bu ADR ile netleşti. Faz 2'de WAL kararı verilirken yedekleme yöntemi biliniyor olacak; Faz 10 bunu uygular.
+
+**Durum.** Kabul edildi.
+
+---
+
+## ADR-020 — Türkçe sıralama uygulama katmanında, SQL'de değil
+
+**Karar.** Türkçe metin kolonlarında (`student.full_name`, `guardian.full_name`, `study_group.name`, `subject.name`, `teacher.full_name`, tarife adları) SQL'de `ORDER BY` **yazılmaz**. Bu kolonlara göre sıralama tek yerde, `src/lib/sortTr.ts` içindeki tek bir `Intl.Collator('tr')` ile yapılır; repository katmanı bu listeleri sırasız döndürür. Yasak yalnızca Türkçe metin kolonları içindir — tarih, tutar, sayı ve `sort_order` kolonlarında `ORDER BY` serbest ve gereklidir.
+
+**Gerekçe.** SQLite'ta `localeCompare('tr')` karşılığı yok; `COLLATE NOCASE` ASCII-only. `ORDER BY full_name` yazılırsa Ç/Ö/Ş/Ü/İ ile başlayan her öğrenci listenin en altına, Z'den sonraya düşer — ilk açılışta gözle görülür ve teknik olmayan kullanıcıya "program bozuk" dedirtir. Alternatif olan Rust'a kayıtlı özel collation reddedildi: `CREATE TABLE`/`CREATE INDEX` içine yazılan özel bir collation adı, `.db` dosyasını **başka hiçbir araçla açılamaz** hale getirir — ADR-019'un yedek doğrulaması ve olası bir kurtarma işlemi bundan zarar görür.
+
+**Sonuç.** ~100 öğrenci ölçeğinde maliyet ölçülemez. Arama tarafı ayrı bir mekanizmadır ve şemada kalır: `student`, `subject` ve `study_group` tablolarında Rust'ta üretilen `search_name` sütunu (`§0 K8`).
+
+**Durum.** Kabul edildi.
+
+---
+
+## ADR-021 — Veri içe aktarma yok
+
+**Karar.** MVP'de Excel/CSV içe aktarma özelliği yazılmaz. Kurs sahibi verisini sıfırdan girer.
+
+**Gerekçe.** PRD §9 S1 kurs sahibine soruldu, cevap: aktarılacak dijital veri yok (2026-07-25). Varsayım doğrulandığı için soru kapandı.
+
+**Sonuç.** Faz 4 planlandığı gibi kalır, bölünmesi gerekmiyor. **Dışa** aktarma kapsamda kalır (cari ekstre CSV, BOM'lu UTF-8 — R4.15). İleride gerçek bir aktarım ihtiyacı doğarsa ayrı bir ADR ile açılır.
 
 **Durum.** Kabul edildi.

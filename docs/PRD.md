@@ -276,6 +276,11 @@ taksit planından gelir. Peşin ödemede tek taksit, vadesi satış günü.
 | K-16 | Kullanımdaki tarifeyi/branşı silme | **Engelle** | Arşivleme önerilir |
 | K-17 | Defter satırını değiştirme veya silme | **Engelle** | `trg_ledger_immutable` / `trg_ledger_no_delete` |
 | K-18 | Şablon değişikliğinin geçmişi bozması | **Engelle** | Yeni `session_series`; eski seanslar dokunulmaz |
+| K-19 | Aynı tahsilattan iki kez defter kaydı | **Engelle** | `ux_ledger_payment` kısmi UNIQUE indeksi. **Asıl koruma arayüzde:** Kaydet düğmesi ilk tıklamada kilitlenir ve makbuz numarası modal açılırken rezerve edilir — çift tık iki ayrı `payment` **satırı** üretir, hiçbir defter indeksi bunu yakalayamaz |
+| K-20 | Aynı defter satırını iki kez ters kaydetme | **Engelle** | `ux_ledger_reverses` + `trg_ledger_reversal_valid` (tutar ve öğrenci doğrulanır) |
+| K-21 | Defter satırını arşivleme (soft delete kılığında silme) | **Engelle** | `CHECK (deleted_at IS NULL)` + sütunsuz `trg_ledger_immutable` |
+| K-22 | Aynı öğrenci + branş için çakışan iki açık kayıt | **Engelle** | Repository doğrulaması; tahakkuku belirsiz hâle getirir |
+| K-23 | Tarife bulunamayan dersi sessizce ücretsiz işleme | **Engelle** | `resolve_unit_price` hata döner; kullanıcıya K-7 diliyle sorulur |
 
 **Genel ilke:** Para ve geçmişle ilgili her şey **engellenir**; program ve kapasiteyle ilgili
 her şey **sorulur**. Kurs sahibi kendi programını bilir; muhasebesini bilmek zorunda değil.
@@ -322,7 +327,7 @@ Cevaplanmadan ilgili faz **tamamlanamaz**.
 
 | # | Soru | Hangi faz | Cevap gelmezse varsayım |
 |---|---|---|---|
-| **S1** | Şu an Excel/defter kullanıyor musun? Kullanıyorsan veri aktarımı (import) gerekir. | Faz 4 | İçe aktarma yok, elle giriş |
+| ~~**S1**~~ | ~~Şu an Excel/defter kullanıyor musun?~~ → **CEVAPLANDI (2026-07-25): hayır, sıfırdan başlıyor.** İçe aktarma yazılmaz, Faz 4 planlandığı gibi kalır. Bkz. **ADR-021**. | ~~Faz 4~~ | — |
 | **S2** | Grup kapasitesi aşımı engellensin mi, uyarı mı yeter? | Faz 5 | Onay istenir, engellenmez |
 | **S3** | Paketlerin son kullanma tarihi var mı? (örn. "3 ay içinde kullanılmalı") | Faz 7 | Süresiz |
 | **S4** | Standart ders süresi kaç dakika? Tasarımda 60 ve 90 var. | Faz 5 | Varsayılan 60, değiştirilebilir |

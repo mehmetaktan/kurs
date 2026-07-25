@@ -6,6 +6,7 @@
 |---|---|---|---|
 | 0 | Kuruluş iskeleti — git, CLAUDE.md, kararlar, komutlar | — | ✅ Tamamlandı |
 | 1 | Plan — tasarım okuma, PRD, veri modeli, ekran envanteri | `/faz-01` | ✅ Tamamlandı |
+| 1.5 | **Faz 1 denetimi** — şema, ADR ve faz komutlarının düzeltilmesi | `/yonetici` | ✅ Tamamlandı |
 | 2 | İskelet & CI — Tauri projesi, şema, migration, seed, Windows build | `/faz-02` | ⬜ |
 | 3 | Tasarım sistemi — token'lar, komponentler, uygulama kabuğu | `/faz-03` | ⬜ |
 | 4 | Öğrenci & Veli — CRUD, arama, detay sayfası | `/faz-04` | ⬜ |
@@ -32,7 +33,7 @@
 
 | Ne zaman | Ne |
 |---|---|
-| Faz 2 sonu | GitHub Actions'tan indirilebilir bir Windows `.msi` çıkıyor olmalı |
+| Faz 2 sonu | GitHub Actions'tan indirilebilir bir Windows `.msi` **ve** `windows-latest` üzerinde yeşil Rust testleri. Testler gerçek migration'ları uyguladığı için bu, şemanın Windows'ta kurulduğunun kanıtıdır — Faz 5'i beklemeden. |
 | Faz 5 sonu | **İlk gerçek Windows testi.** Kurs sahibine build gönderilir. Faz 10'a bırakılmaz. |
 | Faz 7 sonu | Para mantığının testleri yeşil. Buradan sonra şema değişikliği pahalı. |
 | Faz 10 sonu | Kurulum dosyası + kullanım kılavuzu + otomatik yedekleme |

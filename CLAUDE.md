@@ -40,6 +40,7 @@ Kurs sahibi tek başına, tek bilgisayarda kullanıyor. Hem birebir hem grup der
 | `docs/VERI-MODELI.md` | SQLite şeması ve gerekçeleri (Faz 1) |
 | `docs/EKRANLAR.md` | Ekran envanteri (Faz 1) |
 | `docs/TASARIM-SISTEMI.md` | Renk, tipografi, spacing, komponentler (Faz 1) |
+| `docs/DENETIM-FAZ1.md` | Faz 1 denetimi — 25 bulgu, kanıtları ve düzeltmeleri |
 
 ## Stack
 
@@ -80,6 +81,32 @@ Tauri 2 + React + TypeScript + Vite + SQLite (rusqlite)
 - Her yıkıcı işlemde onay diyaloğu, her başarılı işlemde bildirim.
 - Her listede boş / yükleniyor / hata durumu olur.
 - Türkçe sıralama ve arama: `İ/ı` sorunu çözülmüş olmalı (`localeCompare('tr')`).
+
+### Ajan çalıştırma ve model seçimi
+
+> **Hiçbir ajan modeli belirtilmeden çalıştırılmaz.** Model alanı boş bırakılırsa oturum
+> modeli (Opus) miras alınır — boş yere Opus filosu tam olarak böyle doğar. Her `agent()`
+> ve her `Agent` çağrısında `model` **açıkça** yazılır.
+
+Yön **aşağıdan yukarı**: önce "Haiku yeter mi?" diye sor, yetmiyorsa Sonnet, Opus'u
+**gerekçelendir**. Varsayılan Opus değil.
+
+| Model | Ne için | Örnek |
+|---|---|---|
+| **Haiku** | Mekanik, dar, tek doğru cevabı olan iş | dosya/dizin listeleme, grep taraması, belgeden DDL çıkarma, sayma, biçim ve yazım kontrolü, "bu dosyada X geçiyor mu" |
+| **Sonnet** | Sınırları belli, standart muhakeme | tek modülün CRUD'u, komponent yazımı, dar kapsamlı kod okuma, açık spesifikasyondan belge yazma, rutin denetim boyutu |
+| **Opus** | Yanlış olmanın pahalı olduğu muhakeme | para/defter doğruluğu, şema tasarım takasları, karşıt doğrulama (bulgu çürütme), çok kaynaklı sentez, mimari karar ve ADR taslağı |
+
+Kurallar:
+
+- **Her ajandan önce tek satır gerekçe**: hangi model, neden. Gerekçe yazılamıyorsa model
+  seçimi düşünülmemiş demektir.
+- Bir workflow'da modeller **karışık** olur. Tek tip filo (hepsi Opus / hepsi Haiku) kokudur:
+  ya para yakılıyordur ya kalite feda ediliyordur.
+- `effort` de aynı mantıkla seçilir: mekanik aşamada `low`, asıl muhakemede `high`/`xhigh`.
+- Ajan sayısı da aynı disipline tabi: 3 ajan işi görüyorsa 12 ajan çalıştırma.
+- **Para mantığı istisnadır** — `ledger_entry`, taksit, paket ve bakiye ile ilgili denetim
+  veya doğrulama her zaman en güçlü modelle yapılır. Burada tasarruf edilmez.
 
 ## Komutlar
 

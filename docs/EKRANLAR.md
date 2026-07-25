@@ -63,9 +63,15 @@ borçlu.*
 | Yoklama | üç durum: `✓ 6/6 katıldı` · **Yoklama al** düğmesi + "girilmedi" · "Bekleniyor" |
 
 **Borç satırı:** ad · `1.200 TL` (kırmızı, kalın) · `12 gün gecikti`
-→ `v_student_overdue` view'inden. Başlıkta özet: `3 öğrenci · 2.450 TL`.
+→ **`v_student_debt`** view'inden (ADR-018 — defter tabanlı; eski `v_student_overdue` ders başı
+ödeyen öğrencileri hiç göstermiyordu). Gecikme gün sayısı Rust'ta hesaplanır, `today` bind
+edilir. Başlıkta özet: `3 öğrenci · 2.450 TL`.
+
+Bu listede **yalnızca canlı öğrenciler** görünür (`is_live = 1`); arşivlenmiş borçlu Ödemeler
+ekranındaki borçlu listesinde ve toplam alacakta sayılır ama Bugün ekranında görünmez.
 
 **Paket satırı:** ad · `1` (amber) `ders kaldı` → `v_package_remaining`, eşik `≤ 2`.
+Arşivlenmiş öğrencinin paketi bu listeye girmez.
 
 ### Yapılabilenler
 
