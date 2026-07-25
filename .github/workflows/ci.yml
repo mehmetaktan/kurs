@@ -1,0 +1,168 @@
+name: CI
+
+# Bu fazın en kritik parçası (faz-02 §8). İki iş var ve ikisi de gerekli:
+#
+#   test   — Rust testleri hem macOS'ta hem WINDOWS'ta koşar.
+#            windows-latest'te geçen bir test, testler gerçek migration'ları
+#            uyguladığı için ŞEMANIN WINDOWS'TA KURULDUĞUNUN KANITIDIR —
+#            kimsenin Windows makinesine dokunmasına gerek kalmadan.
+#            `bundled` özelliği unutulmuşsa ya da SQLite sürümü yetersizse
+#            hata BURADA çıkar, Faz 5'te kurs sahibinin bilgisayarında değil.
+#
+#   build  — Windows .msi (öncelikli) ve macOS paketi; artifact olarak yüklenir.
+#
+# Rust sürümü rust-toolchain.toml'dan gelir; burada tekrar yazılmaz.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ---------------------------------------------------------------------------
+  test:
+    name: Test · ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows önce yazılı: bu projede asıl hedef o.
+        os: [windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # .gitattributes *.sql text eol=lf diyor. Bu adım kuralın gerçekten
+      # uygulandığını doğrular: CRLF'e dönmüş bir migration dosyası farklı
+      # checksum üretir ve uygulama açılışta "migration değiştirilmiş" der.
+      # Hata macOS'ta HİÇ görünmez, o yüzden kontrol Windows checkout'unda anlamlı.
+      # git'in kendi raporunu kullanıyoruz: `w/` çalışma kopyasındaki satır sonu.
+      # `grep -U` yerine bu tercih edildi çünkü o bayrak GNU grep'e özgü ve Windows
+      # runner'ında kabuk değişirse adım sessizce yanlış sonuç verebilirdi.
+      # Asıl kapı yine de aşağıdaki Rust testidir (migration_dosyasi_lf_ile_gomulu):
+      # derlemeye GÖMÜLEN baytları sınadığı için tek gerçek kanıt odur.
+      - name: Migration dosyaları LF mi
+        shell: bash
+        run: |
+          eol=$(git ls-files --eol src-tauri/migrations)
+          echo "$eol"
+          # Boş çıktı "sorun yok" DEĞİLDİR: yol yanlışsa ya da dosyalar izlenmiyorsa
+          # kontrol hiçbir şeye bakmadan yeşil olurdu.
+          if [ -z "$eol" ]; then
+            echo "::error::src-tauri/migrations altında izlenen dosya yok — kontrol boşa çalıştı"
+            exit 1
+          fi
+          if printf '%s' "$eol" | grep -q 'w/crlf'; then
+            echo "::error::Migration dosyası çalışma kopyasında CRLF — .gitattributes çalışmamış"
+            exit 1
+          fi
+          echo "Tüm migration dosyaları LF."
+
+      - name: Rust kurulumu
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          # rust-toolchain.toml'daki sürüm ve bileşenler otomatik uygulanır;
+          # burada yalnızca rustup'ın var olduğundan emin oluyoruz.
+          toolchain: stable
+          components: rustfmt, clippy
+
+      - name: Rust derleme önbelleği
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.os }}
+
+      - name: Node kurulumu
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Tip denetimi (TypeScript)
+        run: npm run typecheck
+
+      - name: Lint (ESLint)
+        run: npx eslint .
+
+      - name: Biçim denetimi (rustfmt)
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+
+      - name: Lint (clippy)
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
+
+      # Para biçimleme/ayrıştırma iki dilde ayrı ayrı yazılı; ikisi ayrışırsa kuruş kaybolur.
+      # (CLAUDE.md > Para: "Para ile ilgili her fonksiyonun testi olur.")
+      - name: Arayüz testleri (vitest)
+        run: npm run test:web
+
+      # Asıl mesele burada: migration'lar ve şema mühürleri Windows'ta da geçiyor mu.
+      - name: Rust testleri
+        run: npm run test:rust
+
+  # ---------------------------------------------------------------------------
+  build:
+    name: Paket · ${{ matrix.os }}
+    needs: test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: kurs-takip-windows-msi
+            # Yalnızca .msi; NSIS kurucusu Faz 10'da değerlendirilecek.
+            paths: |
+              src-tauri/target/release/bundle/msi/*.msi
+          - os: macos-latest
+            artifact: kurs-takip-macos
+            # YALNIZCA .dmg — `.app` yolu bilerek yok. Tauri önce .app'i paketler,
+            # sonra dmg adımı onu TÜKETİR ve bundle/macos/ boşalır. `.app` yolu burada
+            # yazılsaydı `if-no-files-found: error` yüzünden macOS işi hep kırmızı olurdu.
+            # (Yerelde çalıştırılarak doğrulandı.) .app zaten .dmg'nin içinde.
+            paths: |
+              src-tauri/target/release/bundle/dmg/*.dmg
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust kurulumu
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Rust derleme önbelleği
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: build-${{ matrix.os }}
+
+      - name: Node kurulumu
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Varsayılan özelliklerle derlenir: `seed` listede olmadığı için demo verisi
+      # yükleyici kurulum paketine GİRMEZ (faz-02 §6).
+      - name: Tauri paketi
+        run: npm run build
+
+      - name: Kurulum dosyasını yükle
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.paths }}
+          if-no-files-found: error
+          retention-days: 30

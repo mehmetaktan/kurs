@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Ana pencerenin varsayılan yetkileri. Faz 2'de yalnızca komut çağırma gerekiyor; dosya sistemi, kabuk ve ağ yetkisi bilerek verilmedi — ihtiyaç doğan fazda tek tek eklenir.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

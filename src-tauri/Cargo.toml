@@ -1,0 +1,51 @@
+[package]
+name = "kurs-takip"
+version = "0.1.0"
+description = "Kurs Takip — öğrenci, ders ve tahsilat takibi"
+authors = ["Aydın Özel Ders"]
+edition = "2021"
+# rust-toolchain.toml ile aynı sürüm ailesi; CI de aynı dosyayı okur.
+rust-version = "1.97"
+# İki binary var (uygulama + seed); `cargo run` hangisini çalıştıracağını bilmeli.
+default-run = "kurs-takip"
+
+[lib]
+# Tauri 2 kabuğu lib'i çağırır; testler de aynı lib'e bağlanır.
+name = "kurs_takip_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+sha2 = "0.11.0"
+dirs = { version = "6.0.0", optional = true }
+rusqlite = { version = "0.40.1", features = ["bundled"] }
+
+[profile.release]
+# Kurulum dosyası boyutu: Tauri'nin Electron'a göre asıl avantajı (ADR-001).
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
+
+[features]
+# Seed YALNIZCA geliştirmede. Varsayılan özellik listesinde yok, dolayısıyla
+# `tauri build` ile üretilen kurulum paketine hiç girmez (faz-02 §6).
+# `dirs` yalnızca seed binary'si için: Tauri runtime'ı olmadan app_data_dir'i bulmak.
+seed = ["dep:dirs"]
+
+[[bin]]
+name = "kurs-takip"
+path = "src/main.rs"
+
+[[bin]]
+# Demo verisi yükleyici: `npm run seed`. Özellik kapalıyken derlenmez bile.
+name = "seed"
+path = "src/bin/seed.rs"
+required-features = ["seed"]

@@ -1,0 +1,9 @@
+# Rust sürümü burada sabitlenir; CI de aynı dosyayı okur (rustup otomatik uygular).
+#
+# Gerekçe: CI yerelden farklı bir sürüm çekerse derleme yeşil görünüp çalışmayan bir
+# .msi üretebilir. Sürüm yükseltmesi bilinçli bir karardır — bu dosya elle değiştirilir
+# ve değişiklik tek başına bir commit olur.
+[toolchain]
+channel    = "1.97.1"
+components = ["rustfmt", "clippy"]
+profile    = "minimal"

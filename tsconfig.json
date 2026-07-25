@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "target": "ES2021",
+    "useDefineForClassFields": true,
+    "lib": ["ES2021", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+
+    // macOS büyük/küçük harf farkını affeder, Windows CI affetmez.
+    // Import yolları dosya adıyla TAM eşleşmek zorunda (CLAUDE.md > Windows).
+    "forceConsistentCasingInFileNames": true
+  },
+  // Tek tsconfig: vite.config.ts de buradan denetlenir. Ayrı bir "node" projesi
+  // (composite + reference) yalnızca yapılandırma dosyası Node API'si kullandığında
+  // gerekiyor; burada kullanmıyor, o yüzden ikinci dosya taşınmıyor.
+  "include": ["src", "vite.config.ts"]
+}

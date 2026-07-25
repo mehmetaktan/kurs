@@ -44,7 +44,38 @@ Kurs sahibi tek başına, tek bilgisayarda kullanıyor. Hem birebir hem grup der
 
 ## Stack
 
-Tauri 2 + React + TypeScript + Vite + SQLite (rusqlite)
+Tauri 2 + React + TypeScript + Vite + SQLite (rusqlite, `bundled`)
+
+Sürümler kilitli: Rust `rust-toolchain.toml`'da, Tauri CLI `package.json`'da caret'siz.
+CI aynı dosyaları okur — yerelde çalışan sürüm CI'da da çalışır.
+
+## Klasör yapısı (Faz 2)
+
+```
+kurs/
+├── .github/workflows/ci.yml   Windows + macOS test & paket
+├── src/                       React arayüzü
+│   ├── i18n/tr.ts             BÜTÜN Türkçe metinler (ADR-007)
+│   └── lib/                   api.ts · format.ts (kuruş) · sortTr.ts (ADR-020)
+└── src-tauri/
+    ├── migrations/            şemanın tek kaynağı — sıralı, checksum'lı, elle düzeltilmez
+    ├── capabilities/          Tauri 2 yetki dosyaları
+    ├── src/
+    │   ├── lib.rs             AppState + Tauri kurulumu
+    │   ├── commands.rs        #[tauri::command] — İNCE katman
+    │   ├── db/                bağlantı, pragma, migration + checksum
+    │   ├── repo/              iş mantığı: setting · people · academic · finance · views · ops
+    │   ├── model.rs           tablo satır tipleri
+    │   ├── money.rs           kuruş biçimleme (ADR-003)
+    │   ├── text.rs            Türkçe küçültme, search_name (K9)
+    │   ├── clock.rs           yerel tarih — SQLite saati OKUNMAZ (§0)
+    │   ├── error.rs           tek hata tipi + Türkçe mesajlar (PRD §8)
+    │   └── seed.rs            demo verisi — yalnızca `seed` özelliğiyle
+    └── tests/                 crud · seals · views · seed_data
+```
+
+Repository katmanı `search_name` ve `phone_digits`'i **kendisi üretir**; çağıran boş
+bırakır. `ledger_entry`'nin `update`/`archive` fonksiyonu **yoktur** — append-only (K5).
 
 ## Değişmez kurallar
 
@@ -110,4 +141,24 @@ Kurallar:
 
 ## Komutlar
 
-<!-- Faz 2'de doldurulacak: dev, build, check, test, seed -->
+Hepsi proje kökünden çalışır.
+
+| Komut | Ne yapar |
+|---|---|
+| `npm run dev` | Uygulamayı geliştirme kipinde açar (Vite + Tauri, canlı yenileme) |
+| `npm run build` | Kurulum paketi üretir (macOS'ta `.app`/`.dmg`, Windows'ta `.msi`) |
+| `npm run check` | **Kapı**: typecheck + lint (ESLint & clippy) + biçim + testler |
+| `npm test` | Bütün testler — önce vitest (arayüz), sonra cargo (Rust) |
+| `npm run test:web` | Yalnızca arayüz testleri (vitest) |
+| `npm run test:rust` | Yalnızca Rust testleri (`--all-features`) |
+| `npm run seed` | Demo verisi yükler · `-- --reset` sıfırdan, `-- --db yol.db` başka dosyaya |
+| `npm run fmt` | Rust kodunu biçimler (`check` bunu yalnızca **denetler**) |
+
+`npm run check` commit öncesi çalıştırılır; CI de aynı adımları koşar.
+
+**Seed üretime girmez.** `seed` bir Cargo özelliğidir ve varsayılan listede yoktur;
+`npm run build` ile üretilen pakette demo verisi yükleyici bulunmaz.
+
+Veritabanı `app_data_dir` altındadır (ADR-008), proje klasöründe değil:
+- macOS: `~/Library/Application Support/com.aydinozelders.kurstakip/kurs.db`
+- Windows: `%APPDATA%\com.aydinozelders.kurstakip\kurs.db`

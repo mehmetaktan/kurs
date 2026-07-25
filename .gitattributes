@@ -1,0 +1,36 @@
+# Migration dosyaları LF olmak ZORUNDA.
+#
+# schema_migration.checksum, migration dosyasının SHA-256'sıdır ve dosya `include_str!`
+# ile derlemeye gömülür. Windows CI checkout'unda dosya CRLF'e çevrilirse checksum
+# değişir; uygulama açılışta "migration değiştirilmiş" diyerek durur. Bu hata
+# macOS'ta HİÇ görünmez — sadece Windows'ta, yani kurs sahibinin makinesinde çıkar.
+*.sql text eol=lf
+
+# Aynı gerekçe kod ve yapılandırma için de geçerli: tek satır sonu, tek davranış.
+*.rs    text eol=lf
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.js    text eol=lf
+*.json  text eol=lf
+*.toml  text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.md    text eol=lf
+*.html  text eol=lf
+*.css   text eol=lf
+
+# Windows'a özgü script'ler CRLF kalır.
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+*.ps1   text eol=crlf
+
+# İkili dosyalar hiç dokunulmaz (satır sonu çevrimi ikonu bozar).
+*.png   binary
+*.ico   binary
+*.icns  binary
+*.jpg   binary
+*.pdf   binary
+*.ttf   binary
+*.otf   binary
+*.woff  binary
+*.woff2 binary
