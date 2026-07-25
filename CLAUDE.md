@@ -18,6 +18,12 @@ Kurs sahibi tek başına, tek bilgisayarda kullanıyor. Hem birebir hem grup der
 
 **Bir oturum = bir faz.** Faz bitmeden yeni faza geçme, faz ortasında oturum şişerse `/kapat` çalıştır ve yeni oturumda devam et.
 
+Bir faz oturuma sığmıyorsa **bölünür ve kendi komutunu alır** — bugüne kadar `/faz-04b`
+(denetim artıkları) ve `/faz-05c-karar` (araştırma + ADR, ekrandan ayrı) böyle doğdu.
+Bölme kuralı: **araştırma gerektiren bir karar, kod oturumunun başında durmaz.** Kod
+oturumu kararı uygular; kararı ölçüp veren oturum ayrıdır. Yol haritasındaki numaralama
+bölünmeyi izler (`5C-K` → `5C`).
+
 ### İki mod
 
 - **Kod oturumu** (`/faz-NN`): uygulama kodu yazılır. Kararlar sorgulanmaz, uygulanır.

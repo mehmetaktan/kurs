@@ -1,15 +1,76 @@
 # Durum
 
-**Son güncelleme:** 2026-07-26 · Faz 5B (kod oturumu)
-**Mevcut faz:** Faz 5B ✅ tamamlandı → sırada **`/faz-05c`**
-**Sonraki oturumda ilk iş:** `/faz-05c`'nin **ilk adımı kod değil karar** — "takvim
-ızgarası hazır kütüphaneyle mi kurulsun?" ADR'si. Ölçmeden yazma.
+**Son güncelleme:** 2026-07-26 · Faz 5B denetimi (yönetici oturumu)
+**Mevcut faz:** Faz 5B ✅ tamamlandı ve denetlendi → sırada **`/faz-05c-karar`**
+**Sonraki oturumda ilk iş:** Takvim kütüphanesi kararı artık **kendi oturumunda.**
+`/faz-05c-karar` ölçer ve `ADR-031`'i yazar; `/faz-05c` onu uygular. Aynı oturumda
+hem ölçüp hem ekran yazmak ikisinden birini yarım bırakıyordu.
+
+> **Yeni slash komutu eklendi** (`/faz-05c-karar`) — Claude Code yeniden başlatılmalı,
+> yoksa "Unknown command" gelir.
 
 > **Uygulama artık sabah açıldığında bir şey gösteriyor.** Bugün ekranı bağlandı: günün
 > dersleri saat sırasıyla, "şimdi" çizgisi, yoklama bekleyen ders amber şeritle. Ders
 > ekleme, erteleme, iptal ve silme arayüzü çalışıyor.
 >
 > **Kalan tek büyük ekran takvim** (5C) ve projenin kalan tek ciddi riski de o.
+
+---
+
+## Faz 5B denetimi (yönetici) — üç bulgu + ADR-030
+
+Bu oturumda kod yazılmadı. Çıktısı: **ADR-030**, `/faz-05c-karar` komutu, `/faz-05c`'nin
+yeniden yazılmış hâli ve aşağıdaki üç bulgu.
+
+**Yedi kilitli kontrolün yedisi de temiz:** frontend'de SQL yok (ADR-002), float para yok
+(ADR-003), saklanan bakiye sütunu yok (ADR-004), hard delete yok (ADR-005), JSX'te çıplak
+Türkçe yok (ADR-007), platforma özel API yok (ADR-008), SQL'de çıplak `'now'` yok (§0).
+ADR-029 da tutuyor — `today` her ekrana prop olarak iniyor. `ui/Picker.tsx`'teki
+`new Date()` yedeği denetimde işaretlendi ve **geri çekildi**: ADR-029 onu istisna
+listesinde zaten adıyla yazmış ve gerekçesini vermiş. Kapanmış karar, yeniden açılmadı.
+
+### B1 · Para biçimlemesi Windows'ta ikizinden ayrılabilir → `/faz-05c-karar §4`
+
+`src/lib/format.ts` içinde `formatKurus` binlik ayıracını `lira.toLocaleString('tr-TR')`
+ile üretiyor; Rust ikizi `src-tauri/src/money.rs` aynı işi **elle** yapıyor. Projenin
+kendi kuralı (`format.ts > normalizeTr` yorumu, `tr.ts:801`) "WebView2'de ICU verisi eksik
+olabilir" diyor ve bu varsayımı `toLocaleLowerCase` ile `toLocaleDateString`'e uygulamış —
+`toLocaleString`'e uygulamamış. ICU düşerse `1.234,56` yerine `1,234,56` çıkar.
+
+**Test bunu yakalayamaz**: vitest Node'un tam ICU'suyla koşuyor. İki ikiz yalnızca
+kullanıcının Windows ekranında ayrışır. Düzeltmesi `money.rs`'teki döngünün aynısı.
+
+### B2 · Izgara varsayılan Windows dizüstünde dikey sığmıyor → `/faz-05c §1`
+
+`EKRANLAR §122`: 08:00–22:00 = 28 yarım saat. Rahat yoğunlukta **28 × 30px = 840px**
+sadece ızgara (sıkı: 616px); üstüne gün başlığı, sayfa başlığı ve kabuk binecek.
+`tauri.conf.json` pencereye `minHeight: 700` izni veriyor ve tipik bir 1080p Windows
+dizüstü, Windows'un önerdiği ölçeklemede 864–720 CSS px yükseklik veriyor.
+
+Sonuç bir tasarım kısıtı: ızgara **dikey kaydırmak zorunda** ve açılışta **"şimdi"
+çizgisine kaydırmalı**. Faz komutu bunu yazmıyordu; `/faz-05c §1`'e kısıt olarak,
+`§4`'e de test maddesi olarak eklendi (kaydırma konumu **saf fonksiyon** kalacak).
+
+### B3 · Faz 5B CI'ı hiç görmedi — bilerek bekliyor
+
+`origin/main` = `b8648f1` (Faz 5A). `c5773e2` yerelde: 22 dosya, 3898 satır, Windows'ta
+bir kez bile derlenmedi. **Karar: push 5C sonuna bırakıldı**, üç fazın kodu (5B + 5C-K +
+5C) tek seferde CI'a gidecek. Bedeli kabul edildi: bir şey kırılırsa hangi fazdan geldiği
+aramayla bulunacak.
+
+### Çerçeve düzeltmesi: "WebView2 riski" kısmen ters kurulmuştu
+
+macOS'ta Tauri **WKWebView (WebKit)**, Windows'ta **WebView2 (Chromium)** kullanıyor.
+Geliştirme **daha katı** motorda yapılıyor — WKWebView'da çalışan yerleşim Chromium'da
+büyük ihtimalle çalışır, tersi doğru değil. Yani CSS/JS semantiği beklenenden az risk.
+
+Gerçek Windows bilinmeyenleri şunlar: **Segoe UI metrikleri** (kolon genişlikleri),
+**DPI ölçekleme** (B2), **kaydırma çubuğu genişliği**, **ICU verisi** (B1). Sürükle-bırak
+ise seçime bağlı ve bu oturumda **ADR-030** olarak kilitlendi: sürükleme Pointer Events
+ile kurulur. Gerekçe zevk değil gereksinim — `dragstart`'ın eşiğini tarayıcı belirlediği
+için **R3.7'nin 5px kuralı HTML5 DnD üzerinde kurulamaz.** ADR-030 aynı zamanda
+`/faz-05c-karar`'ın 6. eleme ölçütünün dayanağı: sürüklemeyi HTML5 DnD ile kuran bir
+kütüphane ölçülmeden elenir.
 
 ---
 
@@ -122,9 +183,11 @@ Deneme için veritabanına elle eklenen seanslar sonrası `npm run seed -- --res
 
 | Ne | Neden |
 |---|---|
-| **E6 gerçek uygulamada** | Rust testleri var (önizleme, atlama, uygulama) ve modal derleniyor; ekranda sürülmedi. Tetikleyicisi boş takvim ve **takvim 5C'de** — 5C'nin ilk doğrulaması bu olmalı |
+| **E6 gerçek uygulamada** | Rust testleri var (önizleme, atlama, uygulama) ve modal derleniyor; ekranda sürülmedi. Tetikleyicisi boş takvim ve **takvim 5C'de** |
 | **Haftalık tekrarla ders ekleme** | Rust testi var (`haftalik_ders_sablon_acar_ve_seanslari_uretir`, 16 seans). Arayüzden denenmedi: bugün kapalı gündü ve K-2 doğru şekilde engelledi |
 | **Ertele diyaloğu** | Rust reddi testli (R3.13); modal ekranda açılmadı |
+
+Üçü de `/faz-05c §5`'e madde olarak yazıldı — takvim gelince tetikleyicileri doğuyor.
 
 ---
 
@@ -236,19 +299,21 @@ bu, ders hakkı sayacının ayrı sorunu (ADR-015: iki ayrı sayaç). Seçenekle
 
 ---
 
-## Sonraki oturumun en büyük riski — takvim (5C)
+## Kalan riskler — ve nereye bağlandıkları
 
-**Windows artık boş bir varsayım değil**: CI yeşil, migration'lar orada uygulanıyor,
-`.msi` üretiliyor. Kalan risk tek bir ekranda toplanıyor.
+**Windows artık boş bir varsayım değil**: CI yeşil (Faz 5A'da), migration'lar orada
+uygulanıyor, `.msi` üretiliyor. Kalan risk tek bir ekranda toplanıyor ve ikiye ayrılıyor.
 
-Takvim ızgarası projenin WebView2 farklarına **en duyarlı** parçası: sürükle-bırak, mutlak
-konumlu bloklar, saat hesapları ve Segoe UI altında kolon genişlikleri. CI bunu
-**çalıştırmıyor** — testler jsdom'da koşuyor, paket işi yalnızca derliyor. Yani 5C
-bittiğinde elimizde "yeşil CI" olacak ama ekranın Windows'ta nasıl göründüğüne dair
-hiçbir kanıt olmayacak. Kilometre taşı bu yüzden 5C'nin sonunda: **ilk gerçek Windows
-testi**, Faz 10'a bırakılmıyor.
+**1 · Ekranın Windows'ta nasıl göründüğüne dair kanıt yok.** CI ızgarayı
+**çalıştırmıyor** — testler jsdom'da koşuyor, paket işi yalnızca derliyor. Yeşil CI bu
+boşluğu kapatmıyor. Ama boşluk motor semantiğinde değil (yukarıdaki çerçeve düzeltmesi);
+**Segoe UI metrikleri, DPI ölçekleme, kaydırma çubuğu genişliği ve ICU verisi**nde.
+Dördü de somut ve ikisi (B1, B2) zaten bulguya dönüştü. Kilometre taşı yerinde duruyor:
+**ilk gerçek Windows testi 5C'nin sonunda**, Faz 10'a bırakılmıyor — kurs sahibine
+gönderilecek 5 maddelik listenin en az ikisi bu dördünü yoklayacak.
 
-İkinci risk kararın kendisinde: **hazır kütüphane mi, elde mi.** `/faz-05c` bunu koddan
-önce ADR olarak istiyor. Ölçülmesi gerekenler — paket boyutu, Türkçe yerelleştirme,
-`tokens.css` ile uyum, sürükle-bırağın WebView2'de çalışıp çalışmadığı — tahminle
-geçilirse yanlış tarafa dönmenin bedeli bir ekranın tamamı olur.
+**2 · Kararın kendisi: hazır kütüphane mi, elde mi.** Bu risk artık `/faz-05c`'nin içinde
+değil, **kendi oturumunda** — `/faz-05c-karar`. Komut yedi ölçüt ve her birinin **eleme
+koşulunu** yazıyor, ve eşiklerin **ölçümden önce** yazılmasını şart koşuyor: eşik sonradan
+yazılırsa karar değil, çıkan sonucun gerekçelendirmesi olur. Aday havuzu üçle sınırlı,
+"elde yazmak" da adaylardan biri ve aynı denemeden geçiyor.

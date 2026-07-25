@@ -620,3 +620,50 @@ yaptığında liste zaten yeniden yükleniyor. Zamanlayıcı eklemek, gece yarı
 kullanıcının altından değişmesi demekti.
 
 **Durum.** Kabul edildi.
+
+---
+
+## ADR-030 — Sürükleme Pointer Events ile kurulur; HTML5 sürükle-bırak kullanılmaz
+
+**Karar.** Arayüzde sürüklenerek yapılan her işlem — Faz 5C'nin takvim bloklarından
+başlayarak — `pointerdown` / `pointermove` / `pointerup` + `setPointerCapture` üzerine
+kurulur. HTML5 sürükle-bırak API'si (`draggable` özniteliği, `dragstart` · `dragover` ·
+`drop` olayları) **kullanılmaz.** Bu, takvim kütüphanesi adayları için de bir **eleme**
+ölçütüdür (`/faz-05c-karar` ölçüt 6): sürüklemeyi HTML5 DnD ile kuran bir kütüphane
+ölçülmeden elenir.
+
+**Gerekçe — asıl neden bir gereksinim, tercih değil.** `PRD` **R3.7** dersin taşınmasını
+30 dakikaya kilitliyor ve **5 pikselin altındaki hareketi tıklama sayıyor.** HTML5 DnD'de
+`dragstart`'ın ne kadar hareketten sonra ateşleneceğini **tarayıcı belirler**; uygulama o
+eşiği ne okuyabilir ne değiştirebilir. Yani R3.7 bu API üzerinde uygulanamaz — kırılgan
+olur değil, **kurulamaz.** Pointer Events'te eşik bizim aritmetiğimiz: ilk `pointerdown`
+noktasıyla `pointermove` arasındaki mesafe.
+
+İkinci sebep: `setPointerCapture` sürüklenen bloğun, işaretçi kendi sınırlarının dışına
+çıksa bile olayları almasını **garanti eder.** Takvimde sürükleme tanımı gereği bloğun
+dışına çıkar — başka bir güne, başka bir saate. HTML5 DnD'de bu, hedef elemanların
+`dragover`'ında `preventDefault` çağırmakla kurulur ve bırakma noktasının hassas
+koordinatı güvenilir gelmez.
+
+**Gerekçe — "WebView2 farkları" korkusunun doğru adresi.** Bu ADR bir çerçeve
+düzeltmesiyle birlikte alındı. Tauri macOS'ta **WKWebView (WebKit)**, Windows'ta
+**WebView2 (Chromium)** kullanıyor: geliştirme **daha katı** motorda yapılıyor. WKWebView'da
+çalışan bir yerleşimin Chromium'da çalışması beklenir; tersi doğru değil. Dolayısıyla
+CSS/JS **semantiği** bu projede sanıldığından az risk taşıyor.
+
+Gerçek Windows bilinmeyenleri motorun kendisi değil, dördü de somut olan şunlar:
+
+| Bilinmeyen | Nerede vurur |
+|---|---|
+| **Segoe UI metrikleri** | Kolon genişlikleri, blok içinde metnin kırpılması. Sabit `px` kolon kurulmaz |
+| **DPI ölçekleme** | 08:00–22:00 ızgarası rahat yoğunlukta 840px; tipik 1080p dizüstü önerilen ölçeklemede bunu vermiyor. Izgara dikey kaydırır ve açılışta "şimdi"ye kayar |
+| **Kaydırma çubuğu genişliği** | Windows'ta klasik çubuk ızgaradan yer çalar; genişlik hesabı buna dayanıklı olmalı |
+| **ICU verisi** | `toLocale*` çağrısı yapılmaz — gün/ay adları `tr.calendar`'dan, para ayıracı elle (bkz. `tr.ts`, `format.ts`) |
+
+**Sonuç.** Sürükleme mantığı — eşik, 30 dk yuvarlaması, hedef geçerliliği — saf
+fonksiyonlarda kalır ve jsdom'da test edilir; Pointer Events bunu mümkün kılıyor, çünkü
+girdi sıradan koordinat çiftleri. HTML5 DnD'de aynı testler `DataTransfer` taklidi
+gerektirirdi. Faz 6'nın telafi dersi taşıması ve ileride çıkacak her sürükleme aynı
+kalıbı kullanır.
+
+**Durum.** Kabul edildi.

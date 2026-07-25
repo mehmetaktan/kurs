@@ -6,37 +6,38 @@ description: Faz 5C — Takvim ekranı ve ilk Windows testi
 
 Önce oku: `CLAUDE.md`, `docs/DURUM.md`, `docs/EKRANLAR.md` (**§2 Takvim**),
 `docs/TASARIM-SISTEMI.md`, `docs/KARARLAR.md` (**ADR-001**, **ADR-011**, **ADR-017**,
-**ADR-020**, **ADR-024**).
+**ADR-020**, **ADR-024**, **ADR-030**, **ADR-031**).
 
-**Faz 5'in son parçası ve en riskli ekranı.** Sürükle-bırak, ızgara yerleşimi ve saat
-hesapları WebView2 farklarına en duyarlı olan yer.
+**Faz 5'in son parçası.** Kütüphane kararı bu oturumda **verilmez** — `/faz-05c-karar`
+oturumunda verildi ve `ADR-031`'de yazılı. Bu oturum kararı **uygular**; yeniden
+tartışmaz. ADR-031 "elde" diyorsa `src/dev/` altındaki deneme ızgarası başlangıç
+noktasıdır.
 
 ---
 
-## 0. Önce karar: hazır kütüphane mi, elde mi
+## 0. Riskin doğru çerçevesi
 
-**Kod yazmadan önce bu soruyu bir ADR olarak cevapla.** Karar oturum içinde uydurulmaz.
+Bu bölüm **ADR-030**'un özeti; gerekçesi orada. "WebView2 farkları" diye tek bir risk
+yok, karıştırılırsa yanlış yere önlem alınır:
 
-Ölçütler:
+| | |
+|---|---|
+| macOS (geliştirme) | **WKWebView** — WebKit |
+| Windows (teslim) | **WebView2** — Chromium |
 
-1. **Çevrimdışı çalışmak zorunda** — CDN yok, lisans sunucusu yok, telemetri yok
-   (ADR-001: sunucu, hesap, giriş yok).
-2. **Tasarım sistemine oturmalı.** `EKRANLAR §2` ızgarayı bire bir tarif ediyor:
-   08:00–22:00 · 30 dk = 30px (rahat) / 22px (sıkı) · şerit (lane) algoritması ·
-   7 blok varyantı · taralı tatil sütunu · 30 dk'ya kilitli sürükleme + 5px eşiği ·
-   `#d59029` şimdi çizgisi. Kütüphanenin CSS'iyle güreşmek ızgarayı yazmaktan pahalı
-   olabilir — bu **ölçülecek**, varsayılmayacak. Somut ölç: bir günlük görünümü
-   token'larla kaç satır CSS geçersiz kılmadan kurabiliyorsun?
-3. **Lisans.** Ürün kurs sahibine teslim ediliyor ve ADR-024 "ürün Aktansoft'un" diyor.
-   Ticari bir komponentin dağıtım şartı okunmadan aday listesine bile girmez.
-   Kullanıcının `~/.npmrc`'sinde bir **Bryntum** deneme jetonu var — aday, ama şartları
-   okunmadan değil.
-4. **Paket boyutu.** ADR-001 Tauri'yi Electron'a tercih ederken gerekçe kurulum dosyası
-   boyutuydu; 2 MB'lik bir takvim kütüphanesi o kararı kısmen geri alır.
-5. **Türkçe.** Gün/ay adları `tr.calendar`'dan gelmeli; `toLocaleDateString('tr')`
-   kullanılmıyor (ICU verisi eksik Windows'ta İngilizce döner — `tr.ts`'te yazılı).
+Geliştirme **daha katı** motorda yapılıyor. WKWebView'da çalışan bir yerleşim
+Chromium'da büyük ihtimalle çalışır; tersi doğru değil. Yani CSS/JS semantiği
+bu projede beklenenden **daha az** risk.
 
-Kararı `docs/KARARLAR.md`'ye ADR olarak yaz, sonra kod.
+Gerçek Windows bilinmeyenleri motor semantiği değil, şunlar:
+
+1. **Segoe UI metrikleri** — SF Pro'dan farklı genişlik. Kolon genişlikleri ve blok
+   içindeki metnin kırpılması buna bağlı. Sabit `px` kolon genişliği kurma.
+2. **DPI ölçekleme** — §1'deki dikey sığma sorunu buradan geliyor.
+3. **Kaydırma çubuğu genişliği** — Windows'ta klasik çubuk ızgaradan yer çalar;
+   ızgaranın toplam genişlik hesabı buna dayanıklı olmalı.
+4. **ICU verisi** — `toLocale*` çağrısı yapma. Gün/ay adları `tr.calendar`'dan gelir
+   (`toLocaleDateString('tr')` yasak, `tr.ts`'te gerekçesi yazılı).
 
 ## 1. Takvim ekranı
 
@@ -49,8 +50,31 @@ Kararı `docs/KARARLAR.md`'ye ADR olarak yaz, sonra kod.
 Dört ayrı boş durum (`EKRANLAR §149`): ilk kullanım · hafta tamamen tatil · filtre
 sonuçsuz · gün boş. Tek bir "kayıt yok" hepsini anlatmaz.
 
+### Izgara dikey olarak sığmıyor — bu bir tasarım kısıtı, sonradan fark edilmesin
+
+`EKRANLAR §122`: 08:00–22:00 = 28 yarım saat. Rahat yoğunlukta **28 × 30px = 840px**
+sadece ızgara (sıkı yoğunlukta 616px). Buna gün başlığı satırı, sayfa başlığı ve
+uygulama kabuğu eklenecek.
+
+`src-tauri/tauri.conf.json` pencereye `minHeight: 700` izni veriyor. Windows tarafında
+tipik bir 1080p dizüstü, Windows'un o panel için **önerdiği** ölçeklemede (%125–%150)
+864–720 CSS px yükseklik verir; görev çubuğu ve pencere çerçevesi düşünce ızgaraya
+kalan yer 840px'in belirgin biçimde altındadır. Geliştirme makinesinde bu hiç görünmez.
+
+Bunun sonucu:
+
+- Izgara **dikey kaydırır**; sayfa değil ızgaranın kendisi (gün başlıkları yapışkan kalır).
+- Ekran açıldığında **"şimdi" çizgisi görünür alana kaydırılır.** Kullanıcı sabah
+  uygulamayı açtığında 08:00'i değil, içinde bulunduğu saati görmeli.
+- Yoğunluk anahtarı (`--calendar-slot-height`) çalışmaya devam eder; ızgara sabit piksel
+  varsaymaz.
+
 ## 2. Sürükle-bırak
 
+- **Pointer Events ile kurulur** (`pointerdown` / `pointermove` / `setPointerCapture`) —
+  **ADR-030**, kilitli. HTML5 sürükle-bırak (`draggable` + `dragstart`/`drop`)
+  **kullanılmaz**: `dragstart`'ın eşiğini tarayıcı belirlediği için R3.7'nin 5px kuralı
+  o API üzerinde kırılgan değil, **kurulamaz**.
 - 30 dk'ya kilitli, 5px altındaki hareket **tıklama** sayılır (R3.7)
 - Tatil/kapalı güne **bırakılamaz**; hedef göstergesi bile çıkmaz (K-2)
 - Taşıma sonrası kapsam sorulur: **"Sadece bu ders"** / **"Bu ve sonraki dersler"** (R3.8)
@@ -60,31 +84,61 @@ sonuçsuz · gün boş. Tek bir "kayıt yok" hepsini anlatmaz.
 ## 3. 5A/5B'den devralınan yüzey
 
 `session_conflicts` · `reschedule_session` · `delete_sessions` · `cancel_session` ·
-`group_list` hazır. Takvimin ihtiyacı olan tek yeni sorgu muhtemelen **tarih aralığına
-göre seans listesi**: `repo::academic::sessions_between` var, ekranın istediği birleşik
-satır (branş rengi, grup adı, üye sayısı, yoklama durumu) için `repo/schedule.rs`'e bir
-projeksiyon eklenir — `group_rows` kalıbı.
+`group_list` hazır. **Tarih aralığına göre birleşik ders satırı da hazır:** Faz 5B
+`repo/schedule.rs`'e `session_rows_between(from, to)` yazdı ve üye sayısını satırın
+**kendi gününe** göre hesaplıyor — haftalık ızgara için ikinci bir sorgu yazma.
+
+Eksik olabilecek tek şey branş **rengi**; satırda yoksa `repo/schedule.rs`'e eklenir,
+yeni bir dosya açılmaz.
+
+`/faz-05c-karar`'da açılmış bir kalıntı varsa (ör. `Display.tsx`'teki `toLocaleUpperCase`
+kararı) burada kapanır.
 
 ## 4. Testler
 
 - Şerit (lane) algoritması: çakışan iki ders yan yana bölünür, üç ders üçe
 - 30 dk kilidi ve 5px eşiği
 - Kapalı gün sütununun hedef kabul etmemesi
-- "Şimdi" çizgisinin konumu (saat **parametre**, `Date.now()` değil — test edilebilir kalsın)
+- "Şimdi" çizgisinin konumu (saat **parametre**, `Date.now()` değil — ADR-029)
+- **Açılışta "şimdi"ye kaydırma**: verilen saat için hesaplanan kaydırma konumu — saf
+  fonksiyon, jsdom'da test edilebilir kalsın
+- **Yoğunluk**: slot yüksekliği değişince blok konumlarının takip etmesi
+
+## 5. Doğrulanmayanların kapanması
+
+Faz 5B üç akışı ekranda süremedi çünkü tetikleyicileri takvimdi. Bu fazda sürülür:
+
+| Ne | Neden şimdi |
+|---|---|
+| **E6 şablondan oluştur** | Tetikleyicisi boş takvim — artık takvim var |
+| **Haftalık tekrarla ders ekleme** | 5B'de bugün kapalı gündü ve K-2 doğru şekilde engelledi; açık bir günle denenir |
+| **Ertele diyaloğu** | Sürükle-bırak zaten aynı yolu kullanıyor |
 
 ---
 
-## Faz sonu — İLK WINDOWS TESTİ
+## Faz sonu — PUSH, CI ve İLK WINDOWS TESTİ
 
-Bu faz bitince GitHub Actions'tan Windows `.msi`'yi indir. Bana:
-- Kurs sahibine nasıl göndereceğimi
-- Test etmesini isteyeceğim 5 maddelik listeyi
+`c5773e2` (Faz 5B) ve `/faz-05c-karar`'ın commit'i **hâlâ yerelde**; push bu fazın
+sonuna bırakıldı. Sıra:
+
+1. `npm run check` yeşil → commit
+2. **Push et** ve CI'ı bekle. Üç fazın kodu (5B + 5C-K + 5C) ilk kez Windows'ta
+   derlenecek; bir şey kırılırsa hangi fazdan geldiğini aramak gerekebilir.
+3. `Test · windows-latest` yeşil mi ve artefakt kutusunda **sıfır olmayan boyutta**
+   bir `.msi` var mı — kanıt bu.
+
+Sonra bana:
+- Kurs sahibine `.msi`'yi nasıl göndereceğimi
+- Test etmesini isteyeceğim 5 maddelik listeyi — **en az ikisi §0'daki Windows
+  bilinmeyenlerini yoklasın**: takvimin bir günü ekrana sığıyor mu, para tutarı
+  `1.234,56` biçiminde mi görünüyor
 - SmartScreen uyarısı çıkarsa ne yapması gerektiğini
 
 anlat. Bu testi Faz 10'a bırakmıyoruz.
 
 > **Windows makine yok**, doğrulama CI'da yapılıyor. `.msi` indirilip kurulmuyor;
 > kanıt `Test · windows-latest` işinin yeşil olması ve artefakt kutusunda sıfır olmayan
-> boyutta bir `.msi` listelenmesi.
+> boyutta bir `.msi` listelenmesi. Ekranın Windows'ta **nasıl göründüğü** CI'dan
+> öğrenilemez — o yüzden kurs sahibine gönderiliyor.
 
 Bitince `/kapat`.
