@@ -314,3 +314,77 @@ Bir yan etkisi: "içeriğe atla" bağlantısı `<a href="#icerik">` olamıyor, �
 İhtiyaç büyürse (iç içe yerleşim, geçiş animasyonu, rota bazlı kod bölme) bu karar yeniden değerlendirilir; rota tablosu tek dosyada olduğu için geçiş maliyeti düşük.
 
 **Durum.** Kabul edildi.
+
+---
+
+## ADR-024 — Ürün kimliği Aktansoft'un, kurum kimliği derleme zamanı config dosyasından
+
+**Karar.** İki ayrı kimlik var ve karıştırılmaz.
+
+**Ürün kimliği — sabit, Aktansoft'a ait.** Değişkene bağlanmaz, ayarlardan düzenlenmez:
+
+| Ne | Değer | Nerede |
+|---|---|---|
+| Ürün adı | `Kurs Takip` | `tauri.conf.json > productName`, pencere başlığı, `.msi` adı, Başlat menüsü |
+| Uygulama kimliği | `com.aktansoft.kurstakip` | `tauri.conf.json > identifier` **ve** `src-tauri/src/db/mod.rs > APP_IDENTIFIER` |
+| Yayıncı / geliştirici | `Aktansoft` | `Cargo.toml > authors`, `bundle > publisher`, telif satırı |
+| Kenar çubuğu 1. satır | `Kurs Takip` | `tr.app.brand` — bugünkü `DersTakip` değeri **yanlış**, hiçbir yerde karşılığı olmayan ayrı bir ad |
+
+**Kurum kimliği — müşteriye ait, derleme öncesi düzenlenir.** Tek kaynağı depodaki
+`config/kurum.json` dosyasıdır:
+
+```json
+{
+  "institutionName": "Aydın Özel Ders",
+  "receipt": { "address": "", "phone": "" }
+}
+```
+
+`institutionName` kenar çubuğunun ikinci satırında ve makbuz başlığında (PRD R4.11)
+görünür. `receipt.address` / `receipt.phone` PRD'nin **istemediği** alanlardır; boş
+bırakıldıklarında makbuza **basılmazlar**. Faz 8'de gerçek bir makbuzun bunları istediği
+görülürse dosya biçimi yeniden açılmasın diye şimdiden yer ayrıldı; boş varsayılan
+davranışı değiştirmez.
+
+Dosya **iki taraftan da derlemeye gömülür**: TypeScript `src/config/brand.ts` üzerinden
+tipli okur, Rust `include_str!` ile derleme anında gömer (Faz 8 makbuzu aynı kaynağı
+okumak zorunda). Çalışma anında dosya okuması **yoktur**.
+
+**Gerekçe.** Bugün kodda dört farklı ad dolaşıyordu: `Kurs Takip` (ürün), `DersTakip`
+(kenar çubuğu), `Aydın Özel Ders` (kurum, hem `tr.ts`'te hem `setting` tablosunda) ve
+`com.aydinozelders` (uygulama kimliği). Kurum adının uygulama kimliğine sızmış olması
+asıl sorun: `%APPDATA%\com.aydinozelders.kurstakip\kurs.db` yolu **müşteri adını taşıyor**,
+yani ikinci bir müşteride ya yanlış klasör adı kullanılacak ya veritabanı taşınacak.
+
+Kurum kimliğinin derleme zamanına alınmasının bedeli bilinerek kabul edildi: **kurs sahibi
+kurum adını kendi değiştiremez.** Değişiklik yeniden derleme ve yeni bir `.msi` gerektirir.
+Karşılığında teslim edilen pakette müşteriye özel tek bir metin dosyası düzenlenir ve
+mühürlü migration'a dokunulmaz. Tek müşteri, geliştiriciye doğrudan erişim ve yılda bir
+değişmeyecek bir ad göz önüne alındığında takas makul.
+
+Çalışma anı yerine derleme anı gömme, ADR-008'in doğrudan sonucu: çalışma anında okunan
+bir config dosyası Windows'ta bir dosya yolu, bir kodlama (BOM'lu UTF-8), bir "kullanıcı
+dosyayı sildi" ve bir "OneDrive klasörü senkronize etti" arıza sınıfı açardı. Gömülü
+metinde bunların hiçbiri yok.
+
+**Sonuç.** Üç şey bunun peşinden gelir:
+
+1. **`setting.institution_name` satırı artık okunmaz.** Migration `001_initial.sql`
+   mühürlü ve checksum'lı olduğu için satır **yerinde kalır**; uygulama onu okumaz,
+   `app_status.institution_name` alanı config'ten döner. `VERI-MODELI.md §1.2` ve
+   `crud.rs`'teki testi bu notla işaretlenir. Bu, ADR-018'in "tek kaynak" disiplininin
+   ayarlara uygulanmış hâli: iki yerde duran bir değer er geç ikiye ayrılır.
+2. **`EKRANLAR.md E18` (Tanımlar → Genel) kapsamından kurum adı çıkar.** O ekranda
+   çalışma saatleri, satır yoğunluğu, devamsızlık politikası ve makbuz öneki kalır —
+   hepsi kurs sahibinin gerçekten değiştirdiği, işletmeye dair değerler.
+3. **`APP_IDENTIFIER` ile `tauri.conf.json > identifier` eşitliği teste bağlanır.** Bugün
+   yalnızca bir yorum satırı koruyor. İkisi ayrışırsa seed binary'si ile uygulama **farklı
+   klasörlere** yazar; kurs sahibi verisinin kaybolduğunu sanır, oysa veri başka bir
+   `%APPDATA%` klasöründedir. Sessiz ve teşhisi zor bir arıza — kimlik değişikliği tam da
+   bu riski canlı hâle getirdiği için mühür aynı fazda atılır.
+
+Kimlik değişikliği **kurs sahibinin makinesinde gerçek veri oluşmadan önce** yapılmak
+zorunda; sonrasında maliyeti bir veri taşıma işi ve bir destek görüşmesidir. Bu yüzden
+Faz 4'ün §0'ıdır, Faz 10'a bırakılmaz.
+
+**Durum.** Kabul edildi.

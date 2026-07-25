@@ -55,8 +55,10 @@ CI aynı dosyaları okur — yerelde çalışan sürüm CI'da da çalışır.
 kurs/
 ├── .github/workflows/ci.yml   Windows + macOS test & paket
 ├── scripts/verify-bundle.mjs  üretim paketinde /dev sayfası kalmadığını doğrular
+├── config/kurum.json          müşteriye özel değerler — teslim öncesi düzenlenir (ADR-024)
 ├── src/                       React arayüzü
-│   ├── i18n/tr.ts             BÜTÜN Türkçe metinler (ADR-007)
+│   ├── config/brand.ts        kurum.json'un tipli sarmalayıcısı
+│   ├── i18n/tr.ts             BÜTÜN Türkçe metinler (ADR-007) — kurum adı BURADA DEĞİL
 │   ├── styles/                tokens.css (TEK kaynak) · base.css · density.css
 │   ├── ui/                    komponent kütüphanesi — ekranlar buradan alır
 │   ├── shell/                 AppShell · SidebarNav · PageHeader · routes.ts
@@ -105,6 +107,14 @@ bırakır. `ledger_entry`'nin `update`/`archive` fonksiyonu **yoktur** — appen
 ### Dil
 - Kod, veritabanı, dosya ve değişken adları: **İngilizce**
 - Arayüz metinleri: **Türkçe**, tamamı `src/i18n/tr.ts` içinde. JSX'te çıplak metin yok.
+
+### Marka (ADR-024)
+İki ayrı kimlik var, karıştırılmaz:
+- **Ürün — Aktansoft'un, sabit.** Ürün adı `Kurs Takip`, kimlik `com.aktansoft.kurstakip`,
+  yayıncı `Aktansoft`. Değişkene bağlanmaz, ayarlardan düzenlenmez.
+- **Kurum — müşterinin, değişken.** `config/kurum.json` içinde; derleme anında hem TS'e
+  hem Rust'a gömülür. `tr.ts`'te kurum adı **bulunmaz** — orası ürün metinlerinin envanteri.
+- `setting.institution_name` satırı migration'da duruyor ama **okunmuyor**.
 
 ### Windows (macOS'ta geliştirip Windows'a teslim ediyoruz)
 - Dosya yolu string birleştirmeyle kurulmaz → Tauri path API
@@ -169,5 +179,10 @@ Hepsi proje kökünden çalışır.
 `npm run build` ile üretilen pakette demo verisi yükleyici bulunmaz.
 
 Veritabanı `app_data_dir` altındadır (ADR-008), proje klasöründe değil:
-- macOS: `~/Library/Application Support/com.aydinozelders.kurstakip/kurs.db`
-- Windows: `%APPDATA%\com.aydinozelders.kurstakip\kurs.db`
+- macOS: `~/Library/Application Support/com.aktansoft.kurstakip/kurs.db`
+- Windows: `%APPDATA%\com.aktansoft.kurstakip\kurs.db`
+
+> **Kimlik Faz 4 §0'da değişiyor** (ADR-024): `com.aydinozelders.kurstakip` →
+> `com.aktansoft.kurstakip`. O değişiklik uygulanana kadar yerel makinedeki veritabanı
+> hâlâ eski klasörde; yeni klasörde sıfırdan kurulacak. Geliştirme verisi olduğu için
+> taşınmıyor — `npm run seed -- --reset` yeter.

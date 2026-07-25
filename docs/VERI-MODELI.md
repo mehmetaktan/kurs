@@ -93,9 +93,13 @@ Teknik olmayan kullanıcıda sessiz veri bozulmasının en olası kaynağı budu
 
 ### 1.2 `setting`
 
-**Bu tablo neden var:** Kurum adı, çalışma saatleri, yoklama politikası gibi tek satırlık
-kararların her biri için tablo açmamak. Kenar çubuğundaki "Aydın Özel Ders", takvimin
-08:00–22:00 aralığı ve `rahat/sıkı` satır yoğunluğu buradan gelir.
+**Bu tablo neden var:** Çalışma saatleri, yoklama politikası, makbuz öneki gibi tek
+satırlık kararların her biri için tablo açmamak. Takvimin 08:00–22:00 aralığı ve
+`rahat/sıkı` satır yoğunluğu buradan gelir.
+
+> **Kurum adı buradan GELMİYOR (ADR-024).** Kenar çubuğundaki kurum satırı derleme zamanı
+> `config/kurum.json`'dan okunuyor. `institution_name` satırı tabloda duruyor ama kod onu
+> sorgulamıyor — migration mühürlü olduğu için satır silinemedi.
 
 ```sql
 CREATE TABLE setting (
@@ -109,7 +113,7 @@ CREATE TABLE setting (
 
 | key | varsayılan | nerede kullanılır |
 |---|---|---|
-| `institution_name` | `Aydın Özel Ders` | kenar çubuğu başlığı, makbuz başlığı |
+| `institution_name` | `Aydın Özel Ders` | ⚠️ **OKUNMUYOR — ADR-024.** Kurum adı derleme zamanı `config/kurum.json`'dan geliyor. Satır migration mühürlü olduğu için yerinde duruyor; kod bu anahtarı sorgulamaz |
 | `day_start` / `day_end` | `08:00` / `22:00` | takvim dikey aralığı |
 | `slot_minutes` | `30` | takvimde sürükleme kilitlenmesi |
 | `default_session_minutes` | `60` | branşta `default_min` yoksa ders süresi (PRD S4) |
@@ -164,7 +168,8 @@ Seed yalnızca geliştirmede çalışıyor (`faz-02.md §6`); orada bırakılır
 gerçek makinesinde `teacher` tablosu **sonsuza kadar boş kalır** ve öğretmen alanı olan
 5 tablo ile 4 ekran karşılıksız olur. Ad, Tanımlar → Genel ekranından değiştirilebilir.
 
-`institution_name`'den türetilmez: o bir **kurum** adı ("Aydın Özel Ders"), kişi adı değil.
+Kurum adından türetilmez: o bir **kurum** adı ("Aydın Özel Ders"), kişi adı değil —
+üstelik artık başka bir yerde yaşıyor (`config/kurum.json`, ADR-024).
 
 ---
 
@@ -1443,7 +1448,7 @@ Windows CI'da düşer.
 
 | yapılmadı | gerekirse ne olur |
 |---|---|
-| Çoklu şube / kurum | Şu an tek kurum varsayılıyor; `setting.institution_name` yeterli. |
+| Çoklu şube / kurum | Şu an tek kurum varsayılıyor; kurum adı derleme zamanı sabiti (ADR-024). Çoklu şube gerekirse önce o karar geri alınır: kurum kimliği veriye döner. |
 | Öğretmen hakedişi / maaş | ADR-011: tek öğretmen. Gerekirse `teacher_payout` tablosu eklenir. |
 | KDV / fatura | Kurs sahibi makbuz veriyor, fatura kesmiyor. Gerekirse `payment`'a alan eklenir. |
 | Derslik / oda çakışması | Tasarımda oda kavramı yok. |

@@ -19,8 +19,12 @@ Tasarımdaki kenar çubuğu 6 öğe taşıyor:
 | 6 | **Tanımlar** | — | ⬜ tasarlanacak |
 | 7 | **Raporlar** | — | ✅ **menüye eklendi (Faz 3)** — tasarımda yoktu |
 
-Alt bilgi: kurum adı (`Aydın Özel Ders`) ve `Sürüm 1.0 · Yerel`.
+Alt bilgi: kurum adı ve `Sürüm X.Y · Yerel`.
 "Yerel" ibaresi kasıtlı: kullanıcıya verinin buluta gitmediğini söylüyor.
+
+> Kenar çubuğunun üst iki satırı iki ayrı kimliktir (**ADR-024**): 1. satır ürün adı
+> (`Kurs Takip`, sabit, Aktansoft'un), 2. satır kurum adı (`config/kurum.json`'dan).
+> Sürüm numarası elle yazılmaz, `package.json`/`tauri.conf` üzerinden gelir.
 
 > **Karar verildi (2026-07-25, PRD S8): (a) — 7. menü öğesi.** Yol haritasında Faz 9
 > "Dashboard ve raporlar" var, tasarımın menüsünde Raporlar yoktu. Menüde yer vardı ve
@@ -371,8 +375,12 @@ Boş: "Bu dönem için veri yok."
 ## Faz 10 — Ayarlar ve yedekleme
 
 ### E18. Tanımlar → Genel
-Kurum adı · çalışma saatleri · satır yoğunluğu · devamsızlık politikası ·
-makbuz numarası öneki. Hepsi `setting` tablosuna yazar.
+Çalışma saatleri · satır yoğunluğu · devamsızlık politikası · makbuz numarası öneki.
+Hepsi `setting` tablosuna yazar.
+
+> **Kurum adı bu ekranda YOK (ADR-024).** Derleme zamanı `config/kurum.json` dosyasından
+> geliyor; kurs sahibi değiştiremez, değişiklik yeniden derleme gerektirir. Burada kalan
+> her şey kurs sahibinin gerçekten değiştirdiği işletme değerleri.
 
 ### E19. Tanımlar → Yedekleme
 Son yedeklemeler listesi (`backup_log`) · **Şimdi yedekle** · **Geri yükle** (çift onaylı,

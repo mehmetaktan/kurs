@@ -10,6 +10,57 @@ Sadece bu modül. Ders, yoklama, tahsilat bu fazda yok.
 
 ---
 
+## 0. Marka geçişi (ADR-024) — öğrenci modülünden ÖNCE
+
+> **Neden ilk iş:** `identifier` değiştiğinde veritabanının `%APPDATA%` klasörü değişir.
+> Bugün maliyeti iki satır; kurs sahibinin makinesinde gerçek veri oluştuktan sonra
+> maliyeti bir veri taşıma işi ve bir destek görüşmesi. Faz 10'a bırakılamaz.
+
+Kararın tamamı `docs/KARARLAR.md > ADR-024`'te. Uygulanacaklar:
+
+**a. Uygulama kimliği.** `com.aydinozelders.kurstakip` → `com.aktansoft.kurstakip`.
+İki yerde: `src-tauri/tauri.conf.json > identifier` ve `src-tauri/src/db/mod.rs >
+APP_IDENTIFIER`. **Ürün adı `Kurs Takip` olduğu gibi kalır** — `productName`, pencere
+başlığı ve CI artefakt yolları değişmez.
+
+**b. Yayıncı.** `Cargo.toml > authors` → `["Aktansoft"]`. `tauri.conf.json > bundle`
+altına `publisher: "Aktansoft"` eklenir (Windows kurulum ekranında ve "Uygulamalar ve
+özellikler" listesinde görünen ad).
+
+**c. Kurum config'i.** `config/kurum.json` oluşturulur (biçimi ADR-024'te):
+
+- TypeScript tarafı: `src/config/brand.ts` — JSON'u tipli olarak dışa verir.
+- Rust tarafı: `include_str!` ile derleme anında gömülür. Çalışma anı dosya okuması
+  **yok** (ADR-008 gerekçesi ADR-024'te).
+- `src/i18n/tr.ts`: `app.institution` **silinir** (artık config'ten geliyor),
+  `app.brand` `'DersTakip'` → `'Kurs Takip'` olur. `tr.ts` ürün metinlerinin envanteri;
+  müşteri değişkeni orada durmaz.
+- `src/shell/SidebarNav.tsx:26` kurum adını config'ten okur.
+- `commands.rs > app_status.institution_name` artık `setting` tablosundan değil
+  config'ten döner.
+
+**d. `setting.institution_name` artık okunmaz.** Migration `001_initial.sql` **mühürlü,
+elleme** — satır yerinde kalır. İşaretlenecek yerler: `docs/VERI-MODELI.md §1.2`
+satırına "okunmuyor, ADR-024" notu ve `src-tauri/tests/crud.rs`'teki
+`ayarlar_baslangic_verisinden_okunur` testine aynı notun yorumu. Test **silinmez**:
+migration'ın başlangıç verisini yazdığını doğrulamaya devam ediyor.
+
+**e. Sürüm metni tek kaynağa bağlanır.** `tr.app.version` bugün elle yazılmış
+`'Sürüm 1.0 · Yerel'`; gerçek sürüm `0.1.0`. Sürüm numarası `package.json`/`tauri.conf`
+üzerinden gelmeli, `'· Yerel'` ibaresi `tr.ts`'te kalmalı (kasıtlı bir mesaj, bkz.
+`EKRANLAR.md`). Elle yazılmış sürüm numarası kayar ve kimse fark etmez.
+
+**f. Yeni mühür — kimlik eşitliği testi.** `APP_IDENTIFIER` ile `tauri.conf.json >
+identifier` eşitliğini bugün yalnızca bir **yorum satırı** koruyor. Bir test yazılır:
+`tauri.conf.json` okunur, `identifier` alanı `db::APP_IDENTIFIER` ile karşılaştırılır.
+Ayrışırlarsa seed binary'si ile uygulama farklı klasörlere yazar — sessiz ve teşhisi zor.
+**Negatif kontrolü yap:** sabiti geçici olarak boz, testin düştüğünü gör, geri al.
+
+Bittiğinde `npm run check` yeşil olmalı ve uygulama **yeni** `%APPDATA%` klasöründe
+sıfırdan bir veritabanı kurmalı (`npm run seed -- --reset` ile doğrula).
+
+---
+
 ## 1. Öğrenci listesi
 
 Tasarımdaki `Öğrenciler` ekranını gerçek veriyle kur.

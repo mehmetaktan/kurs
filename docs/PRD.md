@@ -188,7 +188,7 @@ derse yazamaz.
 
 | # | Gereksinim |
 |---|---|
-| R4.11 | PDF: kurum adı · makbuz no · tarih · öğrenci ve veli · tutar (rakam + yazı) · yöntem |
+| R4.11 | PDF: kurum adı · makbuz no · tarih · öğrenci ve veli · tutar (rakam + yazı) · yöntem. **Kurum adı `config/kurum.json`'dan** (ADR-024), `setting` tablosundan değil |
 | R4.12 | **Gömülü font zorunlu** — ğ/ş/İ/ı varsayılan PDF fontlarında yok |
 | R4.13 | PDF `app_data_dir` altına kaydedilir ve klasör açılabilir |
 
