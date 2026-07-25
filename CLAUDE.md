@@ -61,7 +61,7 @@ kilitli: `.npmrc`.** CI aynı dosyaları okur — yerelde çalışan sürüm CI'
 > Aynı sınıftan bir tuzak Node'da da var, o yüzden sürüm oraya da tam yazılır: her Node
 > yayını farklı bir npm getirir.
 
-## Klasör yapısı (Faz 5A)
+## Klasör yapısı (Faz 5B)
 
 ```
 kurs/
@@ -75,6 +75,8 @@ kurs/
 │   ├── ui/                    komponent kütüphanesi — ekranlar buradan alır
 │   ├── shell/                 AppShell · SidebarNav · PageHeader · GlobalSearch · routes.ts
 │   ├── pages/
+│   │   ├── bugun/             Faz 5B: TodayPage · today.ts (sıralama, "şimdi" çizgisi)
+│   │   ├── dersler/           Faz 5B: SessionForm (E3) · SessionActions · TemplateModal (E6)
 │   │   ├── ogrenciler/        Faz 4: liste · detay · form · veli · filters · validate
 │   │   ├── gruplar/           Faz 5A: liste · detay · form · filters
 │   │   └── tanimlar/          Faz 5A: branşlar · tatil günleri · renk paleti
@@ -109,7 +111,9 @@ bırakır. `ledger_entry`'nin `update`/`archive` fonksiyonu **yoktur** — appen
 `repo/people.rs` tabloların CRUD'u, `repo/roster.rs` **ekranın istediği birleşik satır**
 (bakiye, kalan ders, veli, işlenen ders). İkisi ayrı durur ki tablo katmanı ekrana
 bağlanmasın. Aynı ayrım akademik tarafta da var: `repo/academic.rs` tablolar,
-**`repo/schedule.rs`** grup projeksiyonu + seans üretim motoru.
+**`repo/schedule.rs`** projeksiyon + zaman mantığı: seans üretim motoru, grup satırı,
+**gün/aralık ders satırı** (`day_rows` · `session_rows_between`) ve seans yazma
+(`save_session`, şablondan oluşturma).
 
 `repo/ops.rs > on_startup(today)` her açılışta çalışır ve eksik seansları üretir
 (`VERI-MODELI §1.14`). Hata uygulamayı açmayı engellemez. Faz 7/8'in vade tahakkuku da
@@ -145,6 +149,9 @@ Sayfalama ortak bir dosyada çünkü ADR-025 **bütün** liste ekranları için 
 - Hard delete yok. `deleted_at` ile soft delete; kullanıcıya "Arşivle" denir.
 - Her tabloda `created_at`, `updated_at`, `deleted_at`.
 - Şema yalnızca sıralı migration dosyalarıyla değişir; elle DDL çalıştırılmaz.
+- Tarih/saat yerel duvar saati metni (ADR-017). **"Şimdi" tek kaynaktan gelir** —
+  `local_now` komutu: SQL'de çıplak `'now'` yok (§0), arayüzde de ekrana giden bir
+  `new Date()` yok (ADR-029).
 
 ### Dil
 - Kod, veritabanı, dosya ve değişken adları: **İngilizce**

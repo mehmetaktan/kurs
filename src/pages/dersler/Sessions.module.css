@@ -1,0 +1,132 @@
+/*
+ * Ders modalları: ekle/düzenle (E3), ertele · iptal · sil, şablondan oluştur (E6).
+ * Renk, tipografi ve aralık **yalnızca token'lardan** — ham değer yazılmaz.
+ *
+ * Hepsi 384px `Modal` içinde, o yüzden alanlar tek kolon; yalnızca saat + süre çifti
+ * yan yana duruyor (grup formundaki `slotGrid` kalıbının dar hâli).
+ */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  text-align: left;
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2-5);
+}
+
+.formError {
+  margin: 0;
+  padding: var(--space-2-5);
+  border: 1px solid var(--color-warn-border);
+  border-radius: var(--radius-8);
+  background: var(--color-danger-bg);
+  font-size: var(--font-size-meta);
+  line-height: var(--line-height-prose);
+  color: var(--color-danger);
+  text-wrap: pretty;
+}
+
+.hint {
+  margin: 0;
+  font-size: var(--font-size-meta);
+  line-height: var(--line-height-prose);
+  color: var(--color-text-muted);
+  text-wrap: pretty;
+}
+
+.warn {
+  margin: 0;
+  font-size: var(--font-size-meta);
+  line-height: var(--line-height-prose);
+  color: var(--color-warn-text);
+  text-wrap: pretty;
+}
+
+/* Üzerinde işlem yapılan ders her diyalogda yazılı — "hangi ders?" sorulmasın. */
+.subject {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+/* ── Çakışma uyarısı (K-1) ────────────────────────────────────────────────── */
+
+.conflictList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.conflictItem {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-2-5);
+  border: 1px solid var(--color-warn-border);
+  border-radius: var(--radius-8);
+  background: var(--color-warn-bg);
+  text-align: left;
+}
+
+.conflictLabel {
+  min-width: 0;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.conflictTime {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--font-size-meta);
+  color: var(--color-text-muted);
+}
+
+/* ── Şablon önizlemesi (E6) ───────────────────────────────────────────────── */
+
+.previewHead {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-meta);
+  color: var(--color-text-muted);
+}
+
+.previewList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1-5);
+  max-height: var(--measure-slot-list-max);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.previewItem {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  align-items: flex-start;
+  padding: var(--space-2) var(--space-2-5);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-8);
+  background: var(--color-surface-muted);
+  text-align: left;
+}
+
+.previewLabel {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.previewMeta {
+  font-size: var(--font-size-meta);
+  color: var(--color-text-muted);
+}

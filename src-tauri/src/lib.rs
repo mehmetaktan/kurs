@@ -182,6 +182,14 @@ pub fn run() {
             commands::cancel_session,
             commands::delete_sessions,
             commands::reschedule_session,
+            // Faz 5B — Bugün ekranı, ders ekle/düzenle, şablondan oluştur
+            commands::local_now,
+            commands::day_sessions,
+            commands::has_schedule,
+            commands::is_closed_day,
+            commands::save_session,
+            commands::template_preview,
+            commands::apply_template,
         ])
         .run(tauri::generate_context!())
         .expect("Tauri uygulaması başlatılamadı");

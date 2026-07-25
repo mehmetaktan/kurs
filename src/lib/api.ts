@@ -531,3 +531,145 @@ export function rescheduleSession(
 ): Promise<void> {
   return call<void>('reschedule_session', { sessionId, startsAt, durationMin })
 }
+
+// ─── Faz 5B — Bugün ekranı, ders ekle/düzenle, şablondan oluştur ──────────────
+
+/**
+ * **"Şimdi"nin tek kaynağı** (`VERI-MODELI §0`): `chrono::Local`, SQLite saati değil.
+ * `'YYYY-MM-DD HH:MM'` döner; tarih ilk 10 karakter.
+ *
+ * Arayüz `new Date()` de kurabilirdi ama o zaman "bugün" iki ayrı yerden gelirdi ve
+ * gece yarısını geçen bir oturumda başlıkla liste farklı günü gösterirdi.
+ */
+export function fetchLocalNow(): Promise<string> {
+  return call<string>('local_now')
+}
+
+/** Bugün ekranının (ve 5C'de takvimin) ders satırı — `repo/schedule.rs > DaySessionRow`. */
+export interface DaySessionRow {
+  id: number
+  /** Şablona bağlıysa dolu — silme kapsamının sorulup sorulmayacağını bu belirler. */
+  seriesId: number | null
+  startsAt: string
+  endsAt: string
+  /** `'solo'` | `'group'` — şemada GENERATED (ADR-012). */
+  kind: string
+  subjectId: number
+  subjectName: string
+  subjectColor: string | null
+  teacherId: number | null
+  studyGroupId: number | null
+  studentId: number | null
+  /** Grubun ya da öğrencinin adı. */
+  title: string
+  /** `'planned' | 'done' | 'cancelled'` */
+  status: string
+  attendanceTaken: boolean
+  /** Grupta o günkü **canlı** üye sayısı, birebirde 1 (§1.23). */
+  studentCount: number
+  presentCount: number
+  markedCount: number
+  isMakeup: boolean
+  cancelReason: string | null
+}
+
+/**
+ * Bir günün dersleri, saat sırasıyla (R1.1). `day` verilmezse Rust yerel bugünü kullanır.
+ * Arşivlenmiş öğrencinin birebir dersi listelenmez (§1.23).
+ */
+export function fetchDaySessions(day: string | null = null): Promise<DaySessionRow[]> {
+  return call<DaySessionRow[]>('day_sessions', { day })
+}
+
+/**
+ * Haftalık program tanımlı mı — Bugün ekranının **iki** boş durumunu ayırır (R1.7).
+ * Boş bir gün listesi iki durumu da üretiyor; ayrımı başka bir şey veremiyor.
+ */
+export function fetchHasSchedule(): Promise<boolean> {
+  return call<boolean>('has_schedule')
+}
+
+/** Tatil **veya** haftalık kapalı gün. Form kaydetmeden önce buna bakar (K-2). */
+export function fetchIsClosedDay(day: string): Promise<boolean> {
+  return call<boolean>('is_closed_day', { day })
+}
+
+/** `'once'` tek bir seans, `'weekly'` bir şablon yazar ve seansları üretir. */
+export type SessionRepeat = 'once' | 'weekly'
+
+export interface SessionInput {
+  /** Dolu = mevcut **tek** dersi düzenle. Şablon düzenleme grup formunda (E5). */
+  id: number | null
+  subjectId: number
+  teacherId: number | null
+  /** `studyGroupId` ve `studentId`'den **tam olarak biri** dolu (ADR-012). */
+  studyGroupId: number | null
+  studentId: number | null
+  /** `'YYYY-MM-DD'` */
+  day: string
+  /** `'HH:MM'` */
+  startTime: string
+  durationMin: number
+  repeat: SessionRepeat
+}
+
+export interface SaveSessionReport {
+  sessionId: number | null
+  seriesId: number | null
+  /** Programa eklenen ders sayısı — bildirimde yazılır. */
+  created: number
+}
+
+/**
+ * Ders kaydeder. **Tatile ders eklenmez** (K-2) — Rust reddeder.
+ * **Çakışma engellemez** (K-1 / R3.11): uyarıyı `fetchSessionConflicts` ile ekran gösterir.
+ */
+export function saveSession(input: SessionInput): Promise<SaveSessionReport> {
+  return call<SaveSessionReport>('save_session', { input })
+}
+
+export interface TemplateSlot {
+  /** 1 = Pazartesi … 7 = Pazar */
+  weekday: number
+  startTime: string
+  durationMin: number
+  subjectId: number
+  studyGroupId: number | null
+  studentId: number | null
+  teacherId: number | null
+  /** `Matematik · Grup A` */
+  label: string
+  /** Uygulanırsa bu dersin düşeceği **ilk** tarih. */
+  firstOn: string
+  /** Şablonu zaten var; uygulanınca atlanır — önizleme bunu söyler, satırı gizlemez. */
+  alreadyPlanned: boolean
+}
+
+export interface TemplatePreview {
+  weekStart: string
+  weekEnd: string
+  applyFrom: string
+  slots: TemplateSlot[]
+}
+
+/** Önizleme **yazmaz**; onay bu listeden sonra istenir (E6). */
+export function fetchTemplatePreview(
+  sourceDay: string,
+  applyFrom: string,
+): Promise<TemplatePreview> {
+  return call<TemplatePreview>('template_preview', { sourceDay, applyFrom })
+}
+
+export interface ApplyTemplateReport {
+  seriesCreated: number
+  /** Zaten şablonu olduğu için atlananlar — sessiz değil, sayılıyor. */
+  skipped: number
+  sessionsCreated: number
+}
+
+export function applyTemplate(
+  sourceDay: string,
+  applyFrom: string,
+): Promise<ApplyTemplateReport> {
+  return call<ApplyTemplateReport>('apply_template', { sourceDay, applyFrom })
+}

@@ -545,3 +545,78 @@ makbuz PDF'i `formatPhone`'u kullanır, `maskPhone`'u değil. Yeni bir biçim ge
 üçüncü bir fonksiyon değil, bu tabloya bir satır eklenir ve gerekçesi yazılır.
 
 **Durum.** Kabul edildi.
+
+---
+
+## ADR-028 — "Şablondan oluştur" haftayı şablona çevirir, kopyalamaz
+
+**Karar.** E6 "Şablondan oluştur", seçilen kaynak haftanın derslerini okur ve her biri
+için bir **`session_series` açar**; seansları `generate_sessions` ufka kadar üretir.
+Dersleri ileri haftalara tek tek **kopyalamaz**.
+
+Kaynak haftadan ayıklananlar ve nedenleri:
+
+| Ayıklanan | Neden |
+|---|---|
+| İptal edilmiş ders (`status='cancelled'`) | O hafta yapılmamış bir ders; şablona aday değil |
+| Telafi dersi (`is_makeup`) | Tanımı gereği tek seferlik, haftalık tekrarı yok (ADR-016) |
+| Arşivlenmiş öğrencinin dersi | Program ekranları canlı kayıtla ilgilenir (§1.23) |
+| Aynı hedefin aynı gün + saatteki ikinci satırı | Aynı şablonu iki kez yazmak olurdu |
+
+`apply_from` tarihinde hâlâ geçerli bir şablonu olan slot **atlanır ve raporda sayılır**.
+
+**Gerekçe — neden kopyalama değil.** Kopyalanan hafta N hafta sonra biter ve takvim
+yeniden boşalır; kullanıcı aynı işlemi tekrar etmek zorunda kalır. Bu, `VERI-MODELI
+§1.14`'ün ufuk gerekçesinin elle yapılan hâlidir: *"takvim birkaç ay sonra sessizce
+boşalır ve Bugün ekranı yanlış boş-durum metnini gösterir."* Üretim motoru zaten
+idempotent, tatil-duyarlı ve testli; ikinci bir üretim yolu açmak "tatile ders düşmez"
+kuralının iki ayrı yerde doğrulanması demekti.
+
+**Gerekçe — neden önizleme zorunlu.** İşlem tek tıkla 16 haftalık program üretiyor ve
+geri alması ders ders silmek demek. Önizleme kaç dersin ve **hangi tarihlerin**
+oluşacağını onaydan **önce** söylüyor (`TemplateSlot.first_on`).
+
+**Gerekçe — neden atlama sayılıyor.** Sessizce atlansaydı kullanıcı önizlemede dört ders
+görüp üç ders eklendiğini fark eder ve programın kaybettiğini sanardı. Atlanan satır
+listede **gizlenmiyor** da: `Zaten programda` rozetiyle duruyor.
+
+**Sonuç.** Faz 5C'de takvimin boş-durumu bu modalı açar; ikinci bir "kopyala" yolu
+açılmaz. Üretilen şablonlar grup formundakilerle **aynı tablodadır** — gruba bağlı
+olanlar `GroupForm`'dan düzenlenebilir. Birebir şablonların düzenleme ekranı **yok**;
+bugünkü tek yönetim yolu "Tüm seri" ile kaldırmak (bkz. `docs/DURUM.md` > ertelenenler).
+
+**Durum.** Kabul edildi.
+
+---
+
+## ADR-029 — "Şimdi"nin tek kaynağı var; arayüz saati kendi okumaz
+
+**Karar.** Kullanıcıya görünen **"bugün" ve "şimdi"** değerleri tek bir yerden gelir:
+`local_now` komutu (`chrono::Local`, `'YYYY-MM-DD HH:MM'`; tarih ilk 10 karakter).
+Arayüz, ekranda gösterilen hiçbir tarih/saat hesabı için `new Date()` çağırmaz.
+
+İki istisna var ve **ikisi de "şimdi" üretmiyor**:
+
+- `lib/format.ts` ile `ui/Picker.tsx` içindeki `Date.UTC` aritmetiği — **verilen** bir
+  tarihi ayrıştırmak, biçimlemek ve ay ızgarasını kurmak için.
+- `DatePicker`'ın `today` prop'u boş geldiğinde düştüğü `new Date()` — yalnızca hangi
+  ayın açılacağını seçer. Çağıranların hepsi `today`'i veriyor.
+
+**Gerekçe.** `VERI-MODELI §0` SQLite saatini yasaklıyordu çünkü `datetime('now')` daima
+UTC dönüyor. Arayüzün `new Date()`'i doğru saat dilimini verir — yani aynı hata değil,
+ama **ikinci bir kaynaktır.** Bugün ekranının başlığı `local_now`'dan, listesi
+`day_sessions`'tan gelirken "şimdi" çizgisi `new Date()`'ten gelseydi, gece yarısını
+geçen bir oturumda başlık dünü, çizgi bugünü gösterirdi. Aynı çatlak Faz 6'nın yoklama
+damgasında ve Faz 9'un "bu ay" penceresinde de açılırdı.
+
+Yan fayda testlerde: `pages/bugun/today.test.ts` "şimdi"yi sabit veriyor. `new Date()`
+kullanılsaydı testin sonucu makinenin saatine bağlanır ve gece yarısı düşerdi — §0'ın
+Rust tarafında zaten kabul edilmiş gerekçesinin aynısı.
+
+**Sonuç.** 5C'nin takvim "şimdi" göstergesi, Faz 6'nın `marked_at` damgası ve Faz 9'un
+rapor pencereleri aynı komuttan okur. Kabul edilen sınır: uzun süre açık kalan bir
+pencerede gün değişirse ekran **kendiliğinden tazelenmez**; kullanıcı bir işlem
+yaptığında liste zaten yeniden yükleniyor. Zamanlayıcı eklemek, gece yarısı ekranın
+kullanıcının altından değişmesi demekti.
+
+**Durum.** Kabul edildi.

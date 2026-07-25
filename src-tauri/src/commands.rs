@@ -18,8 +18,9 @@ use crate::model::{
 };
 use crate::repo::roster::{StudentDetail, StudentInput, StudentQuery, StudentRow};
 use crate::repo::schedule::{
-    Capacity, ClosedDayInput, Conflict, DeleteReport, GroupDetail, GroupInput, GroupQuery,
-    GroupRow, SessionScope, SubjectInput,
+    ApplyTemplateReport, Capacity, ClosedDayInput, Conflict, DaySessionRow, DeleteReport,
+    GroupDetail, GroupInput, GroupQuery, GroupRow, SaveSessionReport, SessionInput, SessionScope,
+    SubjectInput, TemplatePreview,
 };
 use crate::{db, repo, AppState};
 
@@ -384,6 +385,102 @@ pub fn reschedule_session(
 ) -> AppResult<()> {
     state.with_conn(|conn| {
         repo::schedule::reschedule_session(conn, session_id, &starts_at, duration_min)
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Faz 5B — Bugün ekranı, ders ekle/düzenle, şablondan oluştur
+// ---------------------------------------------------------------------------
+
+/// **"Şimdi"nin tek kaynağı** (`VERI-MODELI §0`): `chrono::Local`, SQLite saati değil.
+///
+/// Arayüz `new Date()` de kurabilirdi ama o zaman "bugün" iki ayrı yerden gelirdi ve
+/// gece yarısını geçen bir oturumda Bugün ekranının başlığı ile listesi farklı günü
+/// gösterirdi. Tek yer, tek cevap: `'YYYY-MM-DD HH:MM'`, tarih ilk 10 karakter.
+#[tauri::command]
+pub fn local_now() -> String {
+    clock::now_local()
+}
+
+/// Bugünün dersleri, saat sırasıyla (R1.1). Arşivlenmiş öğrencinin birebir dersi
+/// listelenmez — program ekranları canlı kayıtla ilgilenir (§1.23).
+#[tauri::command]
+pub fn day_sessions(
+    state: State<'_, AppState>,
+    day: Option<String>,
+) -> AppResult<Vec<DaySessionRow>> {
+    state.with_conn(|conn| {
+        let day = day.clone().unwrap_or_else(clock::today_local_string);
+        repo::schedule::day_rows(conn, &day)
+    })
+}
+
+/// Haftalık program tanımlı mı — Bugün ekranının iki boş durumunu ayırır (R1.7).
+#[tauri::command]
+pub fn has_schedule(state: State<'_, AppState>) -> AppResult<bool> {
+    state.with_conn(repo::schedule::has_schedule)
+}
+
+/// Bir gün programa kapalı mı: tek seferlik tatil **veya** haftalık kapalı gün.
+/// Form kaydetmeden önce buna bakar (K-2) — kullanıcı hatayı kaydetme anında değil
+/// tarihi seçtiğinde görür.
+#[tauri::command]
+pub fn is_closed_day(state: State<'_, AppState>, day: String) -> AppResult<bool> {
+    state.with_conn(|conn| {
+        let parsed = chrono::NaiveDate::parse_from_str(day.trim(), "%Y-%m-%d").map_err(|_| {
+            crate::error::AppError::new(
+                "invalid_date",
+                "Tarih okunamadı. Tarihi gün.ay.yıl biçiminde seçin.",
+            )
+        })?;
+        repo::schedule::is_closed_day(conn, parsed)
+    })
+}
+
+/// Ders kaydeder: tek seferlik ya da haftalık. Tatile ders eklenmez (K-2); çakışma
+/// ENGELLEMEZ, arayüz uyarır (K-1). "Bugün" burada bind ediliyor (§0).
+#[tauri::command]
+pub fn save_session(
+    state: State<'_, AppState>,
+    input: SessionInput,
+) -> AppResult<SaveSessionReport> {
+    state.with_conn(|conn| repo::schedule::save_session(conn, &input, clock::today_local()))
+}
+
+/// Şablondan oluştur — **önizleme**. Yazmaz; onay bu listeden sonra istenir (E6).
+#[tauri::command]
+pub fn template_preview(
+    state: State<'_, AppState>,
+    source_day: String,
+    apply_from: String,
+) -> AppResult<TemplatePreview> {
+    state.with_conn(|conn| {
+        let source = parse_day(&source_day)?;
+        let from = parse_day(&apply_from)?;
+        repo::schedule::template_preview(conn, source, from)
+    })
+}
+
+/// Önizlenen haftayı haftalık şablona çevirir ve seansları üretir.
+#[tauri::command]
+pub fn apply_template(
+    state: State<'_, AppState>,
+    source_day: String,
+    apply_from: String,
+) -> AppResult<ApplyTemplateReport> {
+    state.with_conn(|conn| {
+        let source = parse_day(&source_day)?;
+        let from = parse_day(&apply_from)?;
+        repo::schedule::apply_template(conn, source, from, clock::today_local())
+    })
+}
+
+fn parse_day(raw: &str) -> AppResult<chrono::NaiveDate> {
+    chrono::NaiveDate::parse_from_str(raw.trim(), "%Y-%m-%d").map_err(|_| {
+        crate::error::AppError::new(
+            "invalid_date",
+            "Tarih okunamadı. Tarihi gün.ay.yıl biçiminde seçin.",
+        )
     })
 }
 

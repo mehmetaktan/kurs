@@ -575,6 +575,189 @@ export const tr = {
     },
   },
 
+  // Faz 5B — Bugün ekranı (EKRANLAR.md §1, PRD R1.1–R1.7).
+  today: {
+    newSession: 'Yeni ders',
+    fromTemplate: 'Şablondan oluştur',
+
+    lessons: {
+      heading: 'Bugünkü dersler',
+      // Tasarımdaki `54px / 1fr / 128px / 84px / 190px` ders satırının kolonları.
+      table: {
+        time: 'Saat',
+        lesson: 'Ders',
+        students: 'Öğrenci',
+        attendance: 'Yoklama',
+        action: 'İşlem',
+      },
+      // "3 ders · 1 yoklama bekliyor" — R1.2 başlıkta da sayılır.
+      countSuffix: 'ders',
+      pendingSuffix: 'yoklama bekliyor',
+      group: 'Grup',
+      solo: 'Birebir',
+      makeup: 'Telafi',
+      // "6 öğrenci"
+      studentSuffix: 'öğrenci',
+      // Yoklamanın üç durumu (EKRANLAR §1). **"Yoklama al" düğmesi Faz 6'da gelir** —
+      // bugün konsaydı çalışmayan bir düğme olurdu (Faz 4'teki "Aç" kolonu kararı).
+      attendanceDone: 'katıldı',
+      attendanceMissing: 'Yoklama girilmedi',
+      attendanceWaiting: 'Bekleniyor',
+      cancelled: 'İptal',
+      // Geçmişle gelecek arasındaki ayraç — yalnızca ikisi de varsa çıkar (R1.1).
+      nowLine: 'Şimdi',
+      empty: 'Bugün planlanmış ders yok.',
+      emptyBody: 'Program tanımlı; bugüne ders düşmemiş.',
+      // R1.7 — program hiç yoksa boş liste DEĞİL, yönlendirme.
+      noSchedule: 'Haftalık ders programı henüz oluşturulmadı',
+      noScheduleBody:
+        'Ders eklerseniz bu liste her sabah kendiliğinden dolar. Grup dersleri için Gruplar ekranından haftalık program da girebilirsiniz.',
+      noScheduleAction: 'Ders ekle',
+    },
+
+    // Üç yan bölüm de tasarımda var ve **kaldırılmıyor** (R1.6): veri kaynakları
+    // sonraki fazlarda bağlanıyor. Boş durum metni yerine "yakında" yazıyor, çünkü
+    // "borçlu öğrenci yok" demek kontrol edilmemiş bir şeyi doğru gibi sunmak olurdu.
+    debtors: {
+      heading: 'Borcu olan öğrenciler',
+      soon: 'Borçlu listesi tahsilat modülüyle birlikte gelecek.',
+    },
+    packages: {
+      heading: 'Paketi bitmek üzere',
+      soon: 'Kalan ders uyarısı paket modülüyle birlikte gelecek.',
+    },
+    backup: {
+      heading: 'Yedekleme',
+      soon: 'Yedekleme durumu son fazda bu şeritte görünecek.',
+    },
+  },
+
+  // Faz 5B — ders ekle/düzenle (E3), seans işlemleri ve şablondan oluştur (E6).
+  sessions: {
+    form: {
+      newTitle: 'Yeni ders',
+      editTitle: 'Dersi düzenle',
+      kind: 'Ders türü',
+      kindSolo: 'Birebir',
+      kindGroup: 'Grup',
+      // Düzenlemede hedef DEĞİŞMEZ: dersin grubu/öğrencisi devredilemez, yoksa o dersin
+      // yoklaması ve borcu başkasına geçerdi. Doğrusu iptal edip yenisini açmak.
+      kindLocked: 'Dersin grubu ya da öğrencisi düzenlemeyle değiştirilemez.',
+      subject: 'Branş',
+      subjectPlaceholder: 'Branş seçin',
+      group: 'Grup',
+      groupPlaceholder: 'Grup seçin',
+      student: 'Öğrenci',
+      studentPlaceholder: 'Öğrenci seçin',
+      date: 'Tarih',
+      time: 'Saat',
+      duration: 'Süre',
+      minutesSuffix: 'dk',
+      // PRD S4: süre branşın varsayılanından gelir, ikinci bir varsayılan tanımlanmaz.
+      durationHint: 'Branşın varsayılan süresi geldi; değiştirebilirsiniz.',
+      repeat: 'Tekrar',
+      repeatOnce: 'Tek seferlik',
+      repeatWeekly: 'Her hafta',
+      repeatWeeklyHint: 'Seçilen günde her hafta ders açılır ve programa işlenir.',
+      // Geçmiş tarihe ders yazmak yasak değil ama nadiren istenir — söylemek gerekiyor.
+      pastWarning: 'Seçtiğiniz tarih geçmişte. Ders geçmişe eklenecek.',
+      errors: {
+        subjectRequired: 'Dersin branşını seçin.',
+        groupRequired: 'Dersi hangi gruba ekleyeceğinizi seçin.',
+        studentRequired: 'Dersi hangi öğrenciye ekleyeceğinizi seçin.',
+        dateRequired: 'Ders tarihini seçin.',
+        timeRequired: 'Ders saatini yazın, örnek: 16:00.',
+        durationInvalid: 'Ders süresini dakika olarak yazın, örnek: 60.',
+        noSubjects: 'Önce Tanımlar → Branşlar\'dan bir branş tanımlayın.',
+        // K-2 — Rust'taki cümlenin aynısı (`save_session`): kullanıcı aynı kural için
+        // iki farklı metin görmesin.
+        closedDay:
+          'Bu gün tatil olarak işaretli, o güne ders eklenemez. Başka bir gün seçin ya da Tanımlar → Tatil günleri\'nden tatili kaldırın.',
+      },
+      savedOnce: 'Ders programa eklendi.',
+      savedEdit: 'Ders güncellendi.',
+      // "Her hafta tekrarlanacak · 16 ders programa eklendi."
+      savedWeeklyPrefix: 'Her hafta tekrarlanacak ·',
+      savedWeeklySuffix: 'ders programa eklendi.',
+    },
+
+    // K-1 / R3.11 — çakışma ENGELLEMEZ, uyarır. Uyarı çakışan dersin ADINI söyler:
+    // "çakışma var" tek başına kullanıcıya hiçbir şey anlatmıyor.
+    conflict: {
+      title: 'Bu saatte başka bir ders var',
+      body: 'Aynı saate denk gelen dersler:',
+      confirm: 'Yine de ekle',
+      hint: 'Ders eklenir; çakışma programda görünür kalır.',
+      back: 'Saati değiştir',
+    },
+
+    actions: {
+      reschedule: 'Ertele',
+      cancel: 'İptal et',
+      remove: 'Sil',
+    },
+
+    reschedule: {
+      title: 'Dersi ertele',
+      body: 'Dersin yeni tarih ve saatini seçin. Şablon bağı korunur.',
+      confirm: 'Ertele',
+      done: 'Ders ertelendi.',
+    },
+
+    cancelDialog: {
+      title: 'Ders iptal edilsin mi?',
+      body: 'Ders takvimde ve ders geçmişinde kalır, durumu "İptal" olur.',
+      reason: 'İptal sebebi',
+      reasonPlaceholder: 'Örnek: Öğretmen hasta',
+      reasonHint: 'İsteğe bağlı; ders kartında görünür.',
+      confirm: 'Dersi iptal et',
+      done: 'Ders iptal edildi.',
+    },
+
+    remove: {
+      title: 'Bu ders silinsin mi?',
+      // Kapsam NET sorulur ve varsayılan EN DAR olan (R3.8). Şablona bağlı olmayan
+      // derste kapsam sorusu hiç çıkmaz — silinecek tek şey o ders.
+      bodySeries: 'Bu ders haftalık şablonda tekrar ediyor. Neyi silmek istiyorsunuz?',
+      bodySingle: 'Bu ders programdan kalkacak. Geçmiş kayıtlar etkilenmez.',
+      only: 'Sadece bu ders',
+      onlyHint: 'Şablon ve diğer haftalar olduğu gibi kalır.',
+      following: 'Bu ve sonraki dersler',
+      followingHint: 'Şablon bu tarihte kapanır; geçmiş dersler korunur.',
+      all: 'Tüm seri',
+      allHint: 'Şablon arşivlenir; işlenmiş dersler yerinde kalır.',
+      confirm: 'Sil',
+      // DeleteReport ne olduğunu söylüyor ve bildirim onu DOĞRU anlatmak zorunda:
+      // şablona bağlı tek ders arşivlenmiyor, İPTAL ediliyor (ux_session_series_slot).
+      doneCancelled: 'Ders iptal edildi; şablonda yerinde kalıyor.',
+      doneRemovedPrefix: 'Programdan',
+      doneRemovedSuffix: 'ders kaldırıldı.',
+      doneNone: 'Silinecek ders bulunamadı; işlenmiş dersler yerinde kalır.',
+    },
+
+    // E6 — önizleme onaydan ÖNCE gösterilir.
+    template: {
+      title: 'Şablondan oluştur',
+      body: 'Seçtiğiniz haftanın dersleri haftalık programa çevrilir ve ileriye doğru üretilir.',
+      sourceWeek: 'Kaynak hafta',
+      sourceWeekHint: 'O haftadan herhangi bir gün seçmeniz yeterli.',
+      applyFrom: 'Şu tarihten itibaren uygula',
+      preview: 'Önizleme',
+      // "4 ders haftalık programa eklenecek"
+      previewCountSuffix: 'ders haftalık programa eklenecek',
+      firstOnPrefix: 'ilk ders',
+      alreadyPlanned: 'Zaten programda',
+      empty: 'Seçilen haftada ders yok',
+      emptyBody: 'Dersi olan bir hafta seçin ya da önce tek tek ders ekleyin.',
+      confirm: 'Programa uygula',
+      // "3 ders haftalık programa eklendi · 1 ders zaten programdaydı."
+      donePrefix: 'ders haftalık programa eklendi.',
+      doneSkippedPrefix: '·',
+      doneSkippedSuffix: 'ders zaten programdaydı.',
+      nothing: 'Yeni ders eklenmedi; hepsi zaten programdaydı.',
+    },
+  },
+
   status: {
     heading: 'Sistem durumu',
     subtitle: 'Veritabanı bağlantısı ve uygulanan güncellemeler.',

@@ -1,0 +1,140 @@
+/*
+ * Bugün ekranının yerleşimi. Renk, tipografi ve aralık **yalnızca token'lardan**
+ * (`src/styles/tokens.css`) — ham değer yazılmaz.
+ *
+ * İki kolon: dersler `1.7fr`, yan panel `minmax(322px, 0.9fr)` (EKRANLAR §1). Oranlar
+ * tasarımdan; dar pencerede tek kolona düşüyor, yoksa yan panel okunamayacak kadar
+ * sıkışıyor.
+ */
+
+.layout {
+  display: grid;
+  grid-template-columns: 1.7fr minmax(322px, 0.9fr);
+  gap: var(--space-5);
+  align-items: start;
+  max-width: var(--measure-content-max);
+}
+
+@media (width < 1100px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.lessons {
+  min-width: 0;
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.sideCard {
+  padding: var(--space-4);
+}
+
+.sideBody {
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-meta);
+  line-height: var(--line-height-prose);
+  color: var(--color-text-muted);
+  text-wrap: pretty;
+}
+
+/* ── Bölüm başlığındaki sayaç ─────────────────────────────────────────────── */
+
+.sectionMeta {
+  font-variant-numeric: tabular-nums;
+}
+
+/* R1.2 — yoklama bekleyen ders başlıkta da sayılıyor, satırda amber şeritle. */
+.pending {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-warn-text);
+}
+
+/* ── "Şimdi" çizgisi (R1.1) ───────────────────────────────────────────────── */
+
+.nowLine {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  padding: var(--space-2) 0;
+}
+
+.nowLabel {
+  font-size: var(--font-size-micro);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-danger);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-caps);
+}
+
+.nowRule {
+  flex: 1;
+  height: 1px;
+  background: var(--color-danger);
+}
+
+/* ── Ders satırı ──────────────────────────────────────────────────────────── */
+
+.time {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.lessonCell {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  min-width: 0;
+}
+
+.lessonText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.lessonTitle {
+  overflow: hidden;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lessonMeta {
+  font-size: var(--font-size-micro);
+  color: var(--color-text-muted);
+}
+
+.swatch {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.attendanceDone {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-success);
+}
+
+.muted {
+  color: var(--color-text-muted);
+}
+
+.rowActions {
+  display: flex;
+  gap: var(--space-1-5);
+  justify-content: flex-end;
+}

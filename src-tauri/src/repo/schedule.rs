@@ -542,6 +542,573 @@ pub fn reschedule_session(
 }
 
 // ===========================================================================
+// Ders satırı — Bugün ekranı (EKRANLAR §1) ve 5C'de takvim
+// ===========================================================================
+
+/// Bir dersin ekranda görünen hâli: adı, kaç öğrencisi olduğu, yoklamasının durumu.
+///
+/// `academic::sessions_on` ham `session` satırını döndürüyor; orada branşın adı da,
+/// grubun adı da, öğrenci sayısı da yok. Bu ayrım `people.rs` ↔ `roster.rs` ile aynı
+/// (ADR-025): tablo katmanı ekrana bağlanmıyor, projeksiyon burada duruyor.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DaySessionRow {
+    pub id: i64,
+    /// Şablona bağlıysa dolu. Silme kapsamının sorulup sorulmayacağını bu belirler.
+    pub series_id: Option<i64>,
+    pub starts_at: String,
+    pub ends_at: String,
+    /// `'solo'` | `'group'` — şemada GENERATED (ADR-012), elle yazılmıyor.
+    pub kind: String,
+    pub subject_id: i64,
+    pub subject_name: String,
+    pub subject_color: Option<String>,
+    pub teacher_id: Option<i64>,
+    pub study_group_id: Option<i64>,
+    pub student_id: Option<i64>,
+    /// Grubun ya da öğrencinin adı — satırın ikinci satırında yazan şey.
+    pub title: String,
+    /// `'planned'` | `'done'` | `'cancelled'`
+    pub status: String,
+    pub attendance_taken: bool,
+    /// Grup seansında o günkü **canlı** üye sayısı; birebirde 1 (§1.23).
+    pub student_count: i64,
+    /// Yoklaması alınmışsa "Geldi" sayısı.
+    pub present_count: i64,
+    pub marked_count: i64,
+    pub is_makeup: bool,
+    pub cancel_reason: Option<String>,
+}
+
+/// Bir günün dersleri, saat sırasıyla (R1.1).
+pub fn day_rows(conn: &Connection, day: &str) -> AppResult<Vec<DaySessionRow>> {
+    session_rows_between(conn, day, day)
+}
+
+/// Haftalık program tanımlı mı — **Bugün ekranının iki boş durumunu ayıran tek şey**.
+///
+/// R1.7: program yoksa ekran boş liste değil **yönlendirme** gösterir. Program varken de
+/// aynı cümleyi göstermek yanlış olurdu: kurs sahibi programını kurmuş, o gün sadece
+/// dersi yok. Bunu bilmenin başka yolu yok — boş bir gün listesi iki durumu da üretiyor.
+pub fn has_schedule(conn: &Connection) -> AppResult<bool> {
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM session_series WHERE deleted_at IS NULL",
+        [],
+        |row| row.get(0),
+    )?;
+    Ok(count > 0)
+}
+
+/// İki tarih arasındaki dersler. Bugün ekranı tek günle çağırıyor; takvim (5C) hafta
+/// aralığıyla çağıracak — üye sayısı **satırın kendi gününe** göre hesaplandığı için
+/// aralık genişlemesi sonucu bozmuyor.
+///
+/// **Arşivlenmiş öğrencinin birebir dersi listelenmez** (§1.23): program ekranları —
+/// Bugün, takvim, yoklama — yalnızca canlı kayıtla ilgilenir. Muhasebe listeleri bu
+/// fonksiyonu kullanmaz, defterden okur.
+///
+/// `ORDER BY starts_at` serbest: zaman damgası metinsel olarak sıralanabiliyor, ADR-020
+/// yasağı Türkçe metin kolonları için.
+pub fn session_rows_between(
+    conn: &Connection,
+    from: &str,
+    to: &str,
+) -> AppResult<Vec<DaySessionRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT s.id, s.series_id, s.starts_at, s.ends_at, s.kind, \
+                s.subject_id, sub.name, sub.color, s.teacher_id, \
+                s.study_group_id, s.student_id, \
+                COALESCE(g.name, st.full_name, sub.name), \
+                s.status, s.attendance_taken_at IS NOT NULL, \
+                CASE WHEN s.study_group_id IS NULL THEN 1 ELSE \
+                  ( SELECT COUNT(*) FROM enrollment e \
+                    JOIN student es ON es.id = e.student_id AND es.deleted_at IS NULL \
+                    WHERE e.study_group_id = s.study_group_id AND e.deleted_at IS NULL \
+                      AND e.start_on <= s.session_date \
+                      AND (e.end_on IS NULL OR s.session_date <= e.end_on) ) END, \
+                COALESCE(a.present, 0), COALESCE(a.marked, 0), \
+                s.is_makeup, s.cancel_reason \
+         FROM session s \
+         JOIN subject sub ON sub.id = s.subject_id \
+         LEFT JOIN study_group g ON g.id = s.study_group_id \
+         LEFT JOIN student st ON st.id = s.student_id \
+         LEFT JOIN ( SELECT session_id, \
+                            SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) AS present, \
+                            COUNT(*) AS marked \
+                     FROM attendance WHERE deleted_at IS NULL GROUP BY session_id ) a \
+                ON a.session_id = s.id \
+         WHERE s.session_date BETWEEN ?1 AND ?2 AND s.deleted_at IS NULL \
+           AND (s.student_id IS NULL OR st.deleted_at IS NULL) \
+         ORDER BY s.starts_at, s.id",
+    )?;
+
+    let rows = stmt.query_map(params![from, to], |row| {
+        Ok(DaySessionRow {
+            id: row.get(0)?,
+            series_id: row.get(1)?,
+            starts_at: row.get(2)?,
+            ends_at: row.get(3)?,
+            kind: row.get(4)?,
+            subject_id: row.get(5)?,
+            subject_name: row.get(6)?,
+            subject_color: row.get(7)?,
+            teacher_id: row.get(8)?,
+            study_group_id: row.get(9)?,
+            student_id: row.get(10)?,
+            title: row.get(11)?,
+            status: row.get(12)?,
+            attendance_taken: row.get(13)?,
+            student_count: row.get(14)?,
+            present_count: row.get(15)?,
+            marked_count: row.get(16)?,
+            is_makeup: row.get(17)?,
+            cancel_reason: row.get(18)?,
+        })
+    })?;
+
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row?);
+    }
+    Ok(out)
+}
+
+// ===========================================================================
+// Ders ekle / düzenle — E3
+// ===========================================================================
+
+/// Tekrar kuralı. `Once` tek bir `session` satırı, `Weekly` bir `session_series` yazar.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SessionRepeat {
+    /// Tek seferlik ders — `series_id` boş kalır, üretim ona dokunmaz.
+    #[default]
+    Once,
+    /// Haftalık şablon; seanslar ufka kadar üretilir (§1.14).
+    Weekly,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionInput {
+    /// Dolu = mevcut **tek** dersi düzenle. Şablon düzenleme grup formunda (E5).
+    #[serde(default)]
+    pub id: Option<i64>,
+    pub subject_id: i64,
+    #[serde(default)]
+    pub teacher_id: Option<i64>,
+    /// `study_group_id` ve `student_id`'den **tam olarak biri** dolu (ADR-012).
+    #[serde(default)]
+    pub study_group_id: Option<i64>,
+    #[serde(default)]
+    pub student_id: Option<i64>,
+    /// `'YYYY-MM-DD'`
+    pub day: String,
+    /// `'HH:MM'`
+    pub start_time: String,
+    pub duration_min: i64,
+    #[serde(default)]
+    pub repeat: SessionRepeat,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveSessionReport {
+    /// Tek seferlik derste yazılan satırın id'si.
+    pub session_id: Option<i64>,
+    /// Haftalık tekrarda açılan şablonun id'si.
+    pub series_id: Option<i64>,
+    /// Programa **eklenen** ders sayısı. Kullanıcıya söylenir: "kaydettim" ile "takvimim
+    /// doldu" arasındaki bağı başka türlü kuramıyor (grup formundaki kalıbın aynısı).
+    pub created: i64,
+}
+
+/// Ders kaydeder: tek seferlik ya da haftalık.
+///
+/// **Tatile ders eklenemez** (PRD K-2) ve bu, bu fonksiyondaki tek ENGEL. PRD §7'nin
+/// ilkesi: programla ilgili her şey uyarır, tatil ve para engeller. **Çakışmaya burada
+/// bakılmıyor** — o bir uyarı (K-1 / R3.11) ve yeri arayüz: `detect_conflicts` sayıları
+/// verir, kullanıcı "Yine de ekle" der. Kural burada olsaydı kullanıcının onayı
+/// program tarafından geri alınabilir hâle gelirdi.
+///
+/// Haftalık tekrarda `weekday` seçilen **günden türetilir**, ayrıca sorulmaz: kullanıcı
+/// "3 Nisan Cuma 16:00" seçtiyse haftalık tekrarın günü zaten Cuma'dır ve ikinci bir
+/// alan iki cevabın çelişmesine izin verirdi.
+pub fn save_session(
+    conn: &Connection,
+    input: &SessionInput,
+    today: NaiveDate,
+) -> AppResult<SaveSessionReport> {
+    validate_session(input)?;
+
+    let day = parse_date(input.day.trim())?;
+    if is_closed_day(conn, day)? {
+        return Err(AppError::new(
+            "session.day",
+            "Bu gün tatil olarak işaretli, o güne ders eklenemez. \
+             Başka bir gün seçin ya da Tanımlar → Tatil günleri'nden tatili kaldırın.",
+        ));
+    }
+
+    let (starts_at, ends_at) = slot_bounds(day, input.start_time.trim(), input.duration_min)?;
+
+    repo::in_transaction(conn, |conn| match (input.id, input.repeat) {
+        (Some(id), _) => {
+            update_single_session(conn, id, input, &starts_at, &ends_at)?;
+            Ok(SaveSessionReport {
+                session_id: Some(id),
+                series_id: None,
+                created: 0,
+            })
+        }
+        (None, SessionRepeat::Once) => {
+            let id = insert_single_session(conn, input, &starts_at, &ends_at)?;
+            Ok(SaveSessionReport {
+                session_id: Some(id),
+                series_id: None,
+                created: 1,
+            })
+        }
+        (None, SessionRepeat::Weekly) => {
+            let series_id = repo::academic::insert_session_series(
+                conn,
+                &SessionSeries {
+                    id: None,
+                    study_group_id: input.study_group_id,
+                    student_id: input.student_id,
+                    subject_id: input.subject_id,
+                    teacher_id: input.teacher_id,
+                    weekday: day.weekday().number_from_monday() as i64,
+                    start_time: input.start_time.trim().to_string(),
+                    duration_min: input.duration_min,
+                    starts_on: clock::date_string(day),
+                    ends_on: None,
+                    created_at: None,
+                    updated_at: None,
+                    deleted_at: None,
+                },
+            )?;
+            let report = generate_sessions(conn, today)?;
+            Ok(SaveSessionReport {
+                session_id: None,
+                series_id: Some(series_id),
+                created: report.created,
+            })
+        }
+    })
+}
+
+/// Mevcut tek dersin saati, süresi ve branşı değişir.
+///
+/// **Hedef değişmiyor**: bir dersin grubu ya da öğrencisi düzenlemeyle devredilemez.
+/// Devredilseydi o dersin yoklaması, borcu ve geçmişi başka birine geçerdi; doğrusu eski
+/// dersi iptal edip yenisini açmak. `academic::update_session` de bu alanları yazmıyor.
+///
+/// Yoklaması alınmış ders kilitli (R3.13) — `reschedule_session` ile aynı gerekçe ve
+/// aynı mesaj: taşınsaydı yoklama başka bir güne ait olurdu.
+fn update_single_session(
+    conn: &Connection,
+    id: i64,
+    input: &SessionInput,
+    starts_at: &str,
+    ends_at: &str,
+) -> AppResult<()> {
+    let mut session: crate::model::Session = repo::require(conn, id)?;
+    if session.attendance_taken_at.is_some() {
+        return Err(AppError::new(
+            "session_locked",
+            "Bu dersin yoklaması alınmış; ders taşınamaz. \
+             Önce yoklamayı geri alın ya da yeni bir telafi dersi planlayın.",
+        ));
+    }
+
+    session.subject_id = input.subject_id;
+    session.teacher_id = input.teacher_id;
+    session.starts_at = starts_at.to_string();
+    session.ends_at = ends_at.to_string();
+    repo::academic::update_session(conn, id, &session)
+}
+
+fn insert_single_session(
+    conn: &Connection,
+    input: &SessionInput,
+    starts_at: &str,
+    ends_at: &str,
+) -> AppResult<i64> {
+    // Birebirde ücret snapshot'ı kayıttan kopyalanır (ADR-006); grupta `NULL` kalır —
+    // `insert_from_series` ile aynı gerekçe, sıfır yazmak "bedava" demek olurdu (§5).
+    let unit_price = match input.student_id {
+        Some(student_id) => solo_unit_price(conn, student_id, input.subject_id, starts_at)?,
+        None => None,
+    };
+
+    repo::academic::insert_session(
+        conn,
+        &crate::model::Session {
+            id: None,
+            series_id: None,
+            study_group_id: input.study_group_id,
+            student_id: input.student_id,
+            subject_id: input.subject_id,
+            teacher_id: input.teacher_id,
+            starts_at: starts_at.to_string(),
+            ends_at: ends_at.to_string(),
+            session_date: None, // GENERATED
+            kind: None,         // GENERATED
+            status: "planned".into(),
+            is_makeup: false,
+            makeup_for_attendance_id: None,
+            unit_price,
+            attendance_taken_at: None,
+            cancel_reason: None,
+            note: None,
+            created_at: None,
+            updated_at: None,
+            deleted_at: None,
+        },
+    )
+}
+
+/// Alan doğrulaması. Arayüzde ikizi var (anında geri bildirim); **son söz burada** ve
+/// ikisi aynı `code` uzayını kullanıyor, böylece hata doğru girdinin altına yerleşiyor.
+pub fn validate_session(input: &SessionInput) -> AppResult<()> {
+    // ADR-012'nin dışlayıcı CHECK'i şemada zaten var; buradaki kontrol kullanıcıya
+    // "grup ya da öğrenci seçin" diyebilmek için — CHECK ihlali ham bir SQLite hatası.
+    if input.study_group_id.is_some() == input.student_id.is_some() {
+        return Err(AppError::new(
+            "session.target",
+            "Dersin grubunu ya da öğrencisini seçin.",
+        ));
+    }
+    if input.duration_min <= 0 {
+        return Err(AppError::new(
+            "session.durationMin",
+            "Ders süresi sıfırdan büyük olmalı.",
+        ));
+    }
+    parse_date(input.day.trim())?;
+    parse_time(&input.start_time)?;
+    Ok(())
+}
+
+// ===========================================================================
+// Şablondan oluştur — E6
+// ===========================================================================
+
+/// Kaynak haftadaki bir ders: haftalık şablona çevrilecek aday.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TemplateSlot {
+    /// 1 = Pazartesi … 7 = Pazar
+    pub weekday: i64,
+    pub start_time: String,
+    pub duration_min: i64,
+    pub subject_id: i64,
+    pub study_group_id: Option<i64>,
+    pub student_id: Option<i64>,
+    pub teacher_id: Option<i64>,
+    /// `Matematik · Grup A`
+    pub label: String,
+    /// Uygulanırsa bu dersin düşeceği **ilk** tarih. Önizleme "hangi tarihler" sorusunu
+    /// bununla cevaplıyor (`faz-05b.md §2`).
+    pub first_on: String,
+    /// Bu ders için canlı bir şablon zaten var; uygulanınca **atlanır**. İkinci bir
+    /// şablon yazmak aynı saate iki ders üretir ve kullanıcı bunu çakışma sanır.
+    pub already_planned: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TemplatePreview {
+    /// Kaynak haftanın Pazartesi'si — çağıran haftanın herhangi bir gününü verebilir.
+    pub week_start: String,
+    pub week_end: String,
+    pub apply_from: String,
+    pub slots: Vec<TemplateSlot>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApplyTemplateReport {
+    pub series_created: i64,
+    /// Zaten şablonu olduğu için atlananlar.
+    pub skipped: i64,
+    pub sessions_created: i64,
+}
+
+/// Kaynak haftanın derslerinden şablon adaylarını çıkarır. **Yazmaz** — önizleme
+/// onaydan önce gösterilmek zorunda (`faz-05b.md §2`).
+///
+/// Ayıklananlar ve neden:
+/// - **İptal edilmiş ders** (`status='cancelled'`): kullanıcının o hafta yapmadığı ders.
+/// - **Telafi dersi** (`is_makeup`): tanımı gereği tek seferlik, haftalık tekrarı yok.
+/// - **Arşivlenmiş öğrencinin dersi**: program ekranları canlı kayıtla ilgilenir (§1.23).
+///
+/// Aynı hedefin aynı gün ve saatteki tekrarı bir kez listelenir; ikinci satır aynı
+/// şablonu iki kez yazmak olurdu.
+pub fn template_preview(
+    conn: &Connection,
+    source_day: NaiveDate,
+    apply_from: NaiveDate,
+) -> AppResult<TemplatePreview> {
+    let start = week_start(source_day)?;
+    let end = add_days(start, 6)?;
+
+    let rows = session_rows_between(conn, &clock::date_string(start), &clock::date_string(end))?;
+    let planned = live_series_keys(conn, apply_from)?;
+
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut slots = Vec::new();
+
+    for row in rows {
+        if row.status == "cancelled" || row.is_makeup {
+            continue;
+        }
+        let starts = parse_stamp(&row.starts_at)?;
+        let ends = parse_stamp(&row.ends_at)?;
+        let duration_min = (ends - starts).num_minutes();
+        if duration_min <= 0 {
+            continue;
+        }
+
+        let weekday = starts.date().weekday().number_from_monday() as i64;
+        let start_time = starts.format("%H:%M").to_string();
+        let key = slot_key(row.study_group_id, row.student_id, weekday, &start_time);
+        if !seen.insert(key.clone()) {
+            continue;
+        }
+
+        slots.push(TemplateSlot {
+            weekday,
+            start_time: start_time.clone(),
+            duration_min,
+            subject_id: row.subject_id,
+            study_group_id: row.study_group_id,
+            student_id: row.student_id,
+            teacher_id: row.teacher_id,
+            label: format!("{} · {}", row.subject_name, row.title),
+            first_on: clock::date_string(next_weekday_on_or_after(apply_from, weekday)?),
+            already_planned: planned.contains(&key),
+        });
+    }
+
+    slots.sort_by(|a, b| (a.weekday, &a.start_time).cmp(&(b.weekday, &b.start_time)));
+
+    Ok(TemplatePreview {
+        week_start: clock::date_string(start),
+        week_end: clock::date_string(end),
+        apply_from: clock::date_string(apply_from),
+        slots,
+    })
+}
+
+/// Önizlemedeki adayları haftalık şablona çevirir ve seansları üretir.
+///
+/// Şablonu zaten olan ders **atlanır** ve rapor bunu sayıyor: sessizce atlamak,
+/// kullanıcının "12 ders" beklerken 7 ders görmesi demek olurdu.
+pub fn apply_template(
+    conn: &Connection,
+    source_day: NaiveDate,
+    apply_from: NaiveDate,
+    today: NaiveDate,
+) -> AppResult<ApplyTemplateReport> {
+    let preview = template_preview(conn, source_day, apply_from)?;
+
+    repo::in_transaction(conn, |conn| {
+        let mut report = ApplyTemplateReport::default();
+
+        for slot in &preview.slots {
+            if slot.already_planned {
+                report.skipped += 1;
+                continue;
+            }
+            repo::academic::insert_session_series(
+                conn,
+                &SessionSeries {
+                    id: None,
+                    study_group_id: slot.study_group_id,
+                    student_id: slot.student_id,
+                    subject_id: slot.subject_id,
+                    teacher_id: slot.teacher_id,
+                    weekday: slot.weekday,
+                    start_time: slot.start_time.clone(),
+                    duration_min: slot.duration_min,
+                    starts_on: clock::date_string(apply_from),
+                    ends_on: None,
+                    created_at: None,
+                    updated_at: None,
+                    deleted_at: None,
+                },
+            )?;
+            report.series_created += 1;
+        }
+
+        report.sessions_created = generate_sessions(conn, today)?.created;
+        Ok(report)
+    })
+}
+
+/// `apply_from` tarihinde hâlâ geçerli olan şablonların `(hedef, gün, saat)` anahtarları.
+fn live_series_keys(conn: &Connection, apply_from: NaiveDate) -> AppResult<HashSet<String>> {
+    let mut stmt = conn.prepare(
+        "SELECT study_group_id, student_id, weekday, start_time \
+         FROM session_series \
+         WHERE deleted_at IS NULL AND (ends_on IS NULL OR ends_on >= ?1)",
+    )?;
+    let rows = stmt.query_map(params![clock::date_string(apply_from)], |row| {
+        Ok(slot_key(
+            row.get(0)?,
+            row.get(1)?,
+            row.get(2)?,
+            &row.get::<_, String>(3)?,
+        ))
+    })?;
+
+    let mut out = HashSet::new();
+    for row in rows {
+        out.insert(row?);
+    }
+    Ok(out)
+}
+
+fn slot_key(
+    group_id: Option<i64>,
+    student_id: Option<i64>,
+    weekday: i64,
+    start_time: &str,
+) -> String {
+    format!(
+        "{}:{}:{weekday}:{start_time}",
+        group_id.unwrap_or(0),
+        student_id.unwrap_or(0)
+    )
+}
+
+/// Haftanın Pazartesi'si. Hafta Türkiye'de Pazartesi başlar; `weekdaysShortMonFirst`
+/// listesi ve `session_series.weekday` (1 = Pazartesi) ile aynı kabul.
+fn week_start(day: NaiveDate) -> AppResult<NaiveDate> {
+    day.checked_sub_days(Days::new(day.weekday().num_days_from_monday() as u64))
+        .ok_or_else(|| AppError::internal("date_underflow", "hafta başı hesaplanamadı"))
+}
+
+/// `from` dâhil, verilen haftalık güne düşen ilk tarih.
+fn next_weekday_on_or_after(from: NaiveDate, weekday: i64) -> AppResult<NaiveDate> {
+    let mut day = from;
+    for _ in 0..7 {
+        if day.weekday().number_from_monday() as i64 == weekday {
+            return Ok(day);
+        }
+        day = next_day(day)?;
+    }
+    Ok(from)
+}
+
+fn parse_stamp(raw: &str) -> AppResult<NaiveDateTime> {
+    NaiveDateTime::parse_from_str(raw.trim(), "%Y-%m-%d %H:%M")
+        .map_err(|_| AppError::internal("invalid_stamp", format!("zaman damgası okunamadı: {raw}")))
+}
+
+// ===========================================================================
 // Gruplar — EKRANLAR.md §304 (E4) ve §305 (E5)
 // ===========================================================================
 

@@ -21,6 +21,12 @@ export interface TableProps<T> {
   /** Amber zemin + sol şerit — "yoklama girilmedi" gibi dikkat isteyen satırlar. */
   rowAttention?: (row: T) => boolean
   stickyHeader?: boolean
+  /**
+   * Başlık satırını çizme. Aynı kolonlara sahip bir liste ikiye bölündüğünde (Bugün
+   * ekranındaki "şimdi" çizgisi) ikinci parça başlığı tekrar etmesin diye var —
+   * `label` yine veriliyor, ekran okuyucu tabloyu adıyla duyuyor.
+   */
+  hideHeader?: boolean
   /** Satır yoksa gösterilecek içerik (`EmptyState`). Verilmezse başlık da çizilmez. */
   emptyState?: ReactNode
   /** Ekran okuyucu için tablonun adı. */
@@ -41,6 +47,7 @@ export function Table<T>({
   onRowClick,
   rowAttention,
   stickyHeader = false,
+  hideHeader = false,
   emptyState,
   label,
 }: TableProps<T>) {
@@ -54,25 +61,27 @@ export function Table<T>({
 
   return (
     <div className={styles.table} role="table" aria-label={label}>
-      <div
-        className={[styles.head, stickyHeader ? styles.headSticky : undefined]
-          .filter(Boolean)
-          .join(' ')}
-        style={template}
-        role="row"
-      >
-        {columns.map((column) => (
-          <div
-            key={column.key}
-            role="columnheader"
-            className={[styles.cell, column.align === 'end' ? styles.alignEnd : undefined]
-              .filter(Boolean)
-              .join(' ')}
-          >
-            {column.header}
-          </div>
-        ))}
-      </div>
+      {!hideHeader && (
+        <div
+          className={[styles.head, stickyHeader ? styles.headSticky : undefined]
+            .filter(Boolean)
+            .join(' ')}
+          style={template}
+          role="row"
+        >
+          {columns.map((column) => (
+            <div
+              key={column.key}
+              role="columnheader"
+              className={[styles.cell, column.align === 'end' ? styles.alignEnd : undefined]
+                .filter(Boolean)
+                .join(' ')}
+            >
+              {column.header}
+            </div>
+          ))}
+        </div>
+      )}
 
       {rows.map((row) => (
         <div

@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { matchRoute, resolveRoute, useRoute } from './lib/router'
 import { NotFoundPage, PlaceholderPage } from './pages/PlaceholderPage'
+import { TodayPage } from './pages/bugun/TodayPage'
 import { GroupDetailPage } from './pages/gruplar/GroupDetailPage'
 import { GroupsPage } from './pages/gruplar/GroupsPage'
 import { StudentDetailPage } from './pages/ogrenciler/StudentDetailPage'
@@ -41,6 +42,7 @@ function RoutedPage({ path }: { path: string }) {
 
   // Sıra bağlayıcı: SABİT yollar parametreli yollardan ÖNCE. Ters sırada
   // `/ogrenciler/yeni` gibi bir adres `:id = 'yeni'` olarak eşleşirdi (router.ts).
+  if (path === '/') return <TodayPage />
   if (matchRoute(STUDENTS_PATH, path)) return <StudentsPage />
   if (matchRoute(GROUPS_PATH, path)) return <GroupsPage />
   if (matchRoute(DEFINITIONS_PATH, path)) return <DefinitionsPage />

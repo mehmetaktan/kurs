@@ -14,7 +14,7 @@
 | 4.4 | **Faz 4 denetimi** — 6 boyut, karşıt doğrulamalı; ADR-026 (özet rakamlar) | `/yonetici` | ✅ Tamamlandı |
 | 4.5 | **Faz 4 artıkları** — veli araması · bakiye altyazısı · toplam alacak · telefon maskesi · K-14 | `/faz-04b` | ✅ Tamamlandı (beşi de; 288 test) |
 | 5A | Ders & Takvim — branş, tatil, grup, **seans üretim motoru** | `/faz-05` | ✅ Tamamlandı (342 test); CI ilk kez yeşil |
-| 5B | Ders ekle/düzenle, seans işlemleri, **Bugün ekranı** | `/faz-05b` | ⬜ |
+| 5B | Ders ekle/düzenle, seans işlemleri, **Bugün ekranı** | `/faz-05b` | ✅ Tamamlandı (388 test); ADR-028 + ADR-029 eklendi |
 | 5C | **Takvim** — önce "hazır kütüphane mi" ADR'si + **ilk Windows testi** | `/faz-05c` | ⬜ |
 | 6 | Yoklama & Telafi | `/faz-06` | ⬜ |
 | 7 | Fiyatlandırma & Ders Paketi | `/faz-07` | ⬜ |
@@ -42,7 +42,7 @@
 |---|---|
 | Faz 2 sonu | GitHub Actions'tan indirilebilir bir Windows `.msi` **ve** `windows-latest` üzerinde yeşil Rust testleri. Testler gerçek migration'ları uyguladığı için bu, şemanın Windows'ta kurulduğunun kanıtıdır — Faz 5'i beklemeden. → Kod ve CI tanımı hazır; **yeşil çalışma depo GitHub'a gidince doğrulanır.** Faz 3'te de yapılmadı: depo hâlâ yerel. **Faz 4'ten önce halledilmeli** — biriken doğrulanmamış kod her fazda büyüyor. |
 | **Faz 5A sonu** | **CI ilk kez tümüyle yeşil** (2026-07-26): `Test · windows-latest` geçti, `.msi` ve `.dmg` üretildi. Şemanın Windows'ta kurulduğu artık kanıtlı — Faz 2'nin kilometre taşı üç faz gecikmeyle kapandı. Nedeni `npm ci`'nin makine ayarına bağlı kilit dosyasıydı; ayrıntı `docs/DURUM.md`. |
-| Faz 5C sonu | **İlk gerçek Windows testi.** Kurs sahibine build gönderilir. Faz 10'a bırakılmaz. (Faz 5 üçe bölününce bu taş 5C'ye kaydı.) |
+| Faz 5C sonu | **İlk gerçek Windows testi.** Kurs sahibine build gönderilir. Faz 10'a bırakılmaz. (Faz 5 üçe bölününce bu taş 5C'ye kaydı.) Takvim ızgarası WebView2 farklarına en duyarlı ekran ve CI onu **çalıştırmıyor** — jsdom testleri ile paket derlemesi bu boşluğu kapatmıyor. |
 | Faz 7 sonu | Para mantığının testleri yeşil. Buradan sonra şema değişikliği pahalı. |
 | Faz 10 sonu | Kurulum dosyası + kullanım kılavuzu + otomatik yedekleme |
 
