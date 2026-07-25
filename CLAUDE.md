@@ -46,13 +46,20 @@ Kurs sahibi tek başına, tek bilgisayarda kullanıyor. Hem birebir hem grup der
 
 Tauri 2 + React + TypeScript + Vite + SQLite (rusqlite, `bundled`)
 
-Sürümler kilitli: Rust `rust-toolchain.toml`'da, Node `.nvmrc`'de, Tauri CLI
-`package.json`'da caret'siz. CI aynı dosyaları okur — yerelde çalışan sürüm CI'da da
-çalışır.
+Sürümler kilitli: Rust `rust-toolchain.toml`'da, Node `.nvmrc`'de (tam sürüm, `22` gibi
+kayan bir aralık değil), Tauri CLI `package.json`'da caret'siz. **npm ayarları da
+kilitli: `.npmrc`.** CI aynı dosyaları okur — yerelde çalışan sürüm CI'da da çalışır.
 
-> Node **tam sürümle** sabitlenir (`22.21.1`), `22` gibi kayan bir aralıkla değil: her
-> Node yayını farklı bir npm getiriyor ve npm 11, npm 10'un ürettiği `package-lock.json`
-> ağacını yeniden hesaplayıp `npm ci`'de reddediyor. CI #1 tam bu yüzden düştü.
+> **`.npmrc` neden var (CI #1–#3'ün gerçek nedeni).** Makinenin genel `~/.npmrc`'sinde
+> `legacy-peer-deps=true` varsa `npm install` akran bağımlılıklarını çözmeden bir kilit
+> dosyası üretir ve aynı ayar `npm ci`'nin doğrulamasını da kapatır — hata yerelde **hiç
+> görünmez.** CI'da o ayar olmadığı için `npm ci` iki faz boyunca `EUSAGE` ile düştü
+> (`fdir`'ın akranı `picomatch ^3 || ^4`, kökteki `picomatch@2.3.2`'ye düşüyordu).
+> Proje `.npmrc`'si makinenin ayarını dışarıda tutar; jetonlar ve özel kayıt defterleri
+> etkilenmez — npm yapılandırmayı anahtar bazında birleştirir.
+>
+> Aynı sınıftan bir tuzak Node'da da var, o yüzden sürüm oraya da tam yazılır: her Node
+> yayını farklı bir npm getirir.
 
 ## Klasör yapısı (Faz 4)
 
