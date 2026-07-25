@@ -5,17 +5,25 @@ description: Faz 8 — Tahsilat, borçlu listesi, cari ekstre ve makbuz PDF
 # Faz 8 — Tahsilat & Makbuz
 
 Önce oku: `CLAUDE.md`, `docs/DURUM.md`, `docs/VERI-MODELI.md`, `docs/PRD.md`,
-`docs/KARARLAR.md` (ADR-014, **ADR-018**, **ADR-025**).
+`docs/KARARLAR.md` (ADR-014, **ADR-018**, **ADR-025**, **ADR-026**, **ADR-027**).
 
-> **Faz 4'ten devralınan iki iş — unutulmasın, ikisi de bu fazda kapanır:**
+> **Faz 4'ten devralınan iş — unutulmasın, bu fazda kapanır:**
 >
-> 1. **Öğrenciler listesinin son kolonu.** Faz 4'te tasarımdaki `Tahsilat al` yerine
->    geçici olarak **`Aç`** kondu, çünkü tahsilat o fazda yoktu ve çalışmayan bir düğme
->    koymaktansa çalışan bir eylem konuldu. Bu fazda tasarıma döndür
->    (`EKRANLAR.md` E1 / öğrenci listesi kolonları). Arşiv görünümündeki `Geri al`
->    kolonu **kalır** (E2).
-> 2. **`Toplam alacak` rakamının tanımı.** ADR-025 §"Özet rakamlar" kuralına uydur ve
->    `views::total_receivable`'ın ikinci tanımını ortadan kaldır — tek kaynak kalsın.
+> **Öğrenciler listesinin son kolonu.** Faz 4'te tasarımdaki `Tahsilat al` yerine
+> geçici olarak **`Aç`** kondu, çünkü tahsilat o fazda yoktu ve çalışmayan bir düğme
+> koymaktansa çalışan bir eylem konuldu. Bu fazda tasarıma döndür
+> (`EKRANLAR.md` E1 / öğrenci listesi kolonları). Arşiv görünümündeki `Geri al`
+> kolonu **kalır** (E2).
+
+> **Kapanmış devirler — yeniden açma:**
+>
+> - **`Toplam alacak` rakamının tanımı** Faz 4.5'te ADR-026 ile çözüldü: liste
+>   altbilgisi görünen listeyi topluyor ve etiketi `Görünen listenin alacağı`.
+>   `views::total_receivable` **Faz 9 Dashboard'un** kaynağı olarak duruyor; bu fazda
+>   ona dokunma. Borçlular listesinin altbilgisi de aynı kurala uyar.
+> - **Telefon biçimi** ADR-027'de: makbuz PDF'i ve ekstre `formatPhone` kullanır
+>   (`0 532 111 22 33`), `maskPhone` değil. Tahsilat formunda telefon alanı varsa
+>   çıplak `Input` değil `ui/PhoneInput` kullanılır.
 
 ---
 

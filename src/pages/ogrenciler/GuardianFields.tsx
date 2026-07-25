@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { tr } from '../../i18n/tr'
 import { searchGuardians, type Guardian } from '../../lib/api'
 import { formatPhone } from '../../lib/format'
-import { Button, Input, Modal, SearchInput, Select } from '../../ui'
+import { Button, Input, Modal, PhoneInput, SearchInput, Select } from '../../ui'
 import {
   emptyGuardianDraft,
   guardianField,
@@ -117,15 +117,14 @@ export function GuardianFields({
             />
 
             <div className={styles.formPair}>
-              <Input
+              <PhoneInput
                 label={tr.students.form.guardianPhone}
                 placeholder={tr.students.form.phonePlaceholder}
-                inputMode="tel"
                 value={guardian.phone}
                 error={errors[guardianField(index, 'phone')]}
-                onChange={(event) => {
+                onChange={(phone) => {
                   onClearError(guardianField(index, 'phone'))
-                  patch(index, { phone: event.target.value })
+                  patch(index, { phone })
                 }}
               />
               <Select

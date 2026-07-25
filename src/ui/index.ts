@@ -12,10 +12,11 @@
 export { Button } from './Button'
 export type { ButtonProps, ButtonVariant } from './Button'
 
-export { Checkbox, FieldShell, Input, Select, Textarea } from './Field'
+export { Checkbox, FieldShell, Input, PhoneInput, Select, Textarea } from './Field'
 export type {
   CheckboxProps,
   InputProps,
+  PhoneInputProps,
   SelectOption,
   SelectProps,
   TextareaProps,

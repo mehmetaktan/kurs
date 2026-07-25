@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  backspacePhone,
   dateToIso,
+  editPhone,
   formatDate,
   formatDateLong,
   formatDateWithWeekday,
@@ -9,6 +11,7 @@ import {
   formatPhone,
   formatTime,
   isoToDate,
+  maskPhone,
   matchesQuery,
   minutesToTime,
   monthNameTr,
@@ -274,6 +277,123 @@ describe('formatPhone', () => {
     expect(formatPhone('0212 555 44 33 66')).toBe('0212 555 44 33 66')
     expect(formatPhone(null)).toBe('—')
     expect(formatPhone('')).toBe('—')
+  })
+})
+
+// ─── Telefon maskesi (Faz 4.5 §4) ─────────────────────────────────────────────
+//
+// `formatPhone` gösterim için (`0 532 …`), bunlar **girdi alanı** için (`0532 …`) —
+// formun placeholder'ı ve hata mesajı da bu yazımı örnek veriyor.
+
+describe('maskPhone', () => {
+  it('yazarken 0532 111 22 33 biçimini kurar', () => {
+    const adimlar: Array<[string, string]> = [
+      ['0', '0'],
+      ['05', '05'],
+      ['053', '053'],
+      ['0532', '0532'],
+      ['05321', '0532 1'],
+      ['0532111', '0532 111'],
+      ['05321112', '0532 111 2'],
+      ['0532111223', '0532 111 22 3'],
+      ['05321112233', '0532 111 22 33'],
+    ]
+    for (const [girdi, beklenen] of adimlar) {
+      expect(maskPhone(girdi)).toBe(beklenen)
+    }
+  })
+
+  it('idempotent — kendi çıktısına uygulanınca değişmez', () => {
+    for (const girdi of ['0532 214 88 10', '532 111 22 33', '0212 555 44 33', '']) {
+      expect(maskPhone(maskPhone(girdi))).toBe(maskPhone(girdi))
+    }
+  })
+
+  it('baştaki sıfırı ZORLA eklemez — yoksa kullanıcı onu bir daha silemezdi', () => {
+    // Doğrulama 10–13 hane kabul ediyor; `532 111 22 33` geçerli bir yazım.
+    expect(maskPhone('5321112233')).toBe('532 111 22 33')
+    expect(maskPhone('532111')).toBe('532 111')
+  })
+
+  it('+90 ve 0090 yapıştırmasını kabul eder', () => {
+    expect(maskPhone('+90 532 111 22 33')).toBe('0532 111 22 33')
+    expect(maskPhone('905321112233')).toBe('0532 111 22 33')
+    expect(maskPhone('0090 532 111 22 33')).toBe('0532 111 22 33')
+    // Önek yalnızca numara o uzunluğa ULAŞINCA atılır: `90…` yazmaya başlayan
+    // kullanıcının rakamları gözünün önünde silinmez.
+    expect(maskPhone('905')).toBe('905')
+  })
+
+  it('sabit hattı da doğru gruplar', () => {
+    expect(maskPhone('02125554433')).toBe('0212 555 44 33')
+  })
+
+  it('11 haneyi aşan girdiyi KIRPMAZ, artanı sona ekler', () => {
+    // Sessizce rakam yutmak, yanlış numarayı doğru göstermek demek. Uzunluğu
+    // doğrulama söylüyor (`errors.phoneInvalid`).
+    expect(maskPhone('053211122334455')).toBe('0532 111 22 33 4455')
+    expect(phoneDigits(maskPhone('053211122334455'))).toBe('053211122334455')
+  })
+
+  it('rakam olmayanı yutar', () => {
+    expect(maskPhone('')).toBe('')
+    expect(maskPhone('tel: 0532-111-22-33')).toBe('0532 111 22 33')
+  })
+})
+
+describe('editPhone — imleç rakam sayısıyla taşınır', () => {
+  it('sona yazarken imleç sonda kalır', () => {
+    expect(editPhone('0532 1112', 9)).toEqual({ value: '0532 111 2', caret: 10 })
+  })
+
+  it('ORTADAN düzenlemede imleç sona atlamaz', () => {
+    // `0532 111 22 33` içinde 6. konuma (5'ten sonra) `9` yazıldı.
+    const { value, caret } = editPhone('0532 1911 22 33', 7)
+    expect(value).toBe('0532 191 12 23 3')
+    // İmleç yazılan `9`'un hemen ardında — 6. rakamdan sonra.
+    expect(caret).toBe(7)
+    expect(value.slice(0, caret)).toBe('0532 19')
+  })
+
+  it('yapıştırmada ülke kodu düşse de imleç sonda kalır', () => {
+    const raw = '+90 532 111 22 33'
+    expect(editPhone(raw, raw.length)).toEqual({ value: '0532 111 22 33', caret: 14 })
+  })
+
+  it('boş girdide imleç başa döner', () => {
+    expect(editPhone('', 0)).toEqual({ value: '', caret: 0 })
+  })
+})
+
+describe('backspacePhone — ayıraç kullanıcıyı kilitlemez', () => {
+  it('boşluğun üstünde bir RAKAM siler', () => {
+    // `0532 |111 22 33` — imleç ayıraçtan sonra. Boşluğu silmek maskeyi
+    // değiştirmezdi ve tuş çalışmıyormuş gibi görünürdü.
+    expect(backspacePhone('0532 111 22 33', 5)).toEqual({
+      value: '0531 112 23 3',
+      caret: 3,
+    })
+  })
+
+  it('rakamın üstünde normal davranır', () => {
+    expect(backspacePhone('0532 111 22 33', 14)).toEqual({
+      value: '0532 111 22 3',
+      caret: 13,
+    })
+  })
+
+  it('baştaki sıfır silinebilir — alan kilitlenmiyor', () => {
+    expect(backspacePhone('0532 111 22 33', 1)).toEqual({
+      value: '532 111 22 33',
+      caret: 0,
+    })
+  })
+
+  it('başta basılırsa hiçbir rakam silinmez', () => {
+    expect(backspacePhone('0532 111 22 33', 0)).toEqual({
+      value: '0532 111 22 33',
+      caret: 0,
+    })
   })
 })
 

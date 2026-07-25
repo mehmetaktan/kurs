@@ -113,7 +113,18 @@ export function paginate<T>(rows: readonly T[], page: number, size = PAGE_SIZE):
   }
 }
 
-/** Alt çubuktaki "Toplam alacak" — arşivlenmiş borçlu da dahil (§1.23). */
+/**
+ * Alt çubuktaki para özeti — **ekranda görünen satırların** toplamı (ADR-026).
+ *
+ * Çağıran, çip süzgecinden geçmiş ve sıralanmış listeyi verir; sayfalanmış olanı
+ * değil. Rust'tan gelen ham listeyi vermek, rakamın arama/branş süzgecine tepki verip
+ * çiplere kör kalması demekti: "Branş: Matematik" seçince değişen, "Borçlular" çipine
+ * basınca değişmeyen bir sayı.
+ *
+ * `VERI-MODELI §1.23` bozulmuyor: arşivlenmiş borçlu "Arşivlenmiş" çipinde görünür ve
+ * o listenin toplamına girer. Kurs geneli, süzgeçten bağımsız rakamın yeri liste
+ * altbilgisi değil Dashboard'dur (Faz 9, `views::total_receivable`).
+ */
 export function totalReceivableKurus(rows: readonly StudentRow[]): number {
   return rows.reduce((total, row) => total + Math.max(0, row.debtKurus), 0)
 }

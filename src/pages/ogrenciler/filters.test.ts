@@ -160,14 +160,29 @@ describe('sayfalama', () => {
   })
 })
 
-describe('toplam alacak', () => {
+describe('görünen listenin alacağı (ADR-026)', () => {
+  const rows = [
+    row({ id: 1, fullName: 'Canlı', debtKurus: 120_000 }),
+    row({ id: 2, fullName: 'Arşivli', archived: true, debtKurus: 50_000 }),
+    row({ id: 3, fullName: 'Avanslı', debtKurus: 0, balanceKurus: 42_000 }),
+  ]
+
   /** Arşivlenmiş borçlu DAHİL — borç arşivlemekle yok olmaz (VERI-MODELI §1.23). */
-  it('arşivlenmiş öğrencinin borcunu da sayar', () => {
-    const rows = [
-      row({ id: 1, fullName: 'Canlı', debtKurus: 120_000 }),
-      row({ id: 2, fullName: 'Arşivli', archived: true, debtKurus: 50_000 }),
-      row({ id: 3, fullName: 'Avanslı', debtKurus: 0, balanceKurus: 42_000 }),
-    ]
+  it('verilen listenin borçlarını toplar, avansı saymaz', () => {
     expect(totalReceivableKurus(rows)).toBe(170_000)
+  })
+
+  /**
+   * ADR-026: rakam **görünen** satırları toplar. Ekran fonksiyona çip süzgecinden
+   * geçmiş listeyi veriyor; ham listeyi verseydi rakam "Branş: Matematik" seçince
+   * değişip "Borçlular" çipine basınca değişmezdi — aynı ekranda biri diğerini
+   * açıklamayan iki sayı.
+   */
+  it('çip süzgecini izler', () => {
+    expect(totalReceivableKurus(filterByChip(rows, 'all'))).toBe(120_000)
+    expect(totalReceivableKurus(filterByChip(rows, 'debtor'))).toBe(120_000)
+
+    // §1.23 bozulmuyor: arşivli borçlu KENDİ çipinde görünür ve o listeye girer.
+    expect(totalReceivableKurus(filterByChip(rows, 'archived'))).toBe(50_000)
   })
 })

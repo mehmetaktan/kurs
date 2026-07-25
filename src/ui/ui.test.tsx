@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Button } from './Button'
+import { PhoneInput } from './Field'
 import { DatePicker, TimePicker } from './Picker'
 import { Drawer } from './Drawer'
 import { Modal } from './Modal'
@@ -406,6 +407,49 @@ describe('DatePicker', () => {
 
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(screen.queryByRole('dialog')).toBeNull()
+  })
+})
+
+describe('PhoneInput', () => {
+  function Harness({ initial = '' }: { initial?: string }) {
+    const [value, setValue] = useState(initial)
+    return <PhoneInput label="Telefon" value={value} onChange={setValue} />
+  }
+
+  const field = () => screen.getByLabelText('Telefon') as HTMLInputElement
+
+  it('yazarken maskeyi kurar ve kaydedilen değer maskeli metindir', () => {
+    render(<Harness />)
+    fireEvent.change(field(), { target: { value: '05321112233' } })
+    expect(field().value).toBe('0532 111 22 33')
+  })
+
+  it('+90 yapıştırması kabul edilir', () => {
+    render(<Harness />)
+    fireEvent.change(field(), { target: { value: '+90 532 111 22 33' } })
+    expect(field().value).toBe('0532 111 22 33')
+  })
+
+  it('ayıraç üstünde Backspace bir RAKAM siler — alan kilitlenmez', () => {
+    render(<Harness initial="0532 111 22 33" />)
+    const input = field()
+    input.setSelectionRange(5, 5) // `0532 |111 …`
+
+    fireEvent.keyDown(input, { key: 'Backspace' })
+
+    // Boşluk silinseydi maske onu anında geri koyar, tuş çalışmıyormuş gibi görünürdü.
+    expect(input.value).toBe('0531 112 23 3')
+    expect(input.selectionStart).toBe(3)
+  })
+
+  it('ortadan yazınca imleç sona atlamaz', () => {
+    render(<Harness initial="0532 111 22 33" />)
+    const input = field()
+
+    // `0532 1|911 22 33` — 6. konuma `9` yazıldı.
+    fireEvent.change(input, { target: { value: '0532 1911 22 33', selectionStart: 7 } })
+
+    expect(input.value.slice(0, input.selectionStart ?? 0)).toBe('0532 19')
   })
 })
 

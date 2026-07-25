@@ -5,7 +5,7 @@ description: Faz 5 — Branş, grup, seans, takvim ve seri ders oluşturma
 # Faz 5 — Ders & Takvim
 
 Önce oku: `CLAUDE.md`, `docs/DURUM.md`, `docs/VERI-MODELI.md`, `docs/EKRANLAR.md`,
-`docs/KARARLAR.md` (**ADR-012**, **ADR-017**, **ADR-025**).
+`docs/KARARLAR.md` (**ADR-012**, **ADR-017**, **ADR-025**, **ADR-026**, **ADR-027**).
 
 **Projenin en karmaşık fazı. Önce plan modunda çalış, planı onaylatmadan kod yazma.**
 Faz büyükse ikiye bölmeyi öner — yarıda kalmaktansa bölünmüş olsun.

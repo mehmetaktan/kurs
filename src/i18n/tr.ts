@@ -154,7 +154,9 @@ export const tr = {
       // "12 öğrenci gösteriliyor · 14 kayıt"
       showing: 'öğrenci gösteriliyor',
       ofTotal: 'kayıt',
-      receivable: 'Toplam alacak',
+      // ADR-026: rakam görünen satırları topluyor, kurs genelini değil. Etiket bunu
+      // söylemek zorunda — kurs geneli toplam alacağın yeri Dashboard (Faz 9).
+      receivable: 'Görünen listenin alacağı',
     },
 
     empty: {
@@ -255,7 +257,13 @@ export const tr = {
 
       cards: {
         balance: 'Bakiye',
+        // Üç ayrı altyazı, üç ayrı durum. `balanceEmptyCaption` YALNIZCA defteri boş
+        // öğrenci için: borcunu ödemiş öğrencinin de bakiyesi 0 ve ona "henüz hareket
+        // yok" demek, rakamın altına onu yalanlayan bir cümle koymak olurdu.
         balanceEmptyCaption: 'Henüz hareket yok',
+        // Borç var ama vadesi gelmemiş · bakiye kapalı · avans — üçünde de aynı cümle:
+        // kullanıcının bu kartta aradığı tek uyarı gecikme.
+        balanceCurrentCaption: 'Vadesi geçmiş borç yok',
         // "12 gün gecikmiş"
         overdue: 'gün gecikmiş',
         attendance: 'Devam oranı',
@@ -320,7 +328,11 @@ export const tr = {
       done: 'Öğrenci arşivlendi.',
       undo: 'Geri al',
       restored: 'Öğrenci arşivden geri alındı.',
-      debtWarning: 'Bu öğrencinin borcu var; arşivlense de toplam alacakta sayılmaya devam eder.',
+      // PRD K-14: uyarı borcun VARLIĞINI değil TUTARINI söyler —
+      // "Bu öğrencinin 1.200,00 ₺ borcu var; arşivlense de …". İkinci yarı Faz 1
+      // denetimi A8'in karşılığı (§1.23) ve PRD'nin örneğinden daha bilgilendirici.
+      debtWarningPrefix: 'Bu öğrencinin',
+      debtWarningSuffix: 'borcu var; arşivlense de toplam alacakta sayılmaya devam eder.',
     },
   },
 

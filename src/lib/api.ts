@@ -165,6 +165,12 @@ export interface StudentDetail {
   notes: StudentNote[]
   /** Gecikme gün sayısı — Rust'ta `today` bind edilerek hesaplanır (§0). */
   daysOverdue: number | null
+  /**
+   * Defterde hiç hareket var mı. Bakiye kartının altyazısı üç durumu ayırıyor ve
+   * "henüz hareket yok" ile "borcu kapalı" ayrımını yalnızca bu alan verebiliyor —
+   * ikisinde de bakiye `0`.
+   */
+  hasLedger: boolean
   /** `'YYYY-MM-DD HH:MM'` ya da `null`. */
   nextSessionAt: string | null
 }

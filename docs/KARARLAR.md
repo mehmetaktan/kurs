@@ -494,3 +494,54 @@ Dashboard. Orada hiçbir süzgeç yok, dolayısıyla tutarsızlık da doğmuyor.
    topladığını yazacak.
 
 **Durum.** Kabul edildi.
+
+---
+
+## ADR-027 — Telefonun iki biçimi var ve ikisi de veri değil
+
+**Karar.** Telefon numarasının **saklanan** hâli kullanıcının yazdığı ham metindir.
+Biçimleme yalnızca sunumdur ve **iki ayrı biçim** vardır, ikisi de `src/lib/format.ts`
+içinde durur:
+
+| Fonksiyon | Nerede | Çıktı |
+|---|---|---|
+| `formatPhone` | **Gösterim** — liste kolonu, detay kartı, çekmece, arama sonucu | `0 532 111 22 33` |
+| `maskPhone` (+ `editPhone` / `backspacePhone`) | **Girdi alanı** — `ui/PhoneInput` | `0532 111 22 33` |
+
+Aramanın ve saklamanın gördüğü değer ikisi de değil: `text::phone_digits` **Rust'ta**
+üretilen `phone_digits` sütunudur. Maske boşluk koyar, `phone_digits` boşlukları atar —
+maske veriyi değiştirmez.
+
+**Gerekçe — neden iki biçim.** Girdi alanı formun kendi yazımını izlemek zorunda:
+`tr.students.form.phonePlaceholder` ve doğrulama hatasının örneği `0532 111 22 33`
+diyor. Kullanıcının yazdığı biçimden farklı bir biçime *yazarken* zorlamak, alanın
+kendi placeholder'ını yalanlaması olurdu. Gösterimde ise sıfır ayrı duruyor
+(`0 532 …`) çünkü orada tablo kolonu hizalanıyor ve numara okunmak için değil,
+**taranmak** için orada.
+
+**Gerekçe — neden maske veri değil.** Numara Rust'a giderken `check_phone`'dan geçiyor
+(10–13 hane) ve `phone_digits` orada üretiliyor. Maskeyi veri saymak, aynı
+normalleştirmenin arayüzde ikinci bir kopyasını doğururdu — `format.ts` ↔ `text.rs`
+paritesi zaten üç fonksiyonla taşınıyor (ADR-025'in aynı gerekçesi).
+
+**Gerekçe — maskenin üç kuralı ve neden böyle.** Üçü de "kullanıcı kilitlenmesin"
+kaygısından çıktı:
+
+1. **Baştaki sıfır zorla eklenmez.** Eklenseydi `0532 111 22 33` içindeki sıfır
+   silinemezdi: silinir silinmez maske geri koyar ve tuş çalışmıyormuş gibi görünürdü.
+   Bunun yerine **gruplama baştaki sıfıra bakar** — `0532 111 22 33` ya da
+   `532 111 22 33`. Doğrulama ikisini de kabul ediyor.
+2. **11 haneyi aşan girdi kırpılmaz**, artanı sona eklenir. Sessizce rakam yutmak,
+   yanlış bir numarayı doğru göstermek demekti; uzunluğu doğrulama söyler.
+3. **İmleç rakam sayısıyla taşınır**, karakterle değil. Ayıraç üstünde `Backspace` bir
+   **rakam** siler.
+
+Ülke kodu (`+90…` / `0090…`) yalnızca numara o uzunluğa **ulaşınca** atılır — eşik
+olmasaydı `90…` yazmaya başlayan kullanıcının rakamları gözünün önünde silinirdi.
+
+**Sonuç.** Telefon alanı olan her ekran `ui/PhoneInput` kullanır, çıplak `Input`
+kullanmaz — Faz 5'in grup/veli ekranları ve Faz 8'in tahsilat formu dahil. Faz 8'in
+makbuz PDF'i `formatPhone`'u kullanır, `maskPhone`'u değil. Yeni bir biçim gerekirse
+üçüncü bir fonksiyon değil, bu tabloya bir satır eklenir ve gerekçesi yazılır.
+
+**Durum.** Kabul edildi.

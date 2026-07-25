@@ -93,6 +93,9 @@ pub fn student_rows(conn: &Connection, query: &StudentQuery) -> AppResult<Vec<St
     // Kayıt etiketleri (branş / grup) tek sorguda alınıp Rust'ta eşleniyor: satır başına
     // sorgu açmak N+1 olurdu, JOIN etmek ise bakiye/paket alt sorgularını çoğaltırdı.
     let tags = enrollment_tags(conn)?;
+    // Veliler aynı kalıpla: arama BÜTÜN velileri görmek zorunda, satırın gösterdiği
+    // ise birincil veli. Gerekçe `matches_search`'te.
+    let guardians = guardian_index(conn)?;
 
     let mut stmt = conn.prepare(&format!(
         "SELECT s.id, s.full_name, s.school, s.grade, s.phone, s.is_active, \
@@ -131,7 +134,7 @@ pub fn student_rows(conn: &Connection, query: &StudentQuery) -> AppResult<Vec<St
         out.push(row?);
     }
 
-    Ok(filter_rows(out, query))
+    Ok(filter_rows(out, query, &guardians))
 }
 
 /// Arama ve branş/grup süzgeci.
@@ -140,11 +143,15 @@ pub fn student_rows(conn: &Connection, query: &StudentQuery) -> AppResult<Vec<St
 /// küçültülemiyor (gerekçe `people::search_students` içinde) ve aynı normalleştirmeyi
 /// iki yerde kurmaktansa süzgecin tamamı tek yerde duruyor. Liste birkaç yüz satır;
 /// maliyeti ölçülemez.
-fn filter_rows(rows: Vec<StudentRow>, query: &StudentQuery) -> Vec<StudentRow> {
+fn filter_rows(
+    rows: Vec<StudentRow>,
+    query: &StudentQuery,
+    guardians: &GuardianIndex,
+) -> Vec<StudentRow> {
     let needle = text::search_name(&query.search);
 
     rows.into_iter()
-        .filter(|row| matches_search(row, &needle, &query.search))
+        .filter(|row| matches_search(row, &needle, &query.search, guardians))
         .filter(|row| match query.subject_id {
             Some(id) => row.subject_ids.contains(&id),
             None => true,
@@ -156,17 +163,31 @@ fn filter_rows(rows: Vec<StudentRow>, query: &StudentQuery) -> Vec<StudentRow> {
         .collect()
 }
 
-fn matches_search(row: &StudentRow, needle: &str, raw: &str) -> bool {
+/// Arama **bütün velilere** bakar, satırın gösterdiği birincil veliye değil.
+///
+/// Somut senaryo: annesi birincil kayıtlı bir öğrenciyi babası arıyor. Kurs sahibi
+/// babanın numarasını yazıyor, ekran "sonuç yok" diyor, öğrencinin kayıtlı olmadığını
+/// sanıp **ikinci bir öğrenci kaydı açıyor** — mükerrer öğrenci, ardından mükerrer
+/// defter. Arama kutusu zaten veli adı arayacağını söylüyor.
+///
+/// Değişen yalnızca aramanın kapsamı: `StudentRow::guardian_name` / `guardian_phone`
+/// hâlâ birincil veli, yani satırın görünümü aynı kalıyor.
+fn matches_search(row: &StudentRow, needle: &str, raw: &str, guardians: &GuardianIndex) -> bool {
     if needle.is_empty() {
         return true;
     }
     if text::search_name(&row.full_name).contains(needle) {
         return true;
     }
-    if let Some(name) = &row.guardian_name {
-        if text::search_name(name).contains(needle) {
-            return true;
-        }
+
+    let linked = || {
+        guardians
+            .iter()
+            .filter(|(student_id, ..)| *student_id == row.id)
+    };
+
+    if linked().any(|(_, name, _)| text::search_name(name).contains(needle)) {
+        return true;
     }
 
     // Telefon dalı rakam rakam: "0532" ile "0 532" aynı numarayı bulmalı.
@@ -174,13 +195,12 @@ fn matches_search(row: &StudentRow, needle: &str, raw: &str) -> bool {
     if digits.is_empty() {
         return false;
     }
-    let has = |value: &Option<String>| {
+    let has = |value: Option<&str>| {
         value
-            .as_deref()
             .map(|v| text::phone_digits(v).contains(&digits))
             .unwrap_or(false)
     };
-    has(&row.phone) || has(&row.guardian_phone)
+    has(row.phone.as_deref()) || linked().any(|(_, _, phone)| has(phone.as_deref()))
 }
 
 /// Birincil veli — yoksa en düşük id'li veli.
@@ -208,6 +228,32 @@ const ATTENDANCE_ROLLUP_SQL: &str = "SELECT a.student_id, \
      WHERE a.deleted_at IS NULL \
        AND a.status IN ('present', 'excused', 'unexcused') \
      GROUP BY a.student_id";
+
+/// (öğrenci, veli adı, veli telefonu) — aramanın taradığı liste.
+///
+/// `PRIMARY_GUARDIAN_SQL` ile aynı canlılık koşullarını kullanır (`sg.deleted_at IS
+/// NULL` + `g.deleted_at IS NULL`): çözülmüş bir veli bağı ekranda görünmediği gibi
+/// aramada da eşleşmemeli.
+type GuardianIndex = Vec<(i64, String, Option<String>)>;
+
+/// Bütün canlı veli bağları, tek sorguda — `enrollment_tags` ile aynı kalıp.
+/// Satır başına sorgu açmak N+1 olurdu; `student_rows`'un birleşik sorgusuna JOIN
+/// etmek ise öğrenci satırını veli sayısınca çoğaltırdı.
+fn guardian_index(conn: &Connection) -> AppResult<GuardianIndex> {
+    let mut stmt = conn.prepare(
+        "SELECT sg.student_id, g.full_name, g.phone \
+         FROM student_guardian sg \
+         JOIN guardian g ON g.id = sg.guardian_id AND g.deleted_at IS NULL \
+         WHERE sg.deleted_at IS NULL \
+         ORDER BY sg.id",
+    )?;
+    let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row?);
+    }
+    Ok(out)
+}
 
 /// (öğrenci → branşlar, gruplar) — canlı kayıtlardan.
 fn enrollment_tags(conn: &Connection) -> AppResult<Vec<(i64, i64, Option<i64>)>> {
@@ -296,6 +342,11 @@ pub struct StudentDetail {
     pub notes: Vec<StudentNote>,
     /// Gecikme gün sayısı — `views::days_overdue`, `today` bind edilerek (§0).
     pub days_overdue: Option<i64>,
+    /// Defterde hiç hareket var mı. Bakiye kartının altyazısı üç durumu ayırıyor
+    /// ("henüz hareket yok" · "N gün gecikmiş" · "vadesi geçmiş borç yok") ve
+    /// birincisini yalnızca bu alan ayırt edebiliyor: bakiyesi `0` olan öğrencinin
+    /// defteri boş da olabilir, kapanmış da.
+    pub has_ledger: bool,
     /// Sıradaki planlı dersin başlangıcı (`'YYYY-MM-DD HH:MM'`). Yoksa `None`.
     pub next_session_at: Option<String>,
 }
@@ -336,6 +387,7 @@ pub fn student_detail(
         guardians: guardian_links(conn, student_id)?,
         notes: repo::people::notes_of(conn, student_id)?,
         next_session_at: next_session_at(conn, student_id, &today)?,
+        has_ledger: crate::repo::views::has_ledger_entries(conn, student_id)?,
         days_overdue,
         row,
         student,

@@ -280,6 +280,105 @@ export function formatPhone(input: string | null | undefined): string {
   return `0 ${operator} ${first} ${second} ${third}`
 }
 
+// ─── Telefon maskesi ──────────────────────────────────────────────────────────
+//
+// `formatPhone` GÖSTERİM içindir (`0 532 111 22 33`); buradakiler **girdi alanı**
+// içindir ve formun kendi yazımını kurar: `0532 111 22 33` — placeholder ve hata
+// mesajının örneği de bu (`tr.students.form.phonePlaceholder`).
+//
+// Maske görsel, veri değil: kaydedilen değer kullanıcının gördüğü metindir,
+// `phone_digits` normalleştirmesini Rust yapar (`text::phone_digits`).
+
+/** Gruplama baştaki sıfıra bakar: `0532 111 22 33` · `532 111 22 33`. */
+function phoneGroups(digits: string): number[] {
+  return digits.startsWith('0') ? [4, 3, 2, 2] : [3, 3, 2, 2]
+}
+
+/**
+ * Uluslararası yazımı ulusal yazıma indirger: `+90 532…` ve `0090 532…` → `0532…`.
+ *
+ * Önek yalnızca numara O UZUNLUĞA ULAŞINCA atılır (12 ve 14 hane): yazarken araya
+ * girip kullanıcının o an yazdığı rakamı gözünün önünde silmesin diye. Baştaki `0`
+ * ZORLA eklenmiyor — eklenseydi kullanıcı onu bir daha silemezdi ve alan kilitlenirdi;
+ * `532 111 22 33` zaten geçerli bir yazım (doğrulama 10–13 hane kabul ediyor).
+ */
+function nationalPhoneDigits(digits: string): string {
+  if (digits.length >= 14 && digits.startsWith('0090')) return `0${digits.slice(4)}`
+  if (digits.length >= 12 && digits.startsWith('90')) return `0${digits.slice(2)}`
+  return digits
+}
+
+/**
+ * Telefon girdisinin maskesi. **İdempotent**: kendi çıktısına uygulanınca aynı metni
+ * verir, o yüzden her render'da güvenle çağrılabilir.
+ */
+export function maskPhone(input: string): string {
+  const digits = nationalPhoneDigits(phoneDigits(input))
+
+  const parts: string[] = []
+  let index = 0
+  for (const size of phoneGroups(digits)) {
+    if (index >= digits.length) break
+    parts.push(digits.slice(index, index + size))
+    index += size
+  }
+
+  // 11 haneyi aşan girdi KIRPILMAZ, artanı sona eklenir: sessizce rakam yutmak,
+  // yanlış bir numarayı doğru göstermek demekti. Uzunluğu doğrulama söylüyor
+  // (10–13 hane, `errors.phoneInvalid`).
+  if (index < digits.length) parts.push(digits.slice(index))
+
+  return parts.join(' ')
+}
+
+export interface PhoneEdit {
+  value: string
+  caret: number
+}
+
+/** `count` rakamdan hemen sonraki konum. */
+function caretAfterDigits(value: string, count: number): number {
+  if (count <= 0) return 0
+  let seen = 0
+  for (let index = 0; index < value.length; index += 1) {
+    if (value[index] !== ' ') {
+      seen += 1
+      if (seen === count) return index + 1
+    }
+  }
+  return value.length
+}
+
+/**
+ * Yazma / yapıştırma sonrası maskeyi kurar ve imleci **aynı rakamın ardında** bırakır.
+ * Ortadan düzenlerken imlecin sona atlaması bu yüzden olmuyor: konum karakterle değil
+ * rakam sayısıyla taşınıyor.
+ */
+export function editPhone(raw: string, caret: number): PhoneEdit {
+  const before = phoneDigits(raw.slice(0, caret)).length
+  const rawDigits = phoneDigits(raw)
+  // İmlecin ÖNÜNDEKİ rakam sayısını değiştiren tek işlem ülke kodunun atılması;
+  // uzunluk kırpması olmadığı için başka kayma yok.
+  const shift = nationalPhoneDigits(rawDigits).length - rawDigits.length
+
+  const value = maskPhone(raw)
+  return { value, caret: caretAfterDigits(value, Math.max(0, before + shift)) }
+}
+
+/**
+ * Backspace: imleçten geriye doğru ilk **rakam** silinir.
+ *
+ * Ayıracı silmek maskeyi değiştirmiyor — maske boşluğu hemen geri koyuyor — ve
+ * kullanıcıya hiçbir şey olmamış gibi görünüyordu; silmek için tuşa iki kez basmak
+ * gerekirdi.
+ */
+export function backspacePhone(value: string, caret: number): PhoneEdit {
+  let index = Math.min(Math.max(caret, 0), value.length) - 1
+  while (index >= 0 && value[index] === ' ') index -= 1
+  if (index < 0) return { value: maskPhone(value), caret: 0 }
+  return editPhone(value.slice(0, index) + value.slice(index + 1), index)
+}
+
 // ─── Arama normalleştirmesi ───────────────────────────────────────────────────
 
 /**

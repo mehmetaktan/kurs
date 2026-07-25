@@ -1,19 +1,136 @@
 # Durum
 
-**Son güncelleme:** 2026-07-25 · Faz 4 denetimi (yönetici oturumu)
-**Mevcut faz:** Faz 4 ✅ tamamlandı, denetimi ✅ yapıldı → sırada **Faz 4.5**, sonra Faz 5
-**Sonraki oturumda ilk iş:** **push et ve CI'ya bak**, sonra `/faz-04b`
+**Son güncelleme:** 2026-07-25 · Faz 4.5 (kod oturumu)
+**Mevcut faz:** Faz 4.5 ✅ tamamlandı → sırada **Faz 5**
+**Sonraki oturumda ilk iş:** **push et ve CI'ya bak** — üç commit hâlâ uzakta yok
 
 > Öğrenci ve veli modülü çalışıyor: liste, arama, filtre, form, detay, notlar, arşivleme.
 > Marka geçişi (ADR-024) uygulandı ve teste bağlandı.
 >
-> **CI ilk kez çalıştı ve kırmızı geldi.** Nedeni bulundu — Windows'la ilgisi yok,
-> `npm ci` sürüm çakışmasıydı. Düzeltmesi yapıldı ama **doğrulanmadı**: `.nvmrc` dahil
-> **iki commit hâlâ push edilmedi**, fark ancak push sonrası görülür. İlk iş budur.
+> **Faz 4 denetiminin beş artığı da kapandı** (aşağıda). Üçü gerçek uygulamada gözle
+> doğrulandı, Faz 4'te alınamayan **iki ekran görüntüsü de alındı.**
 >
-> **Denetim sonucu: para tarafı temiz, Faz 5'i bloklayan bulgu yok.** Beş düzeltme
-> `/faz-04b` (Faz 4.5, kısa oturum) olarak ayrıldı — Faz 5 projenin en karmaşık fazı,
-> artıklar oraya yüklenmedi.
+> **CI hâlâ kırmızı bilinen son durumda.** Nedeni bulundu — Windows'la ilgisi yok,
+> `npm ci` sürüm çakışmasıydı. Düzeltmesi yapıldı ama **doğrulanmadı**: `.nvmrc` dahil
+> **üç commit hâlâ push edilmedi**, fark ancak push sonrası görülür. İlk iş budur.
+
+---
+
+## Faz 4.5 (Faz 4 artıkları) — tamamlandı
+
+`npm run check` yeşil: **288 test** (164 TypeScript + 124 Rust) + typecheck + ESLint +
+clippy + rustfmt + paket denetimi. Faz 4'te 265'ti; **+23 test.**
+
+Beş maddenin beşi de yapıldı, hiçbiri sonraki faza devretmedi.
+
+| # | Ne | Nerede |
+|---|---|---|
+| 1 | **Veli araması ikinci veliyi de görüyor** | `repo/roster.rs > guardian_index` + `matches_search` |
+| 2 | **Bakiye kartının altyazısı üç durumu ayırıyor** | `roster.rs > StudentDetail.has_ledger` + `StudentDetailPage > balanceCaption` |
+| 3 | **Alt çubuk görünen listeyi topluyor** (ADR-026) | `StudentsPage` → `totalReceivableKurus(visible)` + `tr.footer.receivable` |
+| 4 | **Telefon alanı maskeli** | `lib/format.ts` (`maskPhone` · `editPhone` · `backspacePhone`) + `ui/PhoneInput` |
+| 5 | **K-14 uyarısı borç tutarını yazıyor** | `tr.students.archive.debtWarningPrefix/Suffix` |
+
+### 1 — Veli araması
+
+`student_rows` artık `enrollment_tags` kalıbıyla ikinci bir eşleme daha çekiyor:
+`guardian_index` = (öğrenci, veli adı, veli telefonu), **bütün canlı bağlar**.
+`matches_search` bu listeye bakıyor. `PRIMARY_GUARDIAN_SQL` ile aynı canlılık koşulları
+kullanıldı — çözülmüş bir bağ ekranda görünmediği gibi aramada da eşleşmiyor, testi var.
+
+**Satırın görünümü değişmedi:** `StudentRow.guardian_name` / `guardian_phone` hâlâ
+birincil veli. Değişen yalnızca aramanın kapsamı.
+
+Testin kör noktası da kapandı: `arama_veli_adini_ve_telefonunu_da_kapsar` yalnızca tek
+velili öğrencilerle çalışıyordu. İki yeni test geldi (`arama_ikinci_veliyi_de_bulur`,
+`cozulmus_veli_bagi_aramada_eslesmez`) ve `save_with_guardians` yardımcısı eklendi.
+
+### 2 — Bakiye kartı
+
+Ölçüt `daysOverdue` değil **`hasLedger`**. `views::has_ledger_entries` ham `ledger_entry`
+üzerinde bir **varlık** sorgusu — para hesabı değil, o yüzden view'a gerek yok; ters
+kaydı olan satırlar da sayılıyor (bakiyeye etkileri sıfırlansa da ekstrede duracaklar).
+
+| Durum | Altyazı |
+|---|---|
+| Defter boş | `Henüz hareket yok` |
+| Gecikmiş borç var | `N gün gecikmiş` (değişmedi) |
+| Borç var vadesi gelmemiş · bakiye kapalı · avans | **`Vadesi geçmiş borç yok`** (yeni) |
+
+Üçü için tek yeni metin yeterli: kullanıcının bu kartta aradığı tek uyarı gecikme.
+
+### 3 — ADR-026
+
+`totalReceivableKurus` fonksiyonu değişmedi, **çağrıldığı liste değişti**: `rows` yerine
+`visible` (çip süzgecinden geçmiş, sayfalama öncesi). Etiket `Toplam alacak` →
+**`Görünen listenin alacağı`**. `views::total_receivable`'a dokunulmadı — Faz 9'un kaynağı.
+
+### 4 — Telefon maskesi → **ADR-027**
+
+Saf fonksiyonlar `lib/format.ts`'te, testleri `format.test.ts`'te; `ui/PhoneInput`
+yalnızca imleci geri koyuyor. `formatPhone` **gösterim** için (`0 532 111 22 33`),
+maske **girdi** için (`0532 111 22 33` — formun placeholder'ı ve hata mesajı da bu
+yazımı örnek veriyor).
+
+Aynı değerin iki biçimi olması Faz 5 ve Faz 8'i bağladığı için **ADR-027**'ye yazıldı;
+aşağısı özeti. Dört karar ve gerekçeleri:
+
+- **Baştaki sıfır zorla eklenmiyor.** Eklenseydi `0532 111 22 33` içindeki sıfır
+  silinemezdi: silinir silinmez maske geri koyardı ve alan kilitlenirdi. Bunun yerine
+  **gruplama baştaki sıfıra bakıyor** — `0532 111 22 33` ya da `532 111 22 33`. Doğrulama
+  ikisini de kabul ediyor (10–13 hane).
+- **Ülke kodu yalnızca yapıştırmada atılıyor** (`+90…` 12 hanede, `0090…` 14 hanede) ve
+  orada başa `0` konuyor. Eşik olmasaydı `90…` yazmaya başlayan kullanıcının rakamları
+  gözünün önünde silinirdi.
+- **11 haneyi aşan girdi kırpılmıyor**, artanı sona ekleniyor. Sessizce rakam yutmak,
+  yanlış bir numarayı doğru göstermek olurdu; uzunluğu doğrulama söylüyor.
+- **İmleç rakam sayısıyla taşınıyor**, karakterle değil — ortadan düzenlemede sona
+  atlamıyor. Ayıraç üstünde `Backspace` bir **rakam** siliyor (`backspacePhone`); yoksa
+  maske boşluğu anında geri koyar ve tuş çalışmıyormuş gibi görünürdü.
+
+`Input` bu iş için `forwardRef`'e çevrildi (`SearchInput`'ta zaten olan kalıp).
+
+### 5 — K-14
+
+`debtWarning` ikiye bölündü ve araya `formatLira(row.debtKurus)` girdi. Cümlenin ikinci
+yarısı korundu (Faz 1 denetimi A8 / `VERI-MODELI §1.23`) — PRD'nin örneğinden daha
+bilgilendirici:
+
+> *Mehmet Aslan listeden kalkacak. Geçmiş dersleri, ödemeleri ve borcu olduğu gibi kalır;
+> istediğinizde geri alabilirsiniz. **Bu öğrencinin 1.000,00 ₺ borcu var**; arşivlense de
+> toplam alacakta sayılmaya devam eder.*
+
+### Gerçek uygulamada doğrulananlar
+
+Erişilebilirlik izni geri geldi; ekran `swiftc` ile derlenen bir CGEvent tıklayıcısıyla
+sürüldü (System Events'in `click at` komutu WKWebView'a ulaşmıyor, tuş vuruşları ulaşıyor).
+
+| Ne | Kanıt |
+|---|---|
+| **§1** | `0532 700` (Elif'in **ikinci** velisi Ali Yılmaz'ın numarası) arandı → Elif Yılmaz çıktı; satırda gösterilen telefon hâlâ birincil velinin (`0 532 214 88 10`) |
+| **§2** | Elif Yılmaz — bakiye `0,00 ₺`, altyazı **`Vadesi geçmiş borç yok`**. Eski kodda burada "Henüz hareket yok" yazıyordu. Gecikme dalı da duruyor: Mehmet Aslan `30 gün gecikmiş` |
+| **§3** | `Tümü` → `4.915,00 ₺` · `Borçlu` (6 kişi) → `4.915,00 ₺` · `Arşivlenmiş` (1 kişi) → `300,00 ₺`. Faz 4'teki rakam her çipte `5.215,00 ₺` idi; aradaki 300 ₺ tam olarak arşivli borçlu (§1.23 korunuyor) |
+| **§4** | `05321112` yazıldı → alanda `0532 111 2` göründü, imleç sonda kaldı |
+| **§5** | Arşivleme onayında tutar yazılı (yukarıdaki cümle) |
+
+**Faz 4'ten devreden iki ekran görüntüsü de alındı:** arşivleme onay diyaloğu ve
+kaydetmeden kapatma uyarısı. İkisi de `ConfirmDialog` üzerinde, yıkıcı eylem kırmızı ve
+alt satırında ne olacağını yazıyor. Denemede yapılan değişiklik **kaydedilmedi** —
+geliştirme veritabanı olduğu gibi duruyor.
+
+### Bu oturumda değişen belgeler
+
+`KARARLAR.md` (**ADR-027** — telefonun iki biçimi) · `YOL-HARITASI.md` (4.5 satırı ✅) ·
+`faz-05.md` + `faz-08.md` (ADR-026/027 okuma listesine) · `faz-08.md` ayrıca: `Toplam
+alacak` devri **kapandı** olarak işaretlendi, `Aç` kolonu devri duruyor.
+
+### Bir sonraki yönetici oturumuna not
+
+`faz-10.md:46` ayar ekranında *"Kurs adı, logo, adres, telefon…"* diyor. **ADR-024'ten
+sonra kurum adı ayarlardan düzenlenmiyor** — `config/kurum.json`'dan geliyor ve derleme
+anında gömülüyor. O satır ya ADR-024'e göre yeniden yazılmalı ya da "hangi alan
+ayarlarda, hangisi config'te" ayrımını açıkça söylemeli. Bu oturumda dokunulmadı: kod
+oturumuydu ve satır Faz 10'a kadar bir şeyi bloklamıyor.
 
 ---
 
@@ -136,6 +253,10 @@ Işıl · İrem · Mehmet…), çip sayıları tutuyor, alt çubuk `Toplam alaca
 gösteriyor. Bu rakam görünen 6 borçlunun toplamından **300 ₺ fazla** — arşivlenmiş
 borçlu da sayılıyor (§1.23), yani kural ekranda kanıtlandı.
 
+> **Bu paragraf tarihî.** Aynı ekran Faz 4.5'te ADR-026 ile değişti: rakam artık görünen
+> listeyi topluyor ve etiketi `Görünen listenin alacağı`. Aradaki 300 ₺ kaybolmadı,
+> `Arşivlenmiş` çipine taşındı — §1.23 hâlâ geçerli.
+
 ### Verilen karar: ADR-025 — liste ekranlarının iş bölümü
 
 Arama ve veri filtresi **Rust'ta**, çipler + **Türkçe sıralama ve sayfalama arayüzde**.
@@ -196,8 +317,9 @@ aynı dosyayı okur. `CLAUDE.md > Stack` bunu yazıyor.
 
 ### Sonraki oturumun ilk işi — ve sonrasının sırası
 
-**İki commit push edilmedi:** `9b913d1` (Faz 3 denetimi) ve `b7d1598` (Faz 4). `.nvmrc`
-düzeltmesi ikincisinin içinde, yani uzakta **hâlâ yok**.
+**Dört commit push edilmedi:** `9b913d1` (Faz 3 denetimi), `b7d1598` (Faz 4),
+`0097616` (Faz 4 denetimi) ve bu oturumunki (Faz 4.5). `.nvmrc` düzeltmesi `b7d1598`'in
+içinde, yani uzakta **hâlâ yok** — `git log origin/main..HEAD` dördünü de listeler.
 
 ```
 git push
@@ -206,22 +328,16 @@ git push
 | # | Ne | Kim |
 |---|---|---|
 | 1 | `git push` | **sen** |
-| 2 | CI #2 — `.nvmrc` düzeltmesi işe yaradı mı, `Test · windows-latest` yeşil mi | sen bakarsın |
-| 3 | `/faz-04b` — Faz 4.5, beş düzeltme, **kısa oturum** | kod oturumu |
-| 4 | CI #3 — yeşil onay | kod oturumu |
-| 5 | `/faz-05` — projenin en karmaşık fazı, temiz sayfayla | kod oturumu |
+| 2 | CI — `.nvmrc` düzeltmesi işe yaradı mı, `Test · windows-latest` yeşil mi | sen bakarsın |
+| 3 | `/faz-05` — projenin en karmaşık fazı, temiz sayfayla | kod oturumu |
 
 Actions sayfasında bakılacak tek şey: `Test · windows-latest` yeşil mi. **Windows
 makine gerekmiyor, `.msi` indirilmez, kurulmaz** (ADR-008); asıl kanıt testlerin gerçek
 migration'ları Windows'ta uygulaması. Artefakt kutusunda sıfır olmayan boyutta bir `.msi`
 listelenmesi yeterli.
 
-Hâlâ kırmızıysa **Faz 4.5'e başlamadan** çözülmeli — biriken doğrulanmamış kod artık
-üç faz.
-
-> `/faz-04b` **yeni bir slash komutu**: kullanılabilmesi için Claude Code'un yeniden
-> başlatılması gerekir (`CLAUDE.md` > Oturum protokolü). "Unknown command" hatasının
-> nedeni budur.
+Hâlâ kırmızıysa **Faz 5'e başlamadan** çözülmeli — biriken doğrulanmamış kod artık
+dört faz ve Faz 5 WebView2'ye en duyarlı olanı.
 
 ---
 
@@ -229,10 +345,12 @@ Hâlâ kırmızıysa **Faz 4.5'e başlamadan** çözülmeli — biriken doğrula
 
 | Ne | Neden |
 |---|---|
-| **Onay diyaloglarının ekran görüntüsü** (`Arşivle`, `Kaydetmeden kapat`) | macOS erişilebilirlik izni oturum ortasında düştü, `osascript` tıklaması `-25211` vermeye başladı. İkisi de Faz 3'te görsel olarak doğrulanmış `ConfirmDialog` üzerine kurulu ve mantıkları testli — ama **gözle görülmediler.** Sistem Ayarları → Gizlilik → Erişilebilirlik'te Terminal'e izin verilirse sonraki oturumda alınabilir |
 | `NoteList` / `NoteComposer` ayrı komponent olarak | Notlar `StudentDetailPage` içinde kuruldu. Tek ekranda kullanılan bir desen için `src/ui/`'ya komponent çıkarmak erken soyutlama olurdu; ikinci bir ekran not gösterirse çıkarılır |
 | Öğrenci detayında `Kayıtlar` sekmesi | `faz-04.md §3` sekmeleri `Bilgiler / Dersler / Ödemeler / Notlar` olarak sabitledi. `enrollment` ekranı Faz 5'te grup modülüyle geliyor |
 | `npm audit` 12 "high" | Hiçbiri Faz 3–4'te eklenenlerden değil; eslint/vite geliştirme araç zincirinin bilinen uyarıları, teslim edilen pakete girmiyorlar |
+
+**Faz 4'ten devreden iki ekran görüntüsü Faz 4.5'te alındı** (arşivleme onayı ve
+kaydetmeden kapatma uyarısı) — bu tablodan düştüler.
 
 **Yapışkan tablo başlığı artık doğrulandı** — Faz 3'ten devreden tek belirsizlik buydu.
 Öğrenciler tablosu kabuğun `.content` kabında kaydırılıyor ve başlık yerinde kalıyor.

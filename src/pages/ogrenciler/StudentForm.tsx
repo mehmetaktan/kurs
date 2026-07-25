@@ -16,6 +16,7 @@ import {
   ErrorState,
   Input,
   LoadingState,
+  PhoneInput,
   Textarea,
   useToast,
 } from '../../ui'
@@ -252,16 +253,17 @@ export function StudentForm({ open, studentId, onClose, onSaved }: StudentFormPr
                 </div>
 
                 <div className={styles.formPair}>
-                  <Input
+                  {/* Maskeli: yazarken `0532 111 22 33`. Maske görsel, veri değil —
+                      kayıt yine `phone_digits` normalleştirmesinden geçiyor. */}
+                  <PhoneInput
                     label={tr.students.form.phone}
                     placeholder={tr.students.form.phonePlaceholder}
                     hint={tr.students.form.phoneHint}
-                    inputMode="tel"
                     value={draft.phone}
                     error={errors['student.phone']}
-                    onChange={(event) => {
+                    onChange={(phone) => {
                       clearError('student.phone')
-                      patch({ phone: event.target.value })
+                      patch({ phone })
                     }}
                   />
                   <DatePicker

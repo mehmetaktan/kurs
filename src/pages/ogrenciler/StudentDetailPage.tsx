@@ -246,7 +246,11 @@ export function StudentDetailPage({ studentId }: { studentId: number }) {
         open={confirmArchive}
         title={tr.students.archive.title}
         description={`${student.fullName} ${tr.students.archive.body}${
-          row.debtKurus > 0 ? ` ${tr.students.archive.debtWarning}` : ''
+          row.debtKurus > 0
+            ? ` ${tr.students.archive.debtWarningPrefix} ${formatLira(row.debtKurus)} ${
+                tr.students.archive.debtWarningSuffix
+              }`
+            : ''
         }`}
         confirmLabel={tr.students.archive.confirm}
         confirmHint={tr.students.archive.confirmHint}
@@ -273,9 +277,25 @@ function BackRow() {
   )
 }
 
+/**
+ * Bakiye kartının altyazısı **üç** durumu ayırır.
+ *
+ * Ölçüt `daysOverdue` değil `hasLedger`: `daysOverdue` yalnızca gecikmiş borçta
+ * doluyor, dolayısıyla ikili bir dal borcunu tamamen ödemiş — defterinde onlarca
+ * hareket olan — öğrenciye de "Henüz hareket yok" yazdırıyordu. Avans vermiş öğrencide
+ * de aynısı. Kurs sahibi teknik değil: bir rakamın altında onu yalanlayan bir cümle
+ * okursa ya rakama ya uygulamaya güveni gider.
+ */
+function balanceCaption(daysOverdue: number | null, hasLedger: boolean): string {
+  if (daysOverdue !== null) return `${daysOverdue} ${tr.students.detail.cards.overdue}`
+  return hasLedger
+    ? tr.students.detail.cards.balanceCurrentCaption
+    : tr.students.detail.cards.balanceEmptyCaption
+}
+
 /** Dört kart — kolon oranları bağlayıcı (TASARIM-SISTEMI §8, `--stat-strip-columns`). */
 function SummaryStrip({ detail }: { detail: StudentDetail }) {
-  const { row, daysOverdue, nextSessionAt } = detail
+  const { row, daysOverdue, hasLedger, nextSessionAt } = detail
 
   // Devam oranı: işlenen derslerin kaçında "Geldi". PRD S7 hangi PENCEREDE
   // hesaplanacağını hâlâ soruyor (Faz 9); bugünkü cevap "tümü" ve alt satırda yazıyor,
@@ -291,11 +311,7 @@ function SummaryStrip({ detail }: { detail: StudentDetail }) {
         label={tr.students.detail.cards.balance}
         value={formatLira(row.balanceKurus)}
         tone={row.balanceKurus < 0 ? 'danger' : 'default'}
-        caption={
-          daysOverdue !== null
-            ? `${daysOverdue} ${tr.students.detail.cards.overdue}`
-            : tr.students.detail.cards.balanceEmptyCaption
-        }
+        caption={balanceCaption(daysOverdue, hasLedger)}
         captionTone={daysOverdue !== null ? 'warn' : 'default'}
       />
       <StatCard

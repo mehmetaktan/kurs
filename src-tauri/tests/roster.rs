@@ -33,18 +33,25 @@ fn names(rows: &[kurs_takip_lib::repo::roster::StudentRow]) -> Vec<&str> {
 
 /// Adı ve tek velisi olan bir öğrenci — formun gerçekten kullandığı yol.
 fn save(conn: &Connection, name: &str, guardian: Option<(&str, &str)>) -> i64 {
-    let guardians = guardian
-        .map(|(g_name, phone)| {
-            vec![GuardianInput {
-                guardian_id: None,
-                full_name: g_name.into(),
-                phone: phone.into(),
-                email: None,
-                relation: Some("Anne".into()),
-                is_primary: true,
-            }]
+    let guardians: Vec<(&str, &str)> = guardian.into_iter().collect();
+    save_with_guardians(conn, name, &guardians)
+}
+
+/// Adı ve **birden çok** velisi olan öğrenci. İlk veli birincil (ekranda görünen o),
+/// kalanlar yalnızca aramanın kapsamında — gerçek hayatta anne birincil, baba ikinci.
+fn save_with_guardians(conn: &Connection, name: &str, guardians: &[(&str, &str)]) -> i64 {
+    let guardians: Vec<GuardianInput> = guardians
+        .iter()
+        .enumerate()
+        .map(|(index, (g_name, phone))| GuardianInput {
+            guardian_id: None,
+            full_name: (*g_name).into(),
+            phone: (*phone).into(),
+            email: None,
+            relation: Some(if index == 0 { "Anne" } else { "Baba" }.into()),
+            is_primary: index == 0,
         })
-        .unwrap_or_default();
+        .collect();
 
     repo::roster::save_student(
         conn,
@@ -190,6 +197,91 @@ fn arama_veli_adini_ve_telefonunu_da_kapsar() {
         },
     );
     assert_eq!(names(&by_phone_bare), vec!["Mehmet Aslan"]);
+}
+
+/// Faz 4 denetiminin 1. bulgusu. Arama yalnızca **birincil** veliye bakıyordu ve bu
+/// testin kendisi de aynı kör noktayı taşıyordu: bütün öğrenciler tek veliliydi.
+///
+/// Somut arıza: annesi birincil kayıtlı öğrenciyi babası arıyor, kurs sahibi babanın
+/// numarasını yazıyor, ekran "sonuç yok" diyor ve **ikinci bir öğrenci kaydı** açılıyor.
+#[test]
+fn arama_ikinci_veliyi_de_bulur() {
+    let conn = common::conn();
+    save_with_guardians(
+        &conn,
+        "Elif Yılmaz",
+        &[
+            ("Hatice Yılmaz", "0532 214 88 10"),
+            ("Şükrü Yılmaz", "0505 337 41 62"),
+        ],
+    );
+    save(
+        &conn,
+        "Mehmet Aslan",
+        Some(("Sevgi Aslan", "0555 100 20 30")),
+    );
+
+    // İkinci velinin ADIYLA.
+    let by_name = rows(
+        &conn,
+        &StudentQuery {
+            search: "Şükrü".into(),
+            ..query()
+        },
+    );
+    assert_eq!(names(&by_name), vec!["Elif Yılmaz"]);
+
+    // İkinci velinin TELEFONUYLA — boşluklu yazımla da.
+    let by_phone = rows(
+        &conn,
+        &StudentQuery {
+            search: "0505 337".into(),
+            ..query()
+        },
+    );
+    assert_eq!(names(&by_phone), vec!["Elif Yılmaz"]);
+
+    // Değişen yalnızca aramanın kapsamı: satırın GÖRÜNÜMÜ hâlâ birincil veli.
+    let row = by_name.first().expect("satır dönmeli");
+    assert_eq!(row.guardian_name.as_deref(), Some("Hatice Yılmaz"));
+    assert_eq!(row.guardian_phone.as_deref(), Some("0532 214 88 10"));
+    assert_eq!(row.guardian_count, 2);
+}
+
+/// Çözülmüş bir veli bağı ekranda görünmüyor; aramada da eşleşmemeli. Arama listesi
+/// `PRIMARY_GUARDIAN_SQL` ile aynı canlılık koşullarını kullanmak zorunda.
+#[test]
+fn cozulmus_veli_bagi_aramada_eslesmez() {
+    let conn = common::conn();
+    let student_id = save_with_guardians(
+        &conn,
+        "Elif Yılmaz",
+        &[
+            ("Hatice Yılmaz", "0532 214 88 10"),
+            ("Şükrü Yılmaz", "0505 337 41 62"),
+        ],
+    );
+
+    let link = repo::roster::guardian_links(&conn, student_id)
+        .expect("veliler okunmalı")
+        .into_iter()
+        .find(|link| link.full_name == "Şükrü Yılmaz")
+        .expect("ikinci veli bulunmalı");
+    repo::roster::unlink_guardian(&conn, link.link_id).expect("bağ çözülmeli");
+
+    for needle in ["Şükrü", "0505 337"] {
+        assert!(
+            rows(
+                &conn,
+                &StudentQuery {
+                    search: needle.into(),
+                    ..query()
+                }
+            )
+            .is_empty(),
+            "\"{needle}\" çözülmüş bağı bulmamalı"
+        );
+    }
 }
 
 #[test]
@@ -939,6 +1031,35 @@ fn detay_veli_not_ve_gecikmeyi_getirir() {
     assert!(repo::roster::archive_note(&conn, note_id).unwrap());
     let after = repo::roster::student_detail(&conn, elif, Some(TODAY.into())).unwrap();
     assert_eq!(after.notes.len(), 1);
+    assert!(after.has_ledger, "taksit tahakkuku deftere satır yazdı");
+}
+
+/// Faz 4 denetiminin 2. bulgusu. Bakiye kartının altyazısı `days_overdue`'ya
+/// bağlıydı ve `days_overdue` yalnızca **gecikmiş** borçta doluyor — borcunu tamamen
+/// ödemiş, defterinde onlarca hareket olan öğrencinin kartında da "Henüz hareket yok"
+/// yazıyordu. Ayrımı bakiye veremez: ikisinde de `0`.
+#[test]
+fn detay_defterin_bos_olup_olmadigini_soyler() {
+    let conn = common::conn();
+    let elif = save(&conn, "Elif Yılmaz", None);
+
+    let empty = repo::roster::student_detail(&conn, elif, Some(TODAY.into())).unwrap();
+    assert_eq!(empty.row.balance_kurus, 0);
+    assert!(!empty.has_ledger, "defter gerçekten boş");
+    assert_eq!(empty.days_overdue, None);
+
+    // Borç + tam ödeme: bakiye yine 0, defter DOLU.
+    common::ledger(&conn, elif, "2026-03-01", "session_charge", -25_000);
+    common::ledger(&conn, elif, "2026-03-02", "payment", 25_000);
+
+    let settled = repo::roster::student_detail(&conn, elif, Some(TODAY.into())).unwrap();
+    assert_eq!(settled.row.balance_kurus, 0, "bakiye kapandı");
+    assert_eq!(settled.days_overdue, None, "gecikmiş borç yok");
+    assert!(
+        settled.has_ledger,
+        "defteri dolu öğrenciye 'henüz hareket yok' denemez"
+    );
+    common::assert_ledger_invariant(&conn);
 }
 
 #[test]

@@ -130,7 +130,10 @@ export function StudentsPage() {
     [rows, chip],
   )
   const paged = useMemo(() => paginate(visible, page), [visible, page])
-  const receivable = useMemo(() => totalReceivableKurus(rows ?? []), [rows])
+  // ADR-026: alt çubuğun rakamı GÖRÜNEN listeyi toplar — `rows` değil `visible`.
+  // Sayfalama öncesi hâli: alt çubuk "12 öğrenci gösteriliyor" derken sayfa 1'in
+  // toplamını yazsaydı iki rakam birbirini yalanlardı.
+  const receivable = useMemo(() => totalReceivableKurus(visible), [visible])
 
   const openForm = (studentId: number | null) => {
     setEditing(studentId)

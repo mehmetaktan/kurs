@@ -84,6 +84,23 @@ pub fn student_debt(conn: &Connection, student_id: i64) -> AppResult<Option<Stud
     }
 }
 
+/// Öğrencinin defterinde hiç hareket var mı.
+///
+/// Para hesabı DEĞİL, bir varlık sorusu — ve tam da bu yüzden ham `ledger_entry`'ye
+/// bakıyor. Bakiye kartının altyazısı "henüz hareket yok" ile "borcu kapalı"yı ayırmak
+/// zorunda; ikisi de bakiyeyi `0` gösteriyor, dolayısıyla ayrımı tutar veremez.
+///
+/// Ters kaydı olan satırlar da sayılır: bakiyeye etkileri sıfırlanmış olsa bile
+/// defterde duruyorlar ve cari ekstrede (Faz 8) görünecekler.
+pub fn has_ledger_entries(conn: &Connection, student_id: i64) -> AppResult<bool> {
+    Ok(conn.query_row(
+        "SELECT EXISTS( SELECT 1 FROM ledger_entry \
+                        WHERE student_id = ?1 AND deleted_at IS NULL )",
+        [student_id],
+        |row| row.get(0),
+    )?)
+}
+
 /// Gecikme gün sayısı. Saf tarih farkı — `julianday('now')` KULLANILMAZ (§0).
 /// `today` parametredir; testler CI makinesinin saat dilimine bağlı olmaz.
 pub fn days_overdue(today: NaiveDate, oldest_due_on: Option<&str>) -> Option<i64> {
