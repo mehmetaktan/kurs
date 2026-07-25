@@ -86,33 +86,6 @@ export function sortStudents(rows: readonly StudentRow[]): StudentRow[] {
   return [...rows].sort((a, b) => compareTr(a.fullName, b.fullName) || a.id - b.id)
 }
 
-export const PAGE_SIZE = 20
-
-export interface Page<T> {
-  rows: T[]
-  /** 1-tabanlı ve daima geçerli: liste kısalınca son sayfaya kayar. */
-  page: number
-  pageCount: number
-  total: number
-}
-
-/**
- * Sayfalama. `page` aralık dışındaysa **düzeltilir**, hata verilmez: kullanıcı 5.
- * sayfadayken filtre daraltırsa boş bir ekranla değil son sayfayla karşılaşır.
- */
-export function paginate<T>(rows: readonly T[], page: number, size = PAGE_SIZE): Page<T> {
-  const pageCount = Math.max(1, Math.ceil(rows.length / size))
-  const safePage = Math.min(Math.max(1, Math.trunc(page) || 1), pageCount)
-  const start = (safePage - 1) * size
-
-  return {
-    rows: rows.slice(start, start + size),
-    page: safePage,
-    pageCount,
-    total: rows.length,
-  }
-}
-
 /**
  * Alt çubuktaki para özeti — **ekranda görünen satırların** toplamı (ADR-026).
  *

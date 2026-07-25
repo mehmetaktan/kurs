@@ -21,6 +21,12 @@ export interface PageDef {
  */
 export const STUDENTS_PATH = '/ogrenciler'
 
+/** Grup modülünün kökü (Faz 5A). Detay rotası `${GROUPS_PATH}/:id`. */
+export const GROUPS_PATH = '/gruplar'
+
+/** Tanımlar — branşlar ve tatil günleri (Faz 5A). */
+export const DEFINITIONS_PATH = '/tanimlar'
+
 export const PAGES: readonly PageDef[] = [
   { path: '/', title: tr.pages.today.title, subtitle: tr.pages.today.subtitle, phase: 4 },
   {

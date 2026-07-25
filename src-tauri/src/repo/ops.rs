@@ -1,15 +1,41 @@
-//! İşletim tarafı: `backup_log` (§1.22).
+//! İşletim tarafı: **açılışta çalışan bakım işleri** ve `backup_log` (§1.22).
 //!
 //! Yedekleme durumu Faz 10'a ait bir detay değil, **Bugün ekranının verisi**:
 //! *"Son yedekleme: Bugün 08:14 · otomatik"* ve gecikince turuncu *"3 gün önce · gecikti"*.
 //! Yedek alma mekanizmasının kendisi (`VACUUM INTO`, ADR-019) Faz 10'da yazılır.
 
+use chrono::NaiveDate;
 use rusqlite::{params, Connection, Row};
 
 use crate::clock;
 use crate::error::AppResult;
 use crate::model::BackupLog;
-use crate::repo::{last_id, Record};
+use crate::repo::{self, last_id, Record};
+
+// ---------------------------------------------------------------------------
+// Açılış bakımı
+// ---------------------------------------------------------------------------
+
+/// Uygulama her açılışta çağırır: zamanın geçmesiyle **kendiliğinden** doğması gereken
+/// kayıtları yazar.
+///
+/// Bugün tek iş var — eksik seansların üretimi (§1.14). Ufuk olmasaydı takvim birkaç ay
+/// sonra sessizce boşalır ve Bugün ekranı yanlış boş-durum metnini gösterirdi.
+///
+/// **`today` parametredir** (§0 `'now'` kuralı): SQLite saati UTC döner ve gece
+/// 00:00–03:00 arasında bir önceki günü verirdi. Çağıran `chrono::Local`'dan üretir.
+///
+/// Faz 7/8'in `accrue_due_installments(today)`'ı da buraya girecek — vade tahakkuku aynı
+/// sınıftan bir iş: idempotent, açılışta, `today` bağlı.
+pub fn on_startup(conn: &Connection, today: NaiveDate) -> AppResult<StartupReport> {
+    let sessions = repo::schedule::generate_sessions(conn, today)?;
+    Ok(StartupReport { sessions })
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct StartupReport {
+    pub sessions: repo::schedule::GenerateReport,
+}
 
 impl Record for BackupLog {
     const TABLE: &'static str = "backup_log";

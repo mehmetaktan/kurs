@@ -244,9 +244,14 @@ export function archiveStudentNote(noteId: number): Promise<boolean> {
   return call<boolean>('archive_student_note', { noteId })
 }
 
+/** `subject` satırı — `src-tauri/src/model.rs > Subject`. */
 export interface Subject {
   id: number
   name: string
+  color: string | null
+  /** Varsayılan ders süresi (dk). `null` = `setting.default_session_minutes` (PRD S4). */
+  defaultMin: number | null
+  sortOrder: number
 }
 
 export interface StudyGroup {
@@ -263,4 +268,266 @@ export function fetchSubjects(): Promise<Subject[]> {
 /** Grup filtresinin kaynağı. Sırasız (ADR-020). */
 export function fetchStudyGroups(): Promise<StudyGroup[]> {
   return call<StudyGroup[]>('list_study_groups')
+}
+
+// ─── Faz 5A — tanımlar, gruplar ve seans işlemleri ────────────────────────────
+//
+// Tipler `src-tauri/src/repo/schedule.rs` ile birebir (`rename_all = "camelCase"`).
+
+export interface SubjectInput {
+  id: number | null
+  name: string
+  color: string | null
+  defaultMin: number | null
+  sortOrder: number
+}
+
+/** Tekillik `search_name` üzerinde (K9): `Matematik` ile `matematik` aynı branştır. */
+export function saveSubject(input: SubjectInput): Promise<number> {
+  return call<number>('save_subject', { input })
+}
+
+export function archiveSubject(subjectId: number): Promise<boolean> {
+  return call<boolean>('archive_subject', { subjectId })
+}
+
+export interface ClosedDay {
+  id: number
+  /** `'YYYY-MM-DD'` */
+  day: string
+  label: string
+}
+
+export interface ClosedDayInput {
+  id: number | null
+  day: string
+  label: string
+}
+
+export function fetchClosedDays(): Promise<ClosedDay[]> {
+  return call<ClosedDay[]>('list_closed_days')
+}
+
+export function saveClosedDay(input: ClosedDayInput): Promise<number> {
+  return call<number>('save_closed_day', { input })
+}
+
+export function archiveClosedDay(closedDayId: number): Promise<boolean> {
+  return call<boolean>('archive_closed_day', { closedDayId })
+}
+
+/** `1 = Pazartesi … 7 = Pazar`. Takvim ve seans üretimi bunu okur. */
+export function fetchWeeklyClosedDays(): Promise<number[]> {
+  return call<number[]>('weekly_closed_days')
+}
+
+export function setWeeklyClosedDays(days: number[]): Promise<void> {
+  return call<void>('set_weekly_closed_days', { days })
+}
+
+/** Branşın süresi, yoksa genel ayar, o da yoksa 60 (PRD S4). */
+export function fetchDefaultMinutes(subjectId: number | null): Promise<number> {
+  return call<number>('default_session_minutes', { subjectId })
+}
+
+export interface Teacher {
+  id: number
+  fullName: string
+  color: string
+  isActive: boolean
+}
+
+/** ADR-011: tek öğretmen. Alan yine de yazılır, yoksa K-1 uyarısı ölü doğar. */
+export function fetchTeachers(): Promise<Teacher[]> {
+  return call<Teacher[]>('list_teachers')
+}
+
+/** Haftalık programın bir satırı: "Salı 16:00 · 60 dk". */
+export interface WeeklySlot {
+  /** Mevcut şablon satırıysa dolu; yeni satırda `null`. */
+  id: number | null
+  /** 1 = Pazartesi … 7 = Pazar */
+  weekday: number
+  /** `'16:00'` */
+  startTime: string
+  durationMin: number
+}
+
+/** `Gruplar` tablosunun bir satırı — EKRANLAR.md §304. */
+export interface GroupRow {
+  id: number
+  name: string
+  subjectId: number
+  subjectName: string
+  subjectColor: string | null
+  /** Formun ihtiyacı; liste `teacherName`'i gösteriyor. */
+  teacherId: number | null
+  teacherName: string | null
+  capacity: number
+  /** Bugün itibarıyla kayıtlı **canlı** öğrenci sayısı (§1.23). */
+  memberCount: number
+  weekly: WeeklySlot[]
+  isActive: boolean
+  /** Arşivlendi. `isActive` ile FARKLI şey. */
+  archived: boolean
+  startsOn: string | null
+  endsOn: string | null
+  /** `'YYYY-MM-DD HH:MM'` — özet şeritteki "Sıradaki ders". */
+  nextSessionAt: string | null
+}
+
+export interface GroupQuery {
+  search?: string
+  subjectId?: number | null
+  today?: string | null
+}
+
+/**
+ * Gruplar listesi. Arama ve branş süzgeci Rust'ta; **Türkçe sıralama ve sayfalama
+ * burada** (ADR-025) — `pages/gruplar/filters.ts`.
+ */
+export function fetchGroupList(query: GroupQuery = {}): Promise<GroupRow[]> {
+  return call<GroupRow[]>('group_list', { query })
+}
+
+export interface GroupMember {
+  enrollmentId: number
+  studentId: number
+  fullName: string
+  startOn: string
+  endOn: string | null
+  /** Bugün grupta mı — ayrılmış üye listede kalır, soluk gösterilir (R5.8). */
+  isCurrent: boolean
+}
+
+export interface GroupSessionRow {
+  id: number
+  startsAt: string
+  endsAt: string
+  /** `'planned' | 'done' | 'cancelled'` */
+  status: string
+  attendanceTaken: boolean
+  presentCount: number
+  markedCount: number
+}
+
+export interface GroupNote {
+  id: number
+  studentId: number
+  studentName: string
+  body: string
+  notedOn: string
+}
+
+export interface GroupDetail {
+  group: GroupRow
+  members: GroupMember[]
+  sessions: GroupSessionRow[]
+  /** Ayrı bir tablo yok: üyelerin `student_note` kayıtlarının birleşik akışı. */
+  notes: GroupNote[]
+  processedSessions: number
+  attendedCount: number
+  markedCount: number
+}
+
+export function fetchGroupDetail(groupId: number): Promise<GroupDetail> {
+  return call<GroupDetail>('group_detail', { groupId })
+}
+
+export interface GroupInput {
+  id: number | null
+  name: string
+  subjectId: number
+  teacherId: number | null
+  capacity: number
+  startsOn: string | null
+  endsOn: string | null
+  isActive: boolean
+  weekly: WeeklySlot[]
+}
+
+/** Grup + haftalık program tek transaction; ardından seanslar üretilir (R5.5). */
+export function saveGroup(input: GroupInput): Promise<number> {
+  return call<number>('save_group', { input })
+}
+
+export function archiveGroup(groupId: number): Promise<boolean> {
+  return call<boolean>('archive_group', { groupId })
+}
+
+export function restoreGroup(groupId: number): Promise<boolean> {
+  return call<boolean>('restore_group', { groupId })
+}
+
+export interface Capacity {
+  memberCount: number
+  capacity: number
+}
+
+/** Kapasite aşımı onay diyaloğunun sayıları (PRD S2 / K-8) — engelleme değil, uyarı. */
+export function fetchGroupCapacity(groupId: number): Promise<Capacity> {
+  return call<Capacity>('group_capacity', { groupId })
+}
+
+/** Kapasite kontrol edilmez (S2); çakışan açık kayıt ise engellenir (K-22). */
+export function addGroupMember(
+  groupId: number,
+  studentId: number,
+  startOn: string | null = null,
+): Promise<number> {
+  return call<number>('add_group_member', { groupId, studentId, startOn })
+}
+
+/** Gruptan çıkarma — kayıt silinmez, bitiş tarihi yazılır (R5.8). */
+export function endGroupMembership(
+  enrollmentId: number,
+  endOn: string | null = null,
+): Promise<void> {
+  return call<void>('end_group_membership', { enrollmentId, endOn })
+}
+
+export interface Conflict {
+  sessionId: number
+  startsAt: string
+  endsAt: string
+  /** `Matematik · Grup A` — uyarı dersin **adını** söylemek zorunda. */
+  label: string
+}
+
+/** Çakışma **uyarıdır, engel değil** (K-1 / R3.11). Boş dizi "çakışma yok". */
+export function fetchSessionConflicts(
+  startsAt: string,
+  endsAt: string,
+  ignoreSessionId: number | null = null,
+): Promise<Conflict[]> {
+  return call<Conflict[]>('session_conflicts', { startsAt, endsAt, ignoreSessionId })
+}
+
+/** Kapsam: en dar olan varsayılan. `only` şablona bağlı dersi **iptal eder**, silmez. */
+export type SessionScope = 'only' | 'following' | 'all'
+
+export interface DeleteReport {
+  removed: number
+  cancelled: number
+  seriesClosed: boolean
+}
+
+export function deleteSessions(
+  sessionId: number,
+  scope: SessionScope = 'only',
+): Promise<DeleteReport> {
+  return call<DeleteReport>('delete_sessions', { sessionId, scope })
+}
+
+export function cancelSession(sessionId: number, reason: string | null = null): Promise<void> {
+  return call<void>('cancel_session', { sessionId, reason })
+}
+
+/** Yoklaması alınmış ders taşınamaz (R3.13) — Rust reddeder. */
+export function rescheduleSession(
+  sessionId: number,
+  startsAt: string,
+  durationMin: number,
+): Promise<void> {
+  return call<void>('reschedule_session', { sessionId, startsAt, durationMin })
 }

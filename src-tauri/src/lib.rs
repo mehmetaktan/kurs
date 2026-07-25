@@ -47,6 +47,7 @@ impl AppState {
                 Ok(report) => {
                     applied_migrations = report.all_applied;
                     log_startup(&conn, &db_path, &report.applied_now);
+                    run_startup_jobs(&conn);
                     Ok(conn)
                 }
                 Err(err) => {
@@ -86,6 +87,28 @@ impl AppState {
             Ok(conn) => f(conn),
             Err(err) => Err(err.clone()),
         }
+    }
+}
+
+/// Açılış bakımı: eksik seansların üretimi (§1.14), ileride vade tahakkuku.
+///
+/// **Hata uygulamayı açmayı engellemez.** Bakım işi düşerse kullanıcının yapabileceği
+/// tek şey programı kullanmaya devam etmek; açılışı kesmek onu veriye erişemez hâle
+/// getirirdi. Sorun log'a yazılır, `AppState` sağlam kalır.
+///
+/// "Bugün" `chrono::Local`'dan geliyor, SQLite'tan değil (§0 `'now'` kuralı).
+fn run_startup_jobs(conn: &Connection) {
+    match repo::ops::on_startup(conn, clock::today_local()) {
+        Ok(report) => {
+            let s = report.sessions;
+            if s.created > 0 {
+                println!(
+                    "[kurs] seans üretimi: {} yeni, {} mevcut, {} tatil",
+                    s.created, s.existing, s.closed
+                );
+            }
+        }
+        Err(err) => eprintln!("[kurs] açılış bakımı yapılamadı: {err}"),
     }
 }
 
@@ -134,6 +157,31 @@ pub fn run() {
             commands::archive_student_note,
             commands::list_subjects,
             commands::list_study_groups,
+            // Faz 5A — tanımlar
+            commands::save_subject,
+            commands::archive_subject,
+            commands::restore_subject,
+            commands::list_closed_days,
+            commands::save_closed_day,
+            commands::archive_closed_day,
+            commands::weekly_closed_days,
+            commands::set_weekly_closed_days,
+            commands::default_session_minutes,
+            commands::list_teachers,
+            // Faz 5A — gruplar
+            commands::group_list,
+            commands::group_detail,
+            commands::save_group,
+            commands::archive_group,
+            commands::restore_group,
+            commands::group_capacity,
+            commands::add_group_member,
+            commands::end_group_membership,
+            // Faz 5A — seans işlemleri
+            commands::session_conflicts,
+            commands::cancel_session,
+            commands::delete_sessions,
+            commands::reschedule_session,
         ])
         .run(tauri::generate_context!())
         .expect("Tauri uygulaması başlatılamadı");

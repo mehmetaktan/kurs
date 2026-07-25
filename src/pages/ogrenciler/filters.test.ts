@@ -7,11 +7,11 @@
  */
 import { describe, expect, it } from 'vitest'
 import type { StudentRow } from '../../lib/api'
+import { paginate } from '../../lib/paginate'
 import {
   chipCounts,
   filterByChip,
   matchesChip,
-  paginate,
   sortStudents,
   totalReceivableKurus,
 } from './filters'

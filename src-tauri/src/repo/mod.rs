@@ -11,6 +11,7 @@ pub mod finance;
 pub mod ops;
 pub mod people;
 pub mod roster;
+pub mod schedule;
 pub mod setting;
 pub mod views;
 

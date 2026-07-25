@@ -11,6 +11,7 @@ import {
   type Subject,
 } from '../../lib/api'
 import { formatDate, formatLira, formatPhone } from '../../lib/format'
+import { paginate } from '../../lib/paginate'
 import { navigate } from '../../lib/router'
 import { sortTrBy } from '../../lib/sortTr'
 import { PageContent } from '../../shell/AppShell'
@@ -36,7 +37,6 @@ import { StudentForm } from './StudentForm'
 import {
   chipCounts,
   filterByChip,
-  paginate,
   sortStudents,
   STUDENT_CHIPS,
   totalReceivableKurus,

@@ -125,10 +125,34 @@ impl From<rusqlite::Error> for AppError {
                     "Bu ders için paket hakkı zaten düşülmüş. Listeyi yenileyin.",
                 );
             }
-            if text.contains("subject.search_name") || text.contains("study_group") {
+            // Tekillik `search_name` üzerinde (K9): `Matematik` ile `matematik` aynı
+            // branştır. Mesaj bunu SÖYLEMEK zorunda, yoksa kullanıcı ekranda farklı
+            // yazılmış iki adı görüp neden reddedildiğini anlamıyor.
+            if text.contains("subject.search_name") {
                 return AppError::new(
                     "duplicate_name",
-                    "Bu ad zaten kullanılıyor. Farklı bir ad yazın.",
+                    "Bu branş zaten kayıtlı. Büyük/küçük harf farkı yeni bir branş \
+                     oluşturmaz — listeden mevcut branşı açın.",
+                );
+            }
+            if text.contains("study_group") {
+                return AppError::new(
+                    "duplicate_name",
+                    "Bu branşta aynı adlı bir grup zaten var. \
+                     Gruba farklı bir ad verin (örnek: Grup B).",
+                );
+            }
+            if text.contains("closed_day.day") {
+                return AppError::new(
+                    "duplicate_closed_day",
+                    "Bu tarih zaten kapalı gün olarak kayıtlı. \
+                     Açıklamasını değiştirmek için listeden açın.",
+                );
+            }
+            if text.contains("session.series_id") {
+                return AppError::new(
+                    "session_slot_taken",
+                    "Bu saatte bu programın dersi zaten var. Listeyi yenileyin.",
                 );
             }
             return AppError::new(

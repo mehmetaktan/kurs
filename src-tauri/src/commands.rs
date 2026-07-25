@@ -10,9 +10,17 @@
 use serde::Serialize;
 use tauri::State;
 
+use crate::clock;
 use crate::error::AppResult;
-use crate::model::{Guardian, Setting, Student, StudentBalance, StudentDebt, StudyGroup, Subject};
+use crate::model::{
+    ClosedDay, Guardian, Setting, Student, StudentBalance, StudentDebt, StudyGroup, Subject,
+    Teacher,
+};
 use crate::repo::roster::{StudentDetail, StudentInput, StudentQuery, StudentRow};
+use crate::repo::schedule::{
+    Capacity, ClosedDayInput, Conflict, DeleteReport, GroupDetail, GroupInput, GroupQuery,
+    GroupRow, SessionScope, SubjectInput,
+};
 use crate::{db, repo, AppState};
 
 /// Faz 2 durum ekranının verisi — veritabanı bağlantısının çalıştığının kanıtı.
@@ -170,6 +178,213 @@ pub fn list_subjects(state: State<'_, AppState>) -> AppResult<Vec<Subject>> {
 #[tauri::command]
 pub fn list_study_groups(state: State<'_, AppState>) -> AppResult<Vec<StudyGroup>> {
     state.with_conn(repo::list_live::<StudyGroup>)
+}
+
+// ---------------------------------------------------------------------------
+// Faz 5A — tanımlar: branş ve kapalı gün
+// ---------------------------------------------------------------------------
+
+/// Branş kaydeder. Tekillik `search_name` üzerinde ve repository üretiyor (K9):
+/// `Matematik` ile `matematik` aynı branştır.
+#[tauri::command]
+pub fn save_subject(state: State<'_, AppState>, input: SubjectInput) -> AppResult<i64> {
+    state.with_conn(|conn| repo::schedule::save_subject(conn, &input))
+}
+
+#[tauri::command]
+pub fn archive_subject(state: State<'_, AppState>, subject_id: i64) -> AppResult<bool> {
+    state.with_conn(|conn| repo::archive::<Subject>(conn, subject_id))
+}
+
+#[tauri::command]
+pub fn restore_subject(state: State<'_, AppState>, subject_id: i64) -> AppResult<bool> {
+    state.with_conn(|conn| repo::restore::<Subject>(conn, subject_id))
+}
+
+/// Sırasız (ADR-020) — tarih kolonuna göre sıralama arayüzde yapılır.
+#[tauri::command]
+pub fn list_closed_days(state: State<'_, AppState>) -> AppResult<Vec<ClosedDay>> {
+    state.with_conn(repo::list_live::<ClosedDay>)
+}
+
+#[tauri::command]
+pub fn save_closed_day(state: State<'_, AppState>, input: ClosedDayInput) -> AppResult<i64> {
+    state.with_conn(|conn| repo::schedule::save_closed_day(conn, &input))
+}
+
+/// Tatil kaldırılınca o günün seansları **kendiliğinden geri gelmez**: üretim yalnızca
+/// eksik slotu yazar, kullanıcı takvimi yenilediğinde (ya da bir sonraki açılışta) dolar.
+#[tauri::command]
+pub fn archive_closed_day(state: State<'_, AppState>, closed_day_id: i64) -> AppResult<bool> {
+    state.with_conn(|conn| repo::archive::<ClosedDay>(conn, closed_day_id))
+}
+
+/// Haftalık kapalı günler — `1,7` gibi (1 = Pazartesi … 7 = Pazar).
+#[tauri::command]
+pub fn weekly_closed_days(state: State<'_, AppState>) -> AppResult<Vec<i64>> {
+    state.with_conn(|conn| {
+        let mut days: Vec<i64> = repo::schedule::weekly_closed_days(conn)?
+            .into_iter()
+            .collect();
+        days.sort_unstable();
+        Ok(days)
+    })
+}
+
+#[tauri::command]
+pub fn set_weekly_closed_days(state: State<'_, AppState>, days: Vec<i64>) -> AppResult<()> {
+    state.with_conn(|conn| {
+        repo::setting::update_existing(
+            conn,
+            "weekly_closed_days",
+            &repo::schedule::format_weekdays(&days),
+        )
+    })
+}
+
+/// Branşın varsayılan ders süresi; yoksa genel ayar, o da yoksa 60 (PRD S4).
+#[tauri::command]
+pub fn default_session_minutes(
+    state: State<'_, AppState>,
+    subject_id: Option<i64>,
+) -> AppResult<i64> {
+    state.with_conn(|conn| repo::schedule::default_minutes(conn, subject_id))
+}
+
+/// Öğretmen listesi. ADR-011 gereği tek satır olacak ama alan **gizlenmiyor**: yazan bir
+/// ekran olmazsa `teacher_id` 5 tabloda NULL kalır ve K-1 çakışma uyarısı ölü doğar.
+#[tauri::command]
+pub fn list_teachers(state: State<'_, AppState>) -> AppResult<Vec<Teacher>> {
+    state.with_conn(repo::list_live::<Teacher>)
+}
+
+// ---------------------------------------------------------------------------
+// Faz 5A — gruplar
+// ---------------------------------------------------------------------------
+
+/// Gruplar ekranının tablosu. **Sırasız** döner (ADR-020): Türkçe sıralama ve sayfalama
+/// arayüzde. Arşivlenmiş gruplar da gelir, `archived` alanıyla işaretli.
+#[tauri::command]
+pub fn group_list(state: State<'_, AppState>, query: GroupQuery) -> AppResult<Vec<GroupRow>> {
+    state.with_conn(|conn| repo::schedule::group_rows(conn, &query))
+}
+
+/// Grup detayının tamamı tek çağrıda — `student_detail` ile aynı gerekçe.
+#[tauri::command]
+pub fn group_detail(
+    state: State<'_, AppState>,
+    group_id: i64,
+    today: Option<String>,
+) -> AppResult<GroupDetail> {
+    state.with_conn(|conn| repo::schedule::group_detail(conn, group_id, today.clone()))
+}
+
+/// Grup + haftalık program, tek transaction; ardından seanslar üretilir (R5.5).
+/// "Bugün" burada bind ediliyor — SQLite saati OKUNMAZ (§0).
+#[tauri::command]
+pub fn save_group(state: State<'_, AppState>, input: GroupInput) -> AppResult<i64> {
+    state.with_conn(|conn| repo::schedule::save_group(conn, &input, clock::today_local()))
+}
+
+#[tauri::command]
+pub fn archive_group(state: State<'_, AppState>, group_id: i64) -> AppResult<bool> {
+    state.with_conn(|conn| repo::archive::<StudyGroup>(conn, group_id))
+}
+
+#[tauri::command]
+pub fn restore_group(state: State<'_, AppState>, group_id: i64) -> AppResult<bool> {
+    state.with_conn(|conn| repo::restore::<StudyGroup>(conn, group_id))
+}
+
+/// Doluluk — kapasite aşımı onay diyaloğunun sayıları (PRD S2 / K-8).
+#[tauri::command]
+pub fn group_capacity(
+    state: State<'_, AppState>,
+    group_id: i64,
+    today: Option<String>,
+) -> AppResult<Capacity> {
+    state.with_conn(|conn| {
+        let day = today.clone().unwrap_or_else(clock::today_local_string);
+        repo::schedule::group_capacity(conn, group_id, &day)
+    })
+}
+
+/// Gruba öğrenci ekler. **Kapasite burada kontrol edilmez** — aşımı arayüz onaylatır
+/// (S2). Çakışan açık kayıt ise engellenir (K-22).
+#[tauri::command]
+pub fn add_group_member(
+    state: State<'_, AppState>,
+    group_id: i64,
+    student_id: i64,
+    start_on: Option<String>,
+) -> AppResult<i64> {
+    state.with_conn(|conn| {
+        let day = start_on.clone().unwrap_or_else(clock::today_local_string);
+        repo::schedule::add_group_member(conn, group_id, student_id, &day)
+    })
+}
+
+/// Gruptan çıkarma — kayıt silinmez, bitiş tarihi yazılır (R5.8).
+#[tauri::command]
+pub fn end_group_membership(
+    state: State<'_, AppState>,
+    enrollment_id: i64,
+    end_on: Option<String>,
+) -> AppResult<()> {
+    state.with_conn(|conn| {
+        let day = end_on.clone().unwrap_or_else(clock::today_local_string);
+        repo::schedule::end_group_membership(conn, enrollment_id, &day)
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Faz 5A — seans işlemleri
+// ---------------------------------------------------------------------------
+
+/// Çakışan derslerin listesi. **Uyarı içindir, engelleme değil** (K-1 / R3.11):
+/// kurs sahibi bilerek üst üste ders koyuyor olabilir. Boş liste "çakışma yok".
+#[tauri::command]
+pub fn session_conflicts(
+    state: State<'_, AppState>,
+    starts_at: String,
+    ends_at: String,
+    ignore_session_id: Option<i64>,
+) -> AppResult<Vec<Conflict>> {
+    state.with_conn(|conn| {
+        repo::schedule::detect_conflicts(conn, &starts_at, &ends_at, ignore_session_id)
+    })
+}
+
+#[tauri::command]
+pub fn cancel_session(
+    state: State<'_, AppState>,
+    session_id: i64,
+    reason: Option<String>,
+) -> AppResult<()> {
+    state.with_conn(|conn| repo::schedule::cancel_session(conn, session_id, reason.as_deref()))
+}
+
+/// Kapsam **çağırandan** gelir ve varsayılanı en dar olan (`only`) — kullanıcıya net
+/// sorulur, program onun yerine karar vermez.
+#[tauri::command]
+pub fn delete_sessions(
+    state: State<'_, AppState>,
+    session_id: i64,
+    scope: SessionScope,
+) -> AppResult<DeleteReport> {
+    state.with_conn(|conn| repo::schedule::delete_sessions(conn, session_id, scope))
+}
+
+#[tauri::command]
+pub fn reschedule_session(
+    state: State<'_, AppState>,
+    session_id: i64,
+    starts_at: String,
+    duration_min: i64,
+) -> AppResult<()> {
+    state.with_conn(|conn| {
+        repo::schedule::reschedule_session(conn, session_id, &starts_at, duration_min)
+    })
 }
 
 fn teacher_name(conn: &rusqlite::Connection) -> AppResult<String> {
