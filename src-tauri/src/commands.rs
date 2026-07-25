@@ -11,7 +11,8 @@ use serde::Serialize;
 use tauri::State;
 
 use crate::error::AppResult;
-use crate::model::{Setting, Student, StudentBalance, StudentDebt};
+use crate::model::{Guardian, Setting, Student, StudentBalance, StudentDebt, StudyGroup, Subject};
+use crate::repo::roster::{StudentDetail, StudentInput, StudentQuery, StudentRow};
 use crate::{db, repo, AppState};
 
 /// Faz 2 durum ekranının verisi — veritabanı bağlantısının çalıştığının kanıtı.
@@ -42,7 +43,10 @@ pub fn app_status(state: State<'_, AppState>) -> AppResult<AppStatus> {
             journal_mode: db::journal_mode(conn)?,
             foreign_keys: db::foreign_keys_enabled(conn)?,
             applied_migrations,
-            institution_name: repo::setting::value_or(conn, "institution_name", "Kurs")?,
+            // ADR-024: kurum adı `setting` tablosundan DEĞİL, derleme anında gömülen
+            // `config/kurum.json`'dan geliyor. `setting.institution_name` satırı
+            // migration mühürlü olduğu için duruyor ama okunmuyor.
+            institution_name: crate::brand::institution_name().to_string(),
             teacher_name: teacher_name(conn)?,
             student_count: repo::count_live::<Student>(conn)?,
             session_count: repo::count_live::<crate::model::Session>(conn)?,
@@ -79,6 +83,93 @@ pub fn student_balance(
 #[tauri::command]
 pub fn student_debts(state: State<'_, AppState>) -> AppResult<Vec<StudentDebt>> {
     state.with_conn(repo::views::student_debts)
+}
+
+// ---------------------------------------------------------------------------
+// Faz 4 — öğrenci ve veli
+// ---------------------------------------------------------------------------
+
+/// Öğrenciler ekranının tablosu. **Sırasız** döner (ADR-020): Türkçe sıralama ve
+/// sayfalama `src/lib/sortTr.ts` + `usePagedRows` içinde, arayüz tarafında.
+///
+/// Arşivlenmiş öğrenciler de gelir, `archived` alanıyla işaretli — hangi çipin kimi
+/// göstereceğine ekran karar veriyor (§1.23).
+#[tauri::command]
+pub fn student_list(state: State<'_, AppState>, query: StudentQuery) -> AppResult<Vec<StudentRow>> {
+    state.with_conn(|conn| repo::roster::student_rows(conn, &query))
+}
+
+/// Öğrenci detayının tamamı tek çağrıda — dört ayrı komut dört ayrı yükleniyor/hata
+/// durumu demekti ve ekranın hepsine aynı anda ihtiyacı var.
+#[tauri::command]
+pub fn student_detail(
+    state: State<'_, AppState>,
+    student_id: i64,
+    today: Option<String>,
+) -> AppResult<StudentDetail> {
+    state.with_conn(|conn| repo::roster::student_detail(conn, student_id, today.clone()))
+}
+
+/// Öğrenci + velileri, tek transaction. `input.id` doluysa güncelleme.
+#[tauri::command]
+pub fn save_student(state: State<'_, AppState>, input: StudentInput) -> AppResult<i64> {
+    state.with_conn(|conn| repo::roster::save_student(conn, &input))
+}
+
+/// "Sil" değil **"Arşivle"** (ADR-005). Geçmiş kayıtlar bozulmaz.
+#[tauri::command]
+pub fn archive_student(state: State<'_, AppState>, student_id: i64) -> AppResult<bool> {
+    state.with_conn(|conn| repo::roster::archive_student(conn, student_id))
+}
+
+/// Arşivden geri alma — onay diyaloğunun ardından gelen "Geri al".
+#[tauri::command]
+pub fn restore_student(state: State<'_, AppState>, student_id: i64) -> AppResult<bool> {
+    state.with_conn(|conn| repo::roster::restore_student(conn, student_id))
+}
+
+/// Aktif / Pasif. Arşivleme DEĞİL — pasif öğrenci listede görünmeye devam eder (§1.5).
+#[tauri::command]
+pub fn set_student_active(
+    state: State<'_, AppState>,
+    student_id: i64,
+    is_active: bool,
+) -> AppResult<()> {
+    state.with_conn(|conn| repo::roster::set_student_active(conn, student_id, is_active))
+}
+
+/// "Mevcut veliyi bul ve bağla" akışı — kardeşler aynı veliyi paylaşır (§1.7).
+#[tauri::command]
+pub fn search_guardians(state: State<'_, AppState>, query: String) -> AppResult<Vec<Guardian>> {
+    state.with_conn(|conn| repo::roster::search_guardians(conn, &query))
+}
+
+/// Not ekler. `notedOn` verilmezse yerel bugün — SQLite saati okunmaz (§0).
+#[tauri::command]
+pub fn add_student_note(
+    state: State<'_, AppState>,
+    student_id: i64,
+    body: String,
+    noted_on: Option<String>,
+) -> AppResult<i64> {
+    state.with_conn(|conn| repo::roster::add_note(conn, student_id, &body, noted_on.clone()))
+}
+
+#[tauri::command]
+pub fn archive_student_note(state: State<'_, AppState>, note_id: i64) -> AppResult<bool> {
+    state.with_conn(|conn| repo::roster::archive_note(conn, note_id))
+}
+
+/// Branş filtresinin kaynağı. Sırasız (ADR-020).
+#[tauri::command]
+pub fn list_subjects(state: State<'_, AppState>) -> AppResult<Vec<Subject>> {
+    state.with_conn(repo::list_live::<Subject>)
+}
+
+/// Grup filtresinin kaynağı. Sırasız (ADR-020).
+#[tauri::command]
+pub fn list_study_groups(state: State<'_, AppState>) -> AppResult<Vec<StudyGroup>> {
+    state.with_conn(repo::list_live::<StudyGroup>)
 }
 
 fn teacher_name(conn: &rusqlite::Connection) -> AppResult<String> {

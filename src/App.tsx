@@ -1,8 +1,10 @@
 import { lazy, Suspense } from 'react'
-import { resolveRoute, useRoute } from './lib/router'
+import { matchRoute, resolveRoute, useRoute } from './lib/router'
 import { NotFoundPage, PlaceholderPage } from './pages/PlaceholderPage'
+import { StudentDetailPage } from './pages/ogrenciler/StudentDetailPage'
+import { StudentsPage } from './pages/ogrenciler/StudentsPage'
 import { AppShell } from './shell/AppShell'
-import { DEV_ROUTES, PAGES } from './shell/routes'
+import { DEV_ROUTES, PAGES, STUDENTS_PATH } from './shell/routes'
 import { LoadingState, ToastProvider } from './ui'
 
 /**
@@ -33,6 +35,22 @@ export default function App() {
 function RoutedPage({ path }: { path: string }) {
   if (DevShowcase && path === DEV_ROUTES.showcase) return <DevShowcase />
   if (DevStatus && path === DEV_ROUTES.status) return <DevStatus />
+
+  // Sıra bağlayıcı: SABİT yollar parametreli yollardan ÖNCE. Ters sırada
+  // `/ogrenciler/yeni` gibi bir adres `:id = 'yeni'` olarak eşleşirdi (router.ts).
+  if (matchRoute(STUDENTS_PATH, path)) return <StudentsPage />
+
+  const student = matchRoute(`${STUDENTS_PATH}/:id`, path)
+  if (student) {
+    const id = Number(student.id)
+    // Sayı olmayan bir id "sayfa bulunamadı"dır; `NaN` ile sorgu açmayız.
+    if (Number.isSafeInteger(id) && id > 0) {
+      // `key`: farklı bir öğrenciye geçince bileşen sıfırdan kurulur — sekme seçimi ve
+      // form durumu önceki öğrenciden taşınmasın.
+      return <StudentDetailPage key={id} studentId={id} />
+    }
+    return <NotFoundPage />
+  }
 
   const match = resolveRoute(PAGES, path)
   if (!match) return <NotFoundPage />

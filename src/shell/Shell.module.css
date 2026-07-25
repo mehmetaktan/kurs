@@ -165,6 +165,42 @@
   text-wrap: pretty;
 }
 
+/* Sonuç grubu başlığı: "Öğrenciler" / "Gruplar" / "Dersler" (E20). */
+.searchGroupTitle {
+  padding-bottom: var(--space-1-5);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-caps);
+}
+
+.searchResult {
+  display: flex;
+  gap: var(--space-3);
+  align-items: baseline;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--space-2) var(--space-2-5);
+  font: inherit;
+  color: var(--color-text-primary);
+  text-align: left;
+  cursor: pointer;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-6);
+}
+
+.searchResult:hover {
+  background: var(--color-surface-hover);
+}
+
+.searchResultMeta {
+  font-size: var(--font-size-meta);
+  color: var(--color-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Placeholder sayfası — hangi fazda dolacağını söyleyen kart. */
 .placeholder {
   display: flex;

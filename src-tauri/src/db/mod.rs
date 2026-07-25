@@ -11,7 +11,14 @@ use crate::error::{AppError, AppResult};
 /// `tauri.conf.json` içindeki `identifier` ile AYNI olmak zorunda.
 /// Tauri `app_data_dir()`'i `data_dir()/identifier` olarak hesaplar; seed binary'si
 /// Tauri runtime'ı olmadan aynı klasörü bulmak için bu sabiti kullanır.
-pub const APP_IDENTIFIER: &str = "com.aydinozelders.kurstakip";
+///
+/// Eşitliği artık bir yorum değil **test** koruyor: `tests/identity.rs`. İkisi ayrışırsa
+/// seed binary'si ile uygulama farklı `%APPDATA%` klasörlerine yazar — sessiz ve teşhisi
+/// zor bir arıza (ADR-024).
+///
+/// Ürün kimliği Aktansoft'undur ve kurum adı taşımaz (ADR-024): kurum adı
+/// `config/kurum.json` içinde, `brand` modülünde.
+pub const APP_IDENTIFIER: &str = "com.aktansoft.kurstakip";
 
 pub const DB_FILE_NAME: &str = "kurs.db";
 

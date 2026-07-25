@@ -10,7 +10,7 @@
 | 2 | İskelet & CI — Tauri projesi, şema, migration, seed, Windows build | `/faz-02` | ✅ Tamamlandı — CI doğrulaması GitHub'a push'a bağlı |
 | 3 | Tasarım sistemi — token'lar, komponentler, uygulama kabuğu | `/faz-03` | ✅ Tamamlandı — ADR-022 migration'ı da bu fazda kapandı |
 | 3.5 | **Faz 3 denetimi** — ADR uyumu, marka kararı (ADR-024) | `/yonetici` | ✅ Tamamlandı |
-| 4 | Öğrenci & Veli — CRUD, arama, detay sayfası | `/faz-04` | ⬜ — **§0'da marka geçişi** (ADR-024) modül kodundan önce |
+| 4 | Öğrenci & Veli — CRUD, arama, detay sayfası | `/faz-04` | ✅ Tamamlandı — §0 marka geçişi (ADR-024) uygulandı, ADR-025 eklendi |
 | 5 | Ders & Takvim — branş, grup, seans, seri ders | `/faz-05` | ⬜ |
 | 6 | Yoklama & Telafi | `/faz-06` | ⬜ |
 | 7 | Fiyatlandırma & Ders Paketi | `/faz-07` | ⬜ |

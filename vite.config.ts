@@ -2,12 +2,18 @@
 // bilmediği bir alan olarak reddeder.
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
+import pkg from './package.json' with { type: 'json' }
 
 // Tauri, geliştirmede sabit bir port bekler — port meşgulse sessizce başka porta
 // kaymak yerine hata vermeli, yoksa pencere boş açılır.
 export default defineConfig({
   plugins: [react()],
   clearScreen: false,
+  // Sürüm numarasının TEK kaynağı package.json (ADR-024 §e). Kenar çubuğunun alt
+  // bilgisi bunu `src/config/brand.ts` üzerinden okuyor; elle yazılmıyor.
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   server: {
     port: 1420,
     strictPort: true,

@@ -10,6 +10,7 @@ pub mod academic;
 pub mod finance;
 pub mod ops;
 pub mod people;
+pub mod roster;
 pub mod setting;
 pub mod views;
 
@@ -106,4 +107,27 @@ pub fn restore<T: Record>(conn: &Connection, id: i64) -> AppResult<bool> {
 /// `insert` fonksiyonlarının ortak sonu: eklenen satırın id'si.
 pub(crate) fn last_id(conn: &Connection) -> i64 {
     conn.last_insert_rowid()
+}
+
+/// Birden fazla tabloya yazan işlemler tek transaction'da koşar — yarım kayıt kalmaz.
+///
+/// Öğrenci + veli kaydı bunun tipik örneği: veli bağlanamazsa öğrenci de yazılmamalı,
+/// yoksa kullanıcı "kaydettim" diyor ama velisiz bir öğrenci oluşuyor ve telefon kolonu
+/// boş kalıyor. `Connection`'ı `&mut` olarak ödünç alamıyoruz (`AppState` `&Connection`
+/// veriyor), o yüzden `seed::load`'daki açık BEGIN/COMMIT kalıbı burada bir kez yazıldı.
+pub fn in_transaction<T>(
+    conn: &Connection,
+    f: impl FnOnce(&Connection) -> AppResult<T>,
+) -> AppResult<T> {
+    conn.execute_batch("BEGIN")?;
+    match f(conn) {
+        Ok(value) => {
+            conn.execute_batch("COMMIT")?;
+            Ok(value)
+        }
+        Err(err) => {
+            let _ = conn.execute_batch("ROLLBACK");
+            Err(err)
+        }
+    }
 }

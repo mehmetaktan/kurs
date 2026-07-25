@@ -5,6 +5,7 @@
 //!
 //! Frontend SQL yazmaz. Para mantığı Rust'ta, saf ve test edilebilir fonksiyonlarda.
 
+pub mod brand;
 pub mod clock;
 pub mod commands;
 pub mod db;
@@ -121,6 +122,18 @@ pub fn run() {
             commands::search_students,
             commands::student_balance,
             commands::student_debts,
+            // Faz 4 — öğrenci ve veli
+            commands::student_list,
+            commands::student_detail,
+            commands::save_student,
+            commands::archive_student,
+            commands::restore_student,
+            commands::set_student_active,
+            commands::search_guardians,
+            commands::add_student_note,
+            commands::archive_student_note,
+            commands::list_subjects,
+            commands::list_study_groups,
         ])
         .run(tauri::generate_context!())
         .expect("Tauri uygulaması başlatılamadı");

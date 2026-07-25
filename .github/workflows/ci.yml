@@ -80,10 +80,14 @@ jobs:
           workspaces: src-tauri
           key: ${{ matrix.os }}
 
+      # Sürüm `.nvmrc`'den — `node-version: 22` DEĞİL. Gerekçe: kayan bir "22" her
+      # yayında farklı bir npm getiriyor ve npm 11, npm 10'un ürettiği lock dosyasının
+      # ağacını yeniden hesaplayıp reddediyor (`npm ci` EUSAGE, picomatch çakışması).
+      # `rust-toolchain.toml` ile aynı disiplin: yerel ve CI aynı dosyayı okur.
       - name: Node kurulumu
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
 
       - run: npm ci
@@ -146,10 +150,14 @@ jobs:
           workspaces: src-tauri
           key: build-${{ matrix.os }}
 
+      # Sürüm `.nvmrc`'den — `node-version: 22` DEĞİL. Gerekçe: kayan bir "22" her
+      # yayında farklı bir npm getiriyor ve npm 11, npm 10'un ürettiği lock dosyasının
+      # ağacını yeniden hesaplayıp reddediyor (`npm ci` EUSAGE, picomatch çakışması).
+      # `rust-toolchain.toml` ile aynı disiplin: yerel ve CI aynı dosyayı okur.
       - name: Node kurulumu
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
 
       - run: npm ci

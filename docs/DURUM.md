@@ -1,190 +1,211 @@
 # Durum
 
-**Son güncelleme:** 2026-07-25 · Faz 3 sonrası yönetici denetimi
-**Mevcut faz:** Faz 3 ✅ tamamlandı, denetimi ✅ yapıldı → sırada **Faz 4**
-**Sonraki oturumda ilk iş:** önce **sen push edeceksin**, sonra `/faz-04`
+**Son güncelleme:** 2026-07-25 · Faz 4 sonu
+**Mevcut faz:** Faz 4 ✅ tamamlandı → sırada **Faz 5** (Ders, grup, takvim)
+**Sonraki oturumda ilk iş:** **push et ve CI'ya bak** (aşağıda), sonra `/faz-05`
 
-> Kod tarafında açık iş yok. `npm run check` Faz 3 sonunda tam yeşildi:
-> **197 test** (89 Rust + 108 TypeScript) + typecheck + ESLint + clippy + rustfmt +
-> paket denetimi. Bu oturumda koda dokunulmadı.
+> Öğrenci ve veli modülü çalışıyor: liste, arama, filtre, form, detay, notlar, arşivleme.
+> Marka geçişi (ADR-024) uygulandı ve teste bağlandı.
 >
-> Bekleyen iki şey var ve ikisi de **Faz 4 kodundan önce** sırada:
-> **(1)** depo hâlâ GitHub'a gitmedi — üç fazlık kod Windows'ta hiç koşmadı,
-> **(2)** marka geçişi (ADR-024) — uygulama kimliği veritabanının klasörünü belirliyor.
+> **CI ilk kez çalıştı ve kırmızı geldi.** Nedeni bulundu — Windows'la ilgisi yok,
+> `npm ci` sürüm çakışmasıydı. Düzeltmesi bu oturumda yapıldı ama **doğrulanmadı**:
+> fark ancak push sonrası görülür. Faz 5'in ilk işi budur.
 
 ---
 
-## Sıradaki beş adım
+## Faz 4 (Öğrenci & Veli) — tamamlandı
 
-| # | Ne | Kim | Neden bu sırada |
-|---|---|---|---|
-| 1 | `gh repo create … --push` | **sen** | Üç fazlık doğrulanmamış kod birikti |
-| 2 | CI #1 yeşil mi? | sen bakarsın | Mevcut kodun Windows **temel çizgisi** |
-| 3 | `/faz-04` **§0**: marka + kimlik (ADR-024) | kod oturumu | Kimlik, gerçek veri oluşmadan değişmeli |
-| 4 | CI #2 yeşil mi? | kod oturumu | Rename bir şey kırdı mı |
-| 5 | Faz 4 asıl işi: öğrenci ve veli modülü | kod oturumu | — |
+`npm run check` yeşil: **265 test** (144 TypeScript + 121 Rust) + typecheck + ESLint +
+clippy + rustfmt + paket denetimi.
 
-Push'un marka geçişinden önce olmasının sebebi: iki ayrı CI çalışması **iki ayrı veri
-noktası** verir. Rename sonrası bir şey kırılırsa nedeninin rename mi yoksa eski kod mu
-olduğu belli olur; tek koşuda bu ayrım kaybolur.
+### §0 — Marka geçişi (ADR-024)
 
-```
-gh auth login          # interaktif — sohbete `! gh auth login` yazarak da çalıştırabilirsin
-gh repo create kurs-takip --private --source=. --remote=origin --push
-```
-
-Push ile workflow kendiliğinden başlar; ilk çalışma ~15–25 dk (Rust derlemesi önbelleksiz).
-
-> **Windows makine yok — hiçbir aşamada gerekmiyor** (ADR-008). `.msi` **indirilmez,
-> kurulmaz.** Actions sayfasında bakılacak tek şey: `Test · windows-latest` yeşil mi
-> (asıl kanıt bu — testler gerçek migration'ları uyguluyor) ve Artifacts kutusunda sıfır
-> olmayan boyutta bir `.msi` listeleniyor mu. `.msi`'yi gerçekten kurup açmak Faz 5
-> sonunda **kurs sahibinin bilgisayarında** olacak.
-
----
-
-## Bu oturumda yapılanlar (yönetici — kod yazılmadı)
-
-### ADR uyum denetimi: 7/7 temiz
-
-Frontend'de SQL yok · `f64`/`parseFloat`/`toFixed` ile para yok · saklanan bakiye sütunu
-yok · `DELETE FROM` yok · platforma özel API ya da elle kurulmuş dosya yolu yok · fiyat
-snapshot'ı yerinde · `tr.ts` disiplini yerinde.
-
-### Verilen karar: ADR-024 — marka
-
-Uygulamanın adı ve geliştiricisi **Aktansoft**; kurum adı müşteriye ait bir değişken.
-İki kimlik ayrıldı:
-
-| | Değer | Nerede yaşıyor |
-|---|---|---|
-| **Ürün** (Aktansoft'un, sabit) | Ürün adı `Kurs Takip` · kimlik `com.aktansoft.kurstakip` · yayıncı `Aktansoft` | `tauri.conf.json` · `Cargo.toml` · `db/mod.rs` |
-| **Kurum** (müşterinin, değişken) | `Aydın Özel Ders` | `config/kurum.json` — derleme anında TS'e ve Rust'a gömülür |
-
-**Kabul edilen bedel:** kurs sahibi kurum adını kendi değiştiremez; değişiklik yeniden
-derleme ve yeni bir `.msi` gerektirir. Buna bağlı olarak `setting.institution_name`
-satırı **ölü veriye** döndü — migration mühürlü olduğu için silinemiyor, yerinde duruyor
-ama kod onu sorgulamıyor. `EKRANLAR.md E18`'den (Tanımlar → Genel) kurum adı çıkarıldı.
-
-**Neden Faz 10 değil de şimdi:** `identifier` veritabanının `%APPDATA%` klasörünü
-belirliyor. Bugün iki satır; kurs sahibinin makinesinde gerçek veri oluştuktan sonra bir
-veri taşıma işi ve bir destek görüşmesi.
-
-### Denetimde çıkan üç kusur — hepsi `faz-04.md §0`'a yazıldı
-
-| # | Kusur | Neden önemli |
-|---|---|---|
-| 1 | `SidebarNav.tsx:26` kurum adını `tr.ts`'ten okuyor | `app_status` zaten `institutionName` döndürüyor ama **yalnızca dev sayfası** kullanıyor. Aynı değer iki yerde: er geç ikiye ayrılır |
-| 2 | `db/mod.rs:14` `APP_IDENTIFIER` ile `tauri.conf.json > identifier` eşitliğini **hiçbir test korumuyor** | Sadece bir yorum satırı var. Ayrışırlarsa seed binary'si ile uygulama farklı klasörlere yazar; kullanıcı verisinin kaybolduğunu sanır. Kimlik değişikliği bu riski **canlı** hâle getiriyor |
-| 3 | `tr.app.version` elle yazılmış `'Sürüm 1.0'`, gerçek sürüm `0.1.0` | Elle yazılan sürüm kayar ve kimse fark etmez |
-
-Ayrıca `tr.app.brand` bugün `'DersTakip'` — hiçbir yerde karşılığı olmayan ayrı bir ad.
-`'Kurs Takip'` oluyor.
-
-### Değişen belgeler
-
-`KARARLAR.md` (ADR-024) · `CLAUDE.md` (Marka bölümü · klasör yapısı · DB yolu) ·
-`EKRANLAR.md` (E18 · kenar çubuğu iki kimlik notu) · `VERI-MODELI.md`
-(`setting.institution_name` "okunmuyor" işaretlendi, 3 yerde) · `PRD.md` (R4.11'in
-kaynağı) · `YOL-HARITASI.md` · `.claude/commands/faz-04.md` (**§0** eklendi).
-
----
-
-## Faz 3'ten devreden bilgi
-
-<details>
-<summary>Faz 3 ne bıraktı (özet — ayrıntı commit 667541f'de)</summary>
+Öğrenci modülü kodundan **önce** yapıldı; gerekçesi ADR-024'te: `identifier`
+veritabanının `%APPDATA%` klasörünü belirliyor ve kurs sahibinin makinesinde gerçek veri
+oluştuktan sonra maliyeti bir veri taşıma işi olurdu.
 
 | Ne | Nerede |
 |---|---|
-| Token'lar | `src/styles/tokens.css` — TEK kaynak |
-| Komponentler | `src/ui/` — 28 komponent |
-| Kabuk | `src/shell/` — `AppShell` · `SidebarNav` (7 öğe) · `PageHeader` · `StatusBar` · `routes.ts` |
-| Yönlendirme | `src/lib/router.ts` — hash tabanlı, kütüphanesiz (**ADR-023**) |
-| Türkçe altyapı | `src/lib/format.ts` — tarih, saat, telefon, arama normalleştirmesi |
-| Showcase | `/dev/komponentler` · `/dev/durum` — üretim paketine girmiyor, `verify:bundle` kapısıyla korunuyor |
+| `com.aydinozelders.kurstakip` → `com.aktansoft.kurstakip` | `tauri.conf.json` + `db/mod.rs > APP_IDENTIFIER` |
+| Yayıncı `Aktansoft` | `Cargo.toml > authors` + `bundle.publisher` |
+| Kurum adı derleme zamanı config'e taşındı | `config/kurum.json` → `src/config/brand.ts` (TS) + `src-tauri/src/brand.rs` (`include_str!`) |
+| `tr.app.institution` **silindi**, `brand` `'DersTakip'` → `'Kurs Takip'` | `src/i18n/tr.ts` |
+| `app_status.institution_name` artık `setting`'ten değil config'ten | `commands.rs` |
+| Sürüm tek kaynağa bağlandı | `package.json` → Vite `define` → `APP_VERSION` → kenar çubuğu |
 
-**ADR-022 devir borcu kapandı.** `002_ledger_effective_parity.sql`, DDL `VERI-MODELI.md
-§1.23` ile birebir. Dört test + negatif kontrol (migration çıkarılınca üçü düşüyor).
-Değişmez `assert_ledger_invariant` seed verisinin tamamı üzerinde de koşuyor.
+Ürün adı `Kurs Takip`, pencere başlığı ve CI artefakt yolları **değişmedi**.
 
-**Windows'a dönük iki bilinçli karar:** `DatePicker`/`TimePicker` yerel
-`<input type="date">` kullanmıyor (WebView2'de biçim bölge ayarına bağlı, `mm/dd/yyyy`
-riski); gün/ay adları `toLocaleDateString('tr')` ile değil `tr.ts`'teki sabit listeden
-geliyor (eksik ICU riski).
+`setting.institution_name` satırı `001_initial.sql`'de **duruyor ama okunmuyor** —
+migration mühürlü. `crud.rs`'teki test silinmedi, notla işaretlendi: migration'ın
+başlangıç verisini yazdığını hâlâ kanıtlıyor.
 
-**TS ↔ Rust parite disiplini:** `formatKurus`/`parseKurus`, `phoneDigits`/`phone_digits`,
-`normalizeTr`/`search_name` aynı vektörlerle iki tarafta sınanıyor. Tarih/saat
-biçimleyicisinin Rust karşılığı **yok**; Faz 8 makbuzunda yazılınca ortak listeye taşınacak.
+**Yeni mühür: `src-tauri/tests/identity.rs`.** `APP_IDENTIFIER` ↔ `tauri.conf.json >
+identifier` eşitliğini artık bir yorum değil test koruyor; ürün adı, yayıncı ve
+`Cargo.toml` ↔ `tauri.conf.json` sürüm eşitliği de aynı dosyada. **Negatif kontrolü
+yapıldı:** sabit geçici olarak bozuldu, iki test düştü, geri alındı. TS ayağı
+`src/config/brand.test.ts`'te — `package.json` ↔ `tauri.conf.json` sürümü, kurum adının
+`tr.ts`'te bulunmadığı ve elle yazılmış sürüm numarası olmadığı.
 
-</details>
+`npm run seed -- --reset` yeni klasörde sıfırdan kurdu:
+`…/com.aktansoft.kurstakip/kurs.db`, `migration: [1, 2]`, 12 öğrenci.
 
-### Bilinçli ertelenenler
+### Modül
 
-| Ne | Neden |
+| Ne | Nerede |
 |---|---|
-| `CalendarGrid` `SessionBlock` `NowIndicator` `ClosedDayOverlay` `DropTarget` `Legend` `OverlayEmptyState` `Toolbar` | **Faz 5.** Hepsi takvim ekranının veri modeline bağlı; boşlukta yazılırsa ekran gelince yeniden yazılır. `TASARIM-SISTEMI §6`'da ⏭ ile işaretli |
-| `NoteList` / `NoteComposer` | **Faz 4** — aynı gerekçe, öğrenci notlarıyla birlikte |
-| Global arama sonuçları (`Ctrl K`) | Panel ve kısayol bağlandı, **sonuç kaynağı yok**: öğrenci/grup/ders listeleri Faz 4–5'te geliyor |
-| Sayfa içerikleri | Placeholder — her biri hangi fazda dolacağını söylüyor (`routes.ts`) |
-| `npm audit` 12 "high" | Hiçbiri projenin kendi bağımlılığı değil — eslint/vite geliştirme araç zincirinin bilinen uyarıları, teslim edilen pakete girmiyorlar. Sürüm kilitleme disiplinini faz ortasında bozmamak için dokunulmadı; ayrı bir turda ele alınabilir |
+| Ekran projeksiyonu — bakiye, kalan ders, veli, sayaçlar | `src-tauri/src/repo/roster.rs` |
+| 11 yeni komut | `commands.rs` — liste, detay, kaydet, arşivle/geri al, aktif/pasif, veli ara, not ekle/sil, branş/grup listesi |
+| Liste ekranı | `src/pages/ogrenciler/StudentsPage.tsx` |
+| Detay ekranı | `StudentDetailPage.tsx` — özet şerit + 4 sekme |
+| Form + veli yönetimi | `StudentForm.tsx` + `GuardianFields.tsx` |
+| Çip / sıralama / sayfalama | `filters.ts` (testli) |
+| Alan doğrulaması | `validate.ts` (testli) — Rust ikizi `roster::validate_student` |
 
-### Doğrulanmayan tek şey
+Öğrenci ve velisi **tek transaction'da** yazılıyor: veli doğrulaması düşerse öğrenci de
+yazılmıyor. Aksi hâlde velisiz bir öğrenci oluşup listedeki telefon kolonu sessizce boş
+kalırdı; testi var (`gecersiz_veli_ogrenciyi_de_yazdirmaz`).
 
-**Yapışkan tablo başlığı (`stickyHeader`).** Showcase'te gerçek bir kaydırma kabı içinde
-tam sınanmadı. Asıl testi **Faz 4'ün öğrenci listesi** olacak — orada yapışkan başlık
-ekranın gereği.
+Ekranlarda gerçek veri doğrulandı: Türkçe sıralama doğru (Ahmet · Ayşe · Burak · Elif ·
+Işıl · İrem · Mehmet…), çip sayıları tutuyor, alt çubuk `Toplam alacak 5.215,00 ₺`
+gösteriyor. Bu rakam görünen 6 borçlunun toplamından **300 ₺ fazla** — arşivlenmiş
+borçlu da sayılıyor (§1.23), yani kural ekranda kanıtlandı.
+
+### Verilen karar: ADR-025 — liste ekranlarının iş bölümü
+
+Arama ve veri filtresi **Rust'ta**, çipler + **Türkçe sıralama ve sayfalama arayüzde**.
+
+Faz 4'ün kabul listesi sayfalamanın Rust tarafında test edilmesini istiyordu; **ADR-020
+buna izin vermiyor.** Türkçe sıralama SQL'de yapılamadığı için sıralanmamış bir listeyi
+`LIMIT/OFFSET` ile bölmek yanlış sayfa üretirdi. İkisi aynı katmanda durmak zorunda ve o
+katman arayüz. Sayfalama tam olarak uygulandı, testi `filters.test.ts`'te. Bedeli
+bilinerek kabul edildi: liste tümüyle belleğe alınıyor — iki haneli öğrenci sayısında
+ölçülemez.
+
+Kural Faz 5 (Gruplar), Faz 8 (Borçlular) ve Faz 9 (Raporlar) için de bağlayıcı.
+
+Bir yan bulgu ADR'ye yazıldı: **veli adı araması SQL'de kurulamıyor.** `guardian`
+tablosunda `search_name` sütunu yok (§1.6) ve SQLite'ın `lower()`'ı Türkçe harfleri hiç
+küçültmüyor — `'Ç'` `'Ç'` kalıyor. Süzme `text::search_name`'in kendisiyle Rust içinde
+yapılıyor; sütun eklemek migration ister ve §1.8'in "iki haneli tabloda arama indeksinin
+kazancı yok" gerekçesi burada da geçerli.
+
+### Bu oturumda alınan iki küçük karar
+
+- **Listenin son kolonu "Tahsilat al" değil "Aç"** (arşiv görünümünde "Geri al", E2).
+  Tahsilat Faz 8'de; çalışmayan bir düğme koymaktansa bugün gerçekten çalışan eylem
+  kondu. **Faz 8 bu kolonu devralır.**
+- **Detay ekranında `PageHeader` yok.** Tasarımda (EKRANLAR §4) ekran doğrudan
+  `← Öğrenciler` ile başlıyor ve ad kimlik bloğunda duruyor. Kabuğun başlığı da konsaydı
+  ad iki kez, 100px arayla yazıyordu — ilk ekran görüntüsünde görüldü, düzeltildi.
+
+### Yan kazanç: `Ctrl K` artık gerçek sonuç veriyor
+
+Faz 3'ten devreden `tr.search.notReady` placeholder'ı kalktı. Panel öğrenci sonuçlarını
+`student_list` üzerinden gösteriyor, `Enter` ilk sonucu açıyor. Gruplar ve Dersler
+grupları Faz 5'te aynı listeye eklenecek — sonuç listesi şimdiden gruplu.
 
 ---
 
-## Açık işler
+## CI — ilk çalışma kırmızı, nedeni bulundu, düzeltmesi doğrulanmadı
 
-### 1. GitHub'a push — senin elinde, Faz 4'ten önce
+**CI #1 (Faz 3 commit'i) düştü.** Windows'la ilgisi yok: `Test · macos-latest` işi
+`npm ci` adımında öldü ve Windows işi hiç başlamadı.
 
-Yukarıdaki "Sıradaki beş adım" tablosunda. Faz 2'nin kabul kriteri 2 ve 3 buna bağlı,
-hâlâ ⏳.
+```
+npm error `npm ci` can only install packages when your package.json and
+package-lock.json are in sync.
+npm error Invalid: lock file's picomatch@2.3.2 does not satisfy picomatch@4.0.5
+```
 
-### 2. Faz 6'ya devredilen açık karar — ders hakkı tarafı
+**Teşhis.** `npm ci` yerelde **geçiyor** (npm 10.9.4, Node 22.21.1). Fark CI'nın
+`node-version: 22` yazmasıydı: kayan bir aralık, her Node yayınında farklı bir npm
+getiriyor ve npm 11, npm 10'un ürettiği lock ağacını yeniden hesaplayıp reddediyor.
+Yani lock dosyası bozuk değil — **Node sürümü hiçbir yerde sabitlenmemişti.**
 
-`ux_pkgusage_att` `(attendance_id, delta)` üzerinde tekil olduğu için düzeltme zincirinin
-üçüncü adımında ikinci `delta = −1` yazılamıyor. **Defter tarafı ADR-022 ile kapandı**;
-bu, ders hakkı sayacının ayrı sorunu (ADR-015: iki ayrı sayaç). Seçenekler `faz-06.md §3b`'de.
+**Düzeltme.** `.nvmrc` (`22.21.1`) eklendi; CI'daki iki `setup-node` adımı artık
+`node-version-file: .nvmrc` okuyor. `rust-toolchain.toml` ile aynı disiplin: yerel ve CI
+aynı dosyayı okur. `CLAUDE.md > Stack` bunu yazıyor.
+
+**Doğrulanmadı.** Düzeltmenin işe yaradığı ancak push sonrası görülür.
+
+### Sonraki oturumun ilk işi
+
+```
+git push
+```
+
+Sonra Actions sayfasında bakılacak tek şey: `Test · windows-latest` yeşil mi. **Windows
+makine gerekmiyor, `.msi` indirilmez, kurulmaz** (ADR-008); asıl kanıt testlerin gerçek
+migration'ları Windows'ta uygulaması. Artefakt kutusunda sıfır olmayan boyutta bir `.msi`
+listelenmesi yeterli.
+
+Hâlâ kırmızıysa **Faz 5'e başlamadan** çözülmeli.
+
+---
+
+## Doğrulanmayan / bilinçli ertelenenler
+
+| Ne | Neden |
+|---|---|
+| **Onay diyaloglarının ekran görüntüsü** (`Arşivle`, `Kaydetmeden kapat`) | macOS erişilebilirlik izni oturum ortasında düştü, `osascript` tıklaması `-25211` vermeye başladı. İkisi de Faz 3'te görsel olarak doğrulanmış `ConfirmDialog` üzerine kurulu ve mantıkları testli — ama **gözle görülmediler.** Sistem Ayarları → Gizlilik → Erişilebilirlik'te Terminal'e izin verilirse sonraki oturumda alınabilir |
+| `NoteList` / `NoteComposer` ayrı komponent olarak | Notlar `StudentDetailPage` içinde kuruldu. Tek ekranda kullanılan bir desen için `src/ui/`'ya komponent çıkarmak erken soyutlama olurdu; ikinci bir ekran not gösterirse çıkarılır |
+| Öğrenci detayında `Kayıtlar` sekmesi | `faz-04.md §3` sekmeleri `Bilgiler / Dersler / Ödemeler / Notlar` olarak sabitledi. `enrollment` ekranı Faz 5'te grup modülüyle geliyor |
+| `npm audit` 12 "high" | Hiçbiri Faz 3–4'te eklenenlerden değil; eslint/vite geliştirme araç zincirinin bilinen uyarıları, teslim edilen pakete girmiyorlar |
+
+**Yapışkan tablo başlığı artık doğrulandı** — Faz 3'ten devreden tek belirsizlik buydu.
+Öğrenciler tablosu kabuğun `.content` kabında kaydırılıyor ve başlık yerinde kalıyor.
+Tabloya kendi `overflow-x` sarmalayıcısı **konmadı**: konsaydı o sarmalayıcı kaydırma kabı
+olur ve yapışkanlık kırılırdı (gerekçe `Students.module.css` başında, kolon genişliği
+hesabıyla birlikte).
 
 ---
 
 ## Açık sorular — cevabını senden bekliyorum
 
-`docs/PRD.md` §9'da gerekçeleriyle. **S1 (ADR-021) ve S8 cevaplandı.** Hiçbiri Faz 4'ü
-bloklamıyor; her birinin varsayılan varsayımı var.
+`docs/PRD.md` §9'da gerekçeleriyle. **S1 (ADR-021) ve S8 cevaplandı.**
+**S2 ve S4 Faz 5'i doğrudan etkiliyor** — sıradaki oturumda karşına çıkacak.
 
 | # | Soru | Hangi faz |
 |---|---|---|
-| S2 | Grup kapasitesi aşımı engellensin mi, uyarı mı? | Faz 5 |
-| S4 | Standart ders süresi kaç dakika? | Faz 5 |
+| **S2** | Grup kapasitesi aşımı engellensin mi, uyarı mı? | **Faz 5** |
+| **S4** | Standart ders süresi kaç dakika? | **Faz 5** |
 | S3 | Paketlerin son kullanma tarihi var mı? | Faz 7 |
 | S6 | Dönem ortasında ayrılanın kalan paket parası iade mi, alacak mı? | Faz 7 |
 | S5 | Makbuz numarası otomatik mi artsın? | Faz 8 |
 | S7 | "Devam oranı" hangi pencerede hesaplansın? | Faz 9 |
-| S9 | Bilgisayarındaki Windows sürümü ne? | **Faz 10 öncesi** |
+| S9 | Bilgisayarındaki Windows sürümü ne? | Faz 10 öncesi |
 | S10 | Kod imzalama sertifikası alınacak mı? | Faz 10 |
+
+> S7 için Faz 4 bir **varsayım** kullandı: devam oranı tüm işlenen dersler üzerinden
+> hesaplanıyor ve kartın altında "Tüm işlenen dersler" yazıyor — sayı belirsiz kalmasın
+> diye. Faz 9 pencereyi değiştirirse tek bir yer değişir
+> (`StudentDetailPage > SummaryStrip`).
 
 ---
 
-## Bir sonraki oturumun en büyük riski
+## Faz 6'ya devreden açık karar
 
-**Windows'ta hiç çalıştırılmamış üç fazlık kod birikti.** Faz 2 şemayı, Faz 3 arayüzün
-tamamını yazdı; ikisi de yalnızca macOS'ta koştu. Faz 4 gerçek ekranları bunun üstüne
-kuracak. Bir Windows sorunu (satır sonu, dosya yolu, import büyük/küçük harfi, WebView2
-davranışı) bugün bir migration ve bir tasarım sistemi katmanının altında; Faz 4'ten sonra
-bir de öğrenci modülünün altında olacak. **Push edilmezse hata ucuz olmaktan çıkar.**
+`ux_pkgusage_att` `(attendance_id, delta)` üzerinde tekil olduğu için düzeltme zincirinin
+üçüncü adımında ikinci `delta = −1` yazılamıyor. **Defter tarafı ADR-022 ile kapandı**;
+bu, ders hakkı sayacının ayrı sorunu (ADR-015: iki ayrı sayaç). Seçenekler
+`faz-06.md §3b`'de.
 
-Bu riskin bu oturumda **büyüyen** bir yanı var: marka geçişi `identifier`'ı değiştiriyor,
-yani `%APPDATA%` klasörünü. Bu tam olarak Windows'a özgü bir yol davranışı ve macOS'ta
-sınanamaz. Push edilmemiş bir depoda bu değişiklik **hiç doğrulanmadan** Faz 4'ün altına
-gömülür.
+---
 
-İkinci risk daha küçük ama gerçek: kolon genişlikleri ve kaydırma çubuğu **Segoe UI**
-altında doğrulanmadı. Tasarımın 13px yoğun tablosu Windows'ta bir tık geniş çizilir;
-`Öğrenciler` tablosunun 8 kolonu taşarsa bu Faz 4'te görülür — ama yalnızca CI ekran
-görüntüsü ya da kurs sahibinin bilgisayarı varsa. Şimdilik yalnızca `min-width: 1280px`
-güvencesi var.
+## Faz 5'in en büyük riski
+
+**Windows'ta hâlâ tek bir satır çalıştırılmadı — ve artık dört fazlık kod var.**
+
+Risk Faz 4'te değişmedi; **büyüdü ve bir kere gerçekleşti.** CI #1'in düşmesi, hiç
+çalıştırılmamış bir doğrulama zincirinin sessizce bozuk kalabildiğinin kanıtı. Üstelik o
+arıza `npm ci`'deydi — yani asıl aradığımız Windows sorunlarına **daha sıra bile
+gelmedi**: satır sonu, dosya yolu, import büyük/küçük harfi, WebView2 davranışı ve Segoe
+UI altında kolon genişlikleri hâlâ denenmemiş durumda.
+
+Faz 5 takvimi getiriyor: sürükle-bırak, ızgara yerleşimi ve saat hesapları — WebView2
+farklarına en duyarlı ekran. Push edilmeden başlanırsa bir Windows hatası bugün bir
+migration, bir tasarım sistemi ve bir öğrenci modülünün altında; Faz 5'ten sonra bir de
+takvimin altında olacak.
+
+`docs/YOL-HARITASI.md` zaten "Faz 5 sonu: kurs sahibine build gönderilir" diyor. O tarihe
+yeşil bir CI olmadan varılamaz.

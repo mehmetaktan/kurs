@@ -1,0 +1,384 @@
+/*
+ * Öğrenci modülünün yerleşimi. Renk, tipografi ve aralık **yalnızca token'lardan**
+ * (`src/styles/tokens.css`) — ham değer yazılmaz, ekran tasarım sisteminden sapamaz.
+ */
+
+/* ── Liste üstü: çipler + branş/grup seçicileri ───────────────────────────── */
+
+.toolbar {
+  display: flex;
+  gap: var(--space-4);
+  align-items: flex-end;
+  justify-content: space-between;
+  padding-bottom: var(--space-4);
+}
+
+.selects {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-end;
+}
+
+/* Seçiciler tabloda taşma yapmasın; tasarımın dar filtre kutusu. */
+.select {
+  min-width: 150px;
+}
+
+/*
+ * Tablonun ETRAFINA kaydırma kabı KONMUYOR — bilerek.
+ *
+ * Yapışkan başlık en yakın kaydırılan atasına yapışır. Tabloyu `overflow-x: auto` bir
+ * sarmalayıcıya koyarsak o sarmalayıcı kaydırma kabı olur (CSS'te `overflow-x: auto` +
+ * `overflow-y: visible` mümkün değil, ikincisi de `auto`'ya döner), sarmalayıcının
+ * yüksekliği sınırsız olduğu için hiç dikey kaydırılmaz ve **başlık hiç yapışmaz.**
+ * Kaydıran kap kabuğun `.content`'i; tablo doğrudan onun içinde duruyor.
+ *
+ * Yatay taşma riski hesaplandı: 1280px minimum genişlikte kenar çubuğu (216) ve içerik
+ * dolgusu (2×28) düşünce 1008px kalıyor; kolon toplamı + boşluklar 986px. Windows'ta
+ * Segoe UI biraz genişse kolonlar sabit px olduğu için metin `…` ile kısalır, yerleşim
+ * bozulmaz (`Table.module.css > .cell`).
+ */
+
+/* ── Hücre içi ───────────────────────────────────────────────────────────── */
+
+.nameCell {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+  min-width: 0;
+}
+
+.name {
+  overflow: hidden;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nameMeta {
+  flex: none;
+  font-size: var(--font-size-meta);
+  color: var(--color-text-muted);
+}
+
+/* Telefon ve sayı kolonları hizalı okunsun (TASARIM-SISTEMI §2). */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.debt {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-danger);
+}
+
+.credit {
+  color: var(--color-text-secondary);
+}
+
+.low {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-warn);
+}
+
+.empty {
+  color: var(--color-text-empty);
+}
+
+/* ── Çekmece özeti ───────────────────────────────────────────────────────── */
+
+.drawerIdentity {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-border-faint);
+}
+
+.drawerName {
+  font-size: var(--font-size-title-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.drawerSection {
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--color-border-faint);
+}
+
+.drawerLabel {
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-caps);
+}
+
+.drawerValue {
+  padding-top: var(--space-1-5);
+  color: var(--color-text-secondary);
+}
+
+.drawerGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  padding: var(--space-4) 0;
+}
+
+.drawerBox {
+  padding: var(--space-3);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-faint);
+  border-radius: var(--radius-10);
+}
+
+.drawerBoxValue {
+  padding-top: var(--space-1);
+  font-size: var(--font-size-title-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+/* ── Form ────────────────────────────────────────────────────────────────── */
+
+.formSection {
+  padding-bottom: var(--space-5);
+}
+
+.formGrid {
+  display: grid;
+  gap: var(--space-3);
+}
+
+/* Yan yana duran iki dar alan (sınıf + doğum tarihi). */
+.formPair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+.guardianCard {
+  padding: var(--space-3-5);
+  margin-bottom: var(--space-3);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-faint);
+  border-radius: var(--radius-10);
+}
+
+.guardianHead {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: var(--space-2);
+}
+
+.guardianTitle {
+  font-size: var(--font-size-meta);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-tertiary);
+}
+
+.guardianActions {
+  display: flex;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+}
+
+.formActions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+.formError {
+  padding: var(--space-2-5) var(--space-3);
+  margin-bottom: var(--space-3);
+  font-size: var(--font-size-meta);
+  color: var(--color-danger);
+  background: var(--color-danger-bg);
+  border-radius: var(--radius-7);
+}
+
+/* Veli arama sonuçları — modal içinde. */
+.guardianResults {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1-5);
+  max-height: 280px;
+  padding-top: var(--space-3);
+  overflow-y: auto;
+}
+
+.guardianResult {
+  display: block;
+  width: 100%;
+  padding: var(--space-2-5) var(--space-3);
+  font: inherit;
+  color: var(--color-text-primary);
+  text-align: left;
+  cursor: pointer;
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-7);
+}
+
+.guardianResult:hover {
+  background: var(--color-surface-hover);
+}
+
+.guardianResultMeta {
+  padding-top: var(--space-0-5);
+  font-size: var(--font-size-meta);
+  color: var(--color-text-tertiary);
+}
+
+.hint {
+  font-size: var(--font-size-meta);
+  color: var(--color-text-muted);
+}
+
+/* ── Detay ekranı ────────────────────────────────────────────────────────── */
+
+.backRow {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  padding-bottom: var(--space-3);
+}
+
+.backLink {
+  padding: 0;
+  font: inherit;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  background: none;
+  border: 0;
+}
+
+.backLink:hover {
+  color: var(--color-text-primary);
+}
+
+.identity {
+  display: flex;
+  gap: var(--space-4);
+  align-items: center;
+  padding-bottom: var(--space-5);
+}
+
+.identityMain {
+  flex: 1;
+  min-width: 0;
+}
+
+.identityName {
+  display: flex;
+  gap: var(--space-2-5);
+  align-items: center;
+  font-size: var(--font-size-title-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  letter-spacing: var(--letter-spacing-title);
+}
+
+.identityMeta {
+  padding-top: var(--space-1);
+  font-size: var(--font-size-meta);
+  color: var(--color-text-tertiary);
+}
+
+.identityActions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.tabPanel {
+  padding-top: var(--space-5);
+}
+
+.infoGrid {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: var(--space-3) var(--space-4);
+  align-items: baseline;
+}
+
+.infoLabel {
+  font-size: var(--font-size-meta);
+  color: var(--color-text-muted);
+}
+
+.infoValue {
+  color: var(--color-text-secondary);
+}
+
+.guardianRow {
+  display: flex;
+  gap: var(--space-2-5);
+  align-items: baseline;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border-faint);
+}
+
+.guardianRow:last-child {
+  border-bottom: 0;
+}
+
+.guardianRowName {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+/* ── Notlar ──────────────────────────────────────────────────────────────── */
+
+.noteComposer {
+  padding: var(--space-3-5);
+  margin-bottom: var(--space-4);
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-9);
+}
+
+.noteComposerFoot {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+  padding-top: var(--space-2-5);
+}
+
+.noteList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2-5);
+}
+
+.noteItem {
+  padding: var(--space-3);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-faint);
+  border-radius: var(--radius-9);
+}
+
+.noteHead {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+  justify-content: space-between;
+  padding-bottom: var(--space-1-5);
+  font-size: var(--font-size-meta);
+  color: var(--color-text-muted);
+}
+
+.noteBody {
+  color: var(--color-text-secondary);
+  white-space: pre-wrap;
+}
+
+/* Uzun düz metin: satır sonları dengeli bölünsün. */
+.prose {
+  line-height: var(--line-height-prose);
+  text-wrap: pretty;
+}

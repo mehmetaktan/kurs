@@ -15,6 +15,12 @@ export interface PageDef {
   phase: number
 }
 
+/**
+ * Öğrenci modülünün kökü. Yol iki yerde yazılmasın diye sabit: `App.tsx` rotayı
+ * buradan eşliyor, ekranlar detaya buradan gidiyor.
+ */
+export const STUDENTS_PATH = '/ogrenciler'
+
 export const PAGES: readonly PageDef[] = [
   { path: '/', title: tr.pages.today.title, subtitle: tr.pages.today.subtitle, phase: 4 },
   {
@@ -24,7 +30,7 @@ export const PAGES: readonly PageDef[] = [
     phase: 5,
   },
   {
-    path: '/ogrenciler',
+    path: STUDENTS_PATH,
     title: tr.pages.students.title,
     subtitle: tr.pages.students.subtitle,
     phase: 4,
@@ -64,7 +70,7 @@ export interface NavItem {
 export const NAV_ITEMS: readonly NavItem[] = [
   { path: '/', label: tr.nav.today },
   { path: '/takvim', label: tr.nav.calendar },
-  { path: '/ogrenciler', label: tr.nav.students },
+  { path: STUDENTS_PATH, label: tr.nav.students },
   { path: '/gruplar', label: tr.nav.groups },
   { path: '/odemeler', label: tr.nav.payments, badge: 'debtors' },
   { path: '/tanimlar', label: tr.nav.definitions },

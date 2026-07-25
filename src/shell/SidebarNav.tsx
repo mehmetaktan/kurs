@@ -1,3 +1,4 @@
+import { APP_VERSION, institution } from '../config/brand'
 import { tr } from '../i18n/tr'
 import { Badge } from '../ui'
 import { isNavActive, NAV_ITEMS } from './routes'
@@ -21,9 +22,14 @@ export interface SidebarNavProps {
 export function SidebarNav({ currentPath, debtorCount }: SidebarNavProps) {
   return (
     <aside className={styles.sidebar}>
+      {/*
+        İki ayrı kimlik (ADR-024): 1. satır ÜRÜN adı — Aktansoft'un, sabit, `tr.ts`'ten.
+        2. satır KURUM adı — müşterinin, `config/kurum.json`'dan. Aynı değeri iki yerde
+        tutmak (tr.ts + setting tablosu) er geç ikiye ayrılıyordu.
+      */}
       <div className={styles.brand}>
         <div className={styles.brandName}>{tr.app.brand}</div>
-        <div className={styles.brandInstitution}>{tr.app.institution}</div>
+        <div className={styles.brandInstitution}>{institution.name}</div>
       </div>
 
       <nav className={styles.nav} aria-label={tr.nav.label}>
@@ -54,7 +60,12 @@ export function SidebarNav({ currentPath, debtorCount }: SidebarNavProps) {
         })}
       </nav>
 
-      <div className={styles.footer}>{tr.app.version}</div>
+      {/* Sürüm numarası package.json'dan; elle yazılan sürüm kayar (ADR-024 §e). */}
+      <div className={styles.footer}>
+        {tr.app.versionPrefix} {APP_VERSION}
+        {tr.units.separator}
+        {tr.app.versionLocal}
+      </div>
     </aside>
   )
 }

@@ -46,10 +46,15 @@ Kurs sahibi tek başına, tek bilgisayarda kullanıyor. Hem birebir hem grup der
 
 Tauri 2 + React + TypeScript + Vite + SQLite (rusqlite, `bundled`)
 
-Sürümler kilitli: Rust `rust-toolchain.toml`'da, Tauri CLI `package.json`'da caret'siz.
-CI aynı dosyaları okur — yerelde çalışan sürüm CI'da da çalışır.
+Sürümler kilitli: Rust `rust-toolchain.toml`'da, Node `.nvmrc`'de, Tauri CLI
+`package.json`'da caret'siz. CI aynı dosyaları okur — yerelde çalışan sürüm CI'da da
+çalışır.
 
-## Klasör yapısı (Faz 3)
+> Node **tam sürümle** sabitlenir (`22.21.1`), `22` gibi kayan bir aralıkla değil: her
+> Node yayını farklı bir npm getiriyor ve npm 11, npm 10'un ürettiği `package-lock.json`
+> ağacını yeniden hesaplayıp `npm ci`'de reddediyor. CI #1 tam bu yüzden düştü.
+
+## Klasör yapısı (Faz 4)
 
 ```
 kurs/
@@ -57,12 +62,13 @@ kurs/
 ├── scripts/verify-bundle.mjs  üretim paketinde /dev sayfası kalmadığını doğrular
 ├── config/kurum.json          müşteriye özel değerler — teslim öncesi düzenlenir (ADR-024)
 ├── src/                       React arayüzü
-│   ├── config/brand.ts        kurum.json'un tipli sarmalayıcısı
+│   ├── config/brand.ts        kurum.json'un tipli sarmalayıcısı + APP_VERSION
 │   ├── i18n/tr.ts             BÜTÜN Türkçe metinler (ADR-007) — kurum adı BURADA DEĞİL
 │   ├── styles/                tokens.css (TEK kaynak) · base.css · density.css
 │   ├── ui/                    komponent kütüphanesi — ekranlar buradan alır
-│   ├── shell/                 AppShell · SidebarNav · PageHeader · routes.ts
-│   ├── pages/                 ekranlar (Faz 3'te placeholder)
+│   ├── shell/                 AppShell · SidebarNav · PageHeader · GlobalSearch · routes.ts
+│   ├── pages/
+│   │   └── ogrenciler/        Faz 4: liste · detay · form · veli · filters · validate
 │   ├── dev/                   /dev/komponentler · /dev/durum — ÜRETİME GİRMEZ
 │   ├── test/setup.ts          vitest + jsdom temizliği
 │   └── lib/                   api.ts · format.ts (kuruş, tarih, telefon) ·
@@ -73,19 +79,35 @@ kurs/
     ├── src/
     │   ├── lib.rs             AppState + Tauri kurulumu
     │   ├── commands.rs        #[tauri::command] — İNCE katman
+    │   ├── brand.rs           kurum.json derleme anında gömülü (ADR-024)
     │   ├── db/                bağlantı, pragma, migration + checksum
-    │   ├── repo/              iş mantığı: setting · people · academic · finance · views · ops
+    │   ├── repo/              setting · people · roster · academic · finance · views · ops
     │   ├── model.rs           tablo satır tipleri
     │   ├── money.rs           kuruş biçimleme (ADR-003)
     │   ├── text.rs            Türkçe küçültme, search_name (K9)
     │   ├── clock.rs           yerel tarih — SQLite saati OKUNMAZ (§0)
     │   ├── error.rs           tek hata tipi + Türkçe mesajlar (PRD §8)
     │   └── seed.rs            demo verisi — yalnızca `seed` özelliğiyle
-    └── tests/                 crud · seals · views · seed_data
+    └── tests/                 crud · seals · views · roster · identity · seed_data
 ```
 
 Repository katmanı `search_name` ve `phone_digits`'i **kendisi üretir**; çağıran boş
 bırakır. `ledger_entry`'nin `update`/`archive` fonksiyonu **yoktur** — append-only (K5).
+
+`repo/people.rs` tabloların CRUD'u, `repo/roster.rs` **ekranın istediği birleşik satır**
+(bakiye, kalan ders, veli, işlenen ders). İkisi ayrı durur ki tablo katmanı ekrana
+bağlanmasın.
+
+### Arama, sıralama ve sayfalama nerede
+
+Aynı listenin üç işi üç ayrı yerde ve bu **bilinçli**:
+
+| İş | Nerede | Neden |
+|---|---|---|
+| Arama, branş/grup filtresi | **Rust** (`repo::roster`) | `search_name` sütunu orada; `İ/ı` yazma anında çözülmüş (K9) |
+| Çipler | Arayüz | Sayılarını göstermek için zaten tüm satırlar elde |
+| Sıralama | **Arayüz** (`sortTr.ts`) | ADR-020: SQLite'ta `localeCompare('tr')` yok |
+| Sayfalama | **Arayüz** (`filters.ts`) | Sıralanmamış listeyi sayfalamak yanlış sayfa üretir |
 
 ## Değişmez kurallar
 

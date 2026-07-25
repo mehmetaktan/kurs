@@ -2,7 +2,7 @@
 name = "kurs-takip"
 version = "0.1.0"
 description = "Kurs Takip — öğrenci, ders ve tahsilat takibi"
-authors = ["Aydın Özel Ders"]
+authors = ["Aktansoft"]
 edition = "2021"
 # rust-toolchain.toml ile aynı sürüm ailesi; CI de aynı dosyayı okur.
 rust-version = "1.97"

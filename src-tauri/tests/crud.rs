@@ -209,9 +209,16 @@ fn cakismayan_araliklarla_gruba_geri_donulebilir() {
     );
 }
 
+/// Migration'ın başlangıç verisini yazdığını doğrular — `setting` tablosu kurs sahibinin
+/// makinesinde seed olmadan da dolu gelmek zorunda.
 #[test]
 fn ayarlar_baslangic_verisinden_okunur() {
     let conn = conn();
+    // ⚠️ `institution_name` artık OKUNMUYOR (ADR-024): kurum adı derleme anında
+    // `config/kurum.json`'dan geliyor (`brand::institution_name`). Satır `001_initial.sql`
+    // mühürlü olduğu için yerinde duruyor; bu iddia da onun için silinmedi — migration'ın
+    // başlangıç verisini yazdığını hâlâ kanıtlıyor. Uygulama kodunda bu anahtarı
+    // sorgulayan hiçbir yer YOK.
     assert_eq!(
         repo::setting::value(&conn, "institution_name")
             .unwrap()

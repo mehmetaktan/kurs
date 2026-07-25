@@ -388,3 +388,59 @@ zorunda; sonrasında maliyeti bir veri taşıma işi ve bir destek görüşmesid
 Faz 4'ün §0'ıdır, Faz 10'a bırakılmaz.
 
 **Durum.** Kabul edildi.
+
+---
+
+## ADR-025 — Liste ekranlarının iş bölümü: arama Rust'ta, sıralama ve sayfalama arayüzde
+
+**Karar.** Her liste ekranı (Öğrenciler, Gruplar, Borçlular, Raporlar…) aynı dört parçaya
+bölünür ve parçalar **her zaman aynı katmanda** durur:
+
+| İş | Katman | Nerede |
+|---|---|---|
+| Arama, veri filtresi (branş, grup, tarih aralığı) | **Rust** | `repo::<modül>` |
+| Ekranın istediği birleşik satır (bakiye, kalan ders, veli, sayaçlar) | **Rust** | `repo/roster.rs` gibi ayrı bir *projeksiyon* modülü |
+| Çipler ve sayıları | Arayüz | `pages/<modül>/filters.ts` |
+| **Sıralama ve sayfalama** | **Arayüz** | `lib/sortTr.ts` + `pages/<modül>/filters.ts` |
+
+**Gerekçe — sıralama ve sayfalama neden ayrılamaz.** ADR-020 Türkçe metin kolonlarında
+SQL `ORDER BY` yasağı koyuyor: SQLite'ta `localeCompare('tr')` karşılığı yok, `ORDER BY
+full_name` yazılırsa Ç/Ö/Ş/Ü/İ ile başlayan her öğrenci Z'den sonraya düşer. Buradan
+doğrudan çıkan sonuç şu: **sıralanmamış bir listeyi sayfalamak yanlış sayfa üretir.**
+`LIMIT/OFFSET`'i Rust'a koymak, kullanıcının 2. sayfada göreceği isimlerin ekranda
+uygulanan sıralamayla hiçbir ilgisi olmaması demekti. İkisi aynı katmanda durmak zorunda
+ve o katman ADR-020 gereği arayüz.
+
+Bedeli kabul edildi: liste **tümüyle** belleğe alınıyor. Tek kullanıcılı bir özel ders
+kursunda öğrenci sayısı iki, en kötü üç hanelidir; ölçülebilir bir maliyeti yok. Sayı
+binleri bulursa bu karar yeniden açılır — o zaman doğru çözüm sayfalamayı Rust'a taşımak
+değil, sıralama anahtarını (`sort_key`) yazma anında üretip sütuna yazmaktır; `search_name`
+(K9) için zaten kurulu olan kalıp budur.
+
+**Gerekçe — arama neden Rust'ta.** `search_name` sütunu orada ve `İ/ı` sorunu **yazma
+anında** çözülmüş oluyor (K9). Aramayı arayüze almak, aynı normalleştirmenin ikinci bir
+kopyasını doğururdu; `format.ts` ↔ `text.rs` paritesi zaten üç fonksiyonla taşınıyor,
+dördüncüsünü eklemenin karşılığı yok.
+
+Tek istisna **veli adı**: `guardian` tablosunda `search_name` sütunu yok (§1.6) ve
+SQLite'ın `lower()`'ı Türkçe harfleri hiç küçültmüyor. Bu yüzden veli adı eşleşmesi
+SQL'de değil, `text::search_name`'in **kendisiyle** Rust içinde süzülüyor. Sütun eklemek
+bir migration ister ve §1.8'in "iki haneli bir tabloda arama indeksinin kazancı yok"
+gerekçesi burada da geçerli.
+
+**Gerekçe — projeksiyon modülü neden ayrı.** `repo/people.rs` tabloların CRUD'u;
+`repo/roster.rs` ekranın istediği satır. İkisi aynı dosyada dursaydı `insert_student`'ın
+yanında bir bakiye sorgusu belirir ve tablo katmanı ekrana bağlanırdı. Ayrım, Faz 5'te
+`Gruplar`, Faz 8'de `Borçlular` için de aynı biçimde kurulur.
+
+**Sonuç.** Testler de bu bölünmeyi izler ve **çakışmaz**: arama, filtre, arşivleme ve
+veli ilişkisi `src-tauri/tests/roster.rs`'te; Türkçe sıralama ve sayfalama
+`src/pages/ogrenciler/filters.test.ts`'te. Faz 4'ün kabul listesi "sayfalama Rust'ta
+test edilsin" diyordu; ADR-020 buna izin vermediği için testi karşı tarafa taşındı.
+
+Form doğrulaması bu bölünmenin dışındadır ve **bilerek iki yerdedir**: arayüzdeki kopya
+anında geri bildirim için, Rust'taki son söz. İkisi aynı `code` uzayını kullanır
+(`student.fullName`, `guardians.0.phone`), böylece Rust'tan dönen hata jenerik bir kutuya
+değil doğru girdinin altına yerleşir.
+
+**Durum.** Kabul edildi.

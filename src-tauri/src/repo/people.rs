@@ -149,7 +149,14 @@ pub fn update_student(conn: &Connection, id: i64, s: &Student) -> AppResult<()> 
     Ok(())
 }
 
-/// Ad veya veli telefonuyla arama — tasarımın arama kutusunun karşılığı.
+/// Öğrenci adı, **veli adı**, öğrenci telefonu ya da veli telefonuyla arama —
+/// tasarımın arama kutusunun karşılığı (`Ctrl K` ve Öğrenciler ekranı).
+///
+/// Ad tarafı `search_name` üzerinden: `İ/ı` sorunu yazma anında çözülmüş oluyor (K9),
+/// sorgu tarafı düz `LIKE` ile deterministik çalışıyor. Veli **adı** Faz 4'te eklendi;
+/// öncesinde yalnızca veli telefonu aranıyordu ve "Hatice Yılmaz" yazan kullanıcı
+/// çocuklarını bulamıyordu.
+///
 /// Sonuç **sırasızdır**; sıralama `sortTr.ts` içinde yapılır (ADR-020).
 pub fn search_students(conn: &Connection, query: &str) -> AppResult<Vec<Student>> {
     let name_needle = format!("%{}%", text::search_name(query));
@@ -161,6 +168,21 @@ pub fn search_students(conn: &Connection, query: &str) -> AppResult<Vec<Student>
         format!("%{digits}%")
     };
 
+    // Veli ADI dalı SQL'de kurulamaz: `guardian` tablosunda `search_name` sütunu YOK
+    // (§1.6) ve SQLite'ın `lower()`'ı Türkçe harfleri hiç küçültmüyor — `'Ç'` `'Ç'`
+    // kalıyor, `'I'` `'i'` oluyor. Aynı gerekçe §1.8'de arama indeksi eklenmemesinin de
+    // gerekçesiydi: iki haneli bir tabloda kazanç yok, her yazmaya maliyet var. Bu yüzden
+    // veli adları Rust'ta, `text::search_name`'in KENDİSİYLE süzülüyor — normalleştirme
+    // tek bir yerde kalıyor ve ayrışamıyor.
+    let guardian_hits = student_ids_by_guardian_name(conn, query)?;
+    let guardian_branch = if guardian_hits.is_empty() {
+        String::new()
+    } else {
+        // Değerler veritabanından gelen `i64` id'ler — kullanıcı girdisi SQL'e girmiyor.
+        let ids: Vec<String> = guardian_hits.iter().map(i64::to_string).collect();
+        format!(" OR s.id IN ({})", ids.join(", "))
+    };
+
     let mut stmt = conn.prepare(&format!(
         "SELECT {cols} FROM student s \
          WHERE s.deleted_at IS NULL \
@@ -169,7 +191,9 @@ pub fn search_students(conn: &Connection, query: &str) -> AppResult<Vec<Student>
               OR EXISTS ( SELECT 1 FROM student_guardian sg \
                           JOIN guardian g ON g.id = sg.guardian_id AND g.deleted_at IS NULL \
                           WHERE sg.student_id = s.id AND sg.deleted_at IS NULL \
-                            AND g.phone_digits LIKE ?2 ) )",
+                            AND g.phone_digits LIKE ?2 ) \
+              {guardian_branch} ) \
+         ORDER BY s.id",
         cols = Student::COLUMNS
     ))?;
     let rows = stmt.query_map(params![name_needle, phone_needle], |row| {
@@ -180,6 +204,33 @@ pub fn search_students(conn: &Connection, query: &str) -> AppResult<Vec<Student>
         out.push(row?);
     }
     Ok(out)
+}
+
+/// Adı aranan metni içeren velilerin bağlı olduğu öğrenci id'leri.
+/// Süzme Rust'ta: gerekçesi `search_students` içinde.
+fn student_ids_by_guardian_name(conn: &Connection, query: &str) -> AppResult<Vec<i64>> {
+    let needle = text::search_name(query);
+    if needle.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut stmt = conn.prepare(
+        "SELECT sg.student_id, g.full_name FROM student_guardian sg \
+         JOIN guardian g ON g.id = sg.guardian_id AND g.deleted_at IS NULL \
+         WHERE sg.deleted_at IS NULL",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+    })?;
+
+    let mut ids = Vec::new();
+    for row in rows {
+        let (student_id, full_name) = row?;
+        if text::search_name(&full_name).contains(&needle) && !ids.contains(&student_id) {
+            ids.push(student_id);
+        }
+    }
+    Ok(ids)
 }
 
 // ---------------------------------------------------------------------------
