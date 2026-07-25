@@ -1,8 +1,30 @@
 ---
-description: Faz 5 — Branş, grup, seans, takvim ve seri ders oluşturma
+description: Faz 5A — Branş, tatil, grup ve seans üretim motoru (tamamlandı)
 ---
 
-# Faz 5 — Ders & Takvim
+# Faz 5A — Ders & Takvim, birinci parça
+
+> ## ✅ Bu faz 2026-07-26'da tamamlandı — bu dosya artık kaydı
+>
+> **Faz 5 üçe bölündü**, gerekçesi aşağıda. Sıradaki komutlar:
+>
+> | Komut | Kapsam |
+> |---|---|
+> | ~~`/faz-05`~~ | **5A** ✅ — seans motoru, Tanımlar (branş + tatil), Gruplar liste/detay |
+> | `/faz-05b` | **5B** — Ders ekle/düzenle, şablondan oluştur, seans işlemleri, Bugün ekranı |
+> | `/faz-05c` | **5C** — Takvim (önce "hazır kütüphane mi" ADR'si) + **ilk Windows testi** |
+>
+> **Neden üçe.** Tek oturuma sığmıyordu: 6 ekran, takvim komponent kütüphanesi, üretim
+> motoru ve §7'nin test listesi. Kullanıcı takvimin en sona kalmasını ve oraya gelince
+> hazır kütüphanelerin değerlendirilmesini istedi — ızgara dışındaki her şey mevcut
+> komponentlerle kurulabildiği için bölünme ikiye değil üçe çıktı ve takvim kararı
+> beklerken iş durmadı.
+>
+> `docs/YOL-HARITASI.md`'nin "Faz 5 sonu: kurs sahibine build gönderilir" kilometre taşı
+> **5C sonuna** kaydı.
+>
+> Aşağıdaki §4 (takvim + Bugün) ve §5 (seans işlemleri arayüzü) **5B ve 5C'ye devretti**;
+> bu dosyada olduğu gibi duruyorlar çünkü fazın özgün kapsamını gösteriyorlar.
 
 Önce oku: `CLAUDE.md`, `docs/DURUM.md`, `docs/VERI-MODELI.md`, `docs/EKRANLAR.md`,
 `docs/KARARLAR.md` (**ADR-012**, **ADR-017**, **ADR-025**, **ADR-026**, **ADR-027**).

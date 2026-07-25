@@ -61,7 +61,7 @@ kilitli: `.npmrc`.** CI aynı dosyaları okur — yerelde çalışan sürüm CI'
 > Aynı sınıftan bir tuzak Node'da da var, o yüzden sürüm oraya da tam yazılır: her Node
 > yayını farklı bir npm getirir.
 
-## Klasör yapısı (Faz 4)
+## Klasör yapısı (Faz 5A)
 
 ```
 kurs/
@@ -75,11 +75,14 @@ kurs/
 │   ├── ui/                    komponent kütüphanesi — ekranlar buradan alır
 │   ├── shell/                 AppShell · SidebarNav · PageHeader · GlobalSearch · routes.ts
 │   ├── pages/
-│   │   └── ogrenciler/        Faz 4: liste · detay · form · veli · filters · validate
+│   │   ├── ogrenciler/        Faz 4: liste · detay · form · veli · filters · validate
+│   │   ├── gruplar/           Faz 5A: liste · detay · form · filters
+│   │   └── tanimlar/          Faz 5A: branşlar · tatil günleri · renk paleti
 │   ├── dev/                   /dev/komponentler · /dev/durum — ÜRETİME GİRMEZ
 │   ├── test/setup.ts          vitest + jsdom temizliği
 │   └── lib/                   api.ts · format.ts (kuruş, tarih, telefon) ·
-│                              sortTr.ts (ADR-020) · router.ts (ADR-023)
+│                              sortTr.ts (ADR-020) · paginate.ts (ADR-025) ·
+│                              router.ts (ADR-023)
 └── src-tauri/
     ├── migrations/            şemanın tek kaynağı — sıralı, checksum'lı, elle düzeltilmez
     ├── capabilities/          Tauri 2 yetki dosyaları
@@ -88,14 +91,16 @@ kurs/
     │   ├── commands.rs        #[tauri::command] — İNCE katman
     │   ├── brand.rs           kurum.json derleme anında gömülü (ADR-024)
     │   ├── db/                bağlantı, pragma, migration + checksum
-    │   ├── repo/              setting · people · roster · academic · finance · views · ops
+    │   ├── repo/              setting · people · roster · academic · schedule ·
+    │   │                      finance · views · ops
     │   ├── model.rs           tablo satır tipleri
     │   ├── money.rs           kuruş biçimleme (ADR-003)
     │   ├── text.rs            Türkçe küçültme, search_name (K9)
     │   ├── clock.rs           yerel tarih — SQLite saati OKUNMAZ (§0)
     │   ├── error.rs           tek hata tipi + Türkçe mesajlar (PRD §8)
     │   └── seed.rs            demo verisi — yalnızca `seed` özelliğiyle
-    └── tests/                 crud · seals · views · roster · identity · seed_data
+    └── tests/                 crud · seals · views · roster · schedule · identity ·
+                                seed_data
 ```
 
 Repository katmanı `search_name` ve `phone_digits`'i **kendisi üretir**; çağıran boş
@@ -103,7 +108,12 @@ bırakır. `ledger_entry`'nin `update`/`archive` fonksiyonu **yoktur** — appen
 
 `repo/people.rs` tabloların CRUD'u, `repo/roster.rs` **ekranın istediği birleşik satır**
 (bakiye, kalan ders, veli, işlenen ders). İkisi ayrı durur ki tablo katmanı ekrana
-bağlanmasın.
+bağlanmasın. Aynı ayrım akademik tarafta da var: `repo/academic.rs` tablolar,
+**`repo/schedule.rs`** grup projeksiyonu + seans üretim motoru.
+
+`repo/ops.rs > on_startup(today)` her açılışta çalışır ve eksik seansları üretir
+(`VERI-MODELI §1.14`). Hata uygulamayı açmayı engellemez. Faz 7/8'in vade tahakkuku da
+oraya girecek — "zamanın geçmesiyle kendiliğinden doğması gereken kayıtlar" tek yerde.
 
 ### Arama, sıralama ve sayfalama nerede
 
@@ -111,10 +121,13 @@ Aynı listenin üç işi üç ayrı yerde ve bu **bilinçli**:
 
 | İş | Nerede | Neden |
 |---|---|---|
-| Arama, branş/grup filtresi | **Rust** (`repo::roster`) | `search_name` sütunu orada; `İ/ı` yazma anında çözülmüş (K9) |
-| Çipler | Arayüz | Sayılarını göstermek için zaten tüm satırlar elde |
-| Sıralama | **Arayüz** (`sortTr.ts`) | ADR-020: SQLite'ta `localeCompare('tr')` yok |
-| Sayfalama | **Arayüz** (`filters.ts`) | Sıralanmamış listeyi sayfalamak yanlış sayfa üretir |
+| Arama, branş/grup filtresi | **Rust** (`repo::roster` · `repo::schedule`) | `search_name` sütunu orada; `İ/ı` yazma anında çözülmüş (K9) |
+| Çipler | Arayüz (`pages/<modül>/filters.ts`) | Sayılarını göstermek için zaten tüm satırlar elde |
+| Sıralama | **Arayüz** (`lib/sortTr.ts` + modülün `filters.ts`'i) | ADR-020: SQLite'ta `localeCompare('tr')` yok |
+| Sayfalama | **Arayüz** (`lib/paginate.ts` — ortak) | Sıralanmamış listeyi sayfalamak yanlış sayfa üretir |
+
+Sayfalama ortak bir dosyada çünkü ADR-025 **bütün** liste ekranları için bağlayıcı;
+çipler ve sıralama modülde kalır, onlar ekranın kendi verisine bağlı.
 
 ## Değişmez kurallar
 

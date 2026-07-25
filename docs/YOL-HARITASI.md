@@ -13,7 +13,9 @@
 | 4 | Öğrenci & Veli — CRUD, arama, detay sayfası | `/faz-04` | ✅ Tamamlandı — §0 marka geçişi (ADR-024) uygulandı, ADR-025 eklendi |
 | 4.4 | **Faz 4 denetimi** — 6 boyut, karşıt doğrulamalı; ADR-026 (özet rakamlar) | `/yonetici` | ✅ Tamamlandı |
 | 4.5 | **Faz 4 artıkları** — veli araması · bakiye altyazısı · toplam alacak · telefon maskesi · K-14 | `/faz-04b` | ✅ Tamamlandı (beşi de; 288 test) |
-| 5 | Ders & Takvim — branş, grup, seans, seri ders | `/faz-05` | ⬜ — ADR-025 bağlayıcı, komutta yazılı |
+| 5A | Ders & Takvim — branş, tatil, grup, **seans üretim motoru** | `/faz-05` | ✅ Tamamlandı (342 test); CI ilk kez yeşil |
+| 5B | Ders ekle/düzenle, seans işlemleri, **Bugün ekranı** | `/faz-05b` | ⬜ |
+| 5C | **Takvim** — önce "hazır kütüphane mi" ADR'si + **ilk Windows testi** | `/faz-05c` | ⬜ |
 | 6 | Yoklama & Telafi | `/faz-06` | ⬜ |
 | 7 | Fiyatlandırma & Ders Paketi | `/faz-07` | ⬜ |
 | 8 | Tahsilat & Makbuz | `/faz-08` | ⬜ |
@@ -23,13 +25,15 @@
 ## Bağımlılıklar
 
 ```
-1 ──> 2 ──> 3 ──> 4 ──> 5 ──> 6
-                        │
-                        └────> 7 ──> 8 ──> 9 ──> 10
+1 ──> 2 ──> 3 ──> 4 ──> 5A ──> 5B ──> 5C ──> 6
+                         │
+                         └──────────────────> 7 ──> 8 ──> 9 ──> 10
 ```
 
 - **Faz 3, Faz 2'ye bağlı**: komponentler gerçek veriyle bağlanabilmeli.
-- **Faz 7, Faz 5'e bağlı**: paket mantığı seans olmadan test edilemez.
+- **Faz 7, Faz 5A'ya bağlı**: paket mantığı seans olmadan test edilemez — ama seansları
+  **motor** üretiyor, takvim değil. 5A bittiğine göre Faz 7 teknik olarak 5B/5C'yi
+  beklemiyor; sıra yine de bozulmuyor çünkü yoklama (Faz 6) Bugün ekranından giriliyor.
 - **Faz 9, Faz 6 + 8'e bağlı**: dashboard hem yoklama hem tahsilat verisini gösterir.
 
 ## Kritik kilometre taşları
@@ -37,7 +41,8 @@
 | Ne zaman | Ne |
 |---|---|
 | Faz 2 sonu | GitHub Actions'tan indirilebilir bir Windows `.msi` **ve** `windows-latest` üzerinde yeşil Rust testleri. Testler gerçek migration'ları uyguladığı için bu, şemanın Windows'ta kurulduğunun kanıtıdır — Faz 5'i beklemeden. → Kod ve CI tanımı hazır; **yeşil çalışma depo GitHub'a gidince doğrulanır.** Faz 3'te de yapılmadı: depo hâlâ yerel. **Faz 4'ten önce halledilmeli** — biriken doğrulanmamış kod her fazda büyüyor. |
-| Faz 5 sonu | **İlk gerçek Windows testi.** Kurs sahibine build gönderilir. Faz 10'a bırakılmaz. |
+| **Faz 5A sonu** | **CI ilk kez tümüyle yeşil** (2026-07-26): `Test · windows-latest` geçti, `.msi` ve `.dmg` üretildi. Şemanın Windows'ta kurulduğu artık kanıtlı — Faz 2'nin kilometre taşı üç faz gecikmeyle kapandı. Nedeni `npm ci`'nin makine ayarına bağlı kilit dosyasıydı; ayrıntı `docs/DURUM.md`. |
+| Faz 5C sonu | **İlk gerçek Windows testi.** Kurs sahibine build gönderilir. Faz 10'a bırakılmaz. (Faz 5 üçe bölününce bu taş 5C'ye kaydı.) |
 | Faz 7 sonu | Para mantığının testleri yeşil. Buradan sonra şema değişikliği pahalı. |
 | Faz 10 sonu | Kurulum dosyası + kullanım kılavuzu + otomatik yedekleme |
 

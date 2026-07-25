@@ -1,18 +1,124 @@
 # Durum
 
-**Son güncelleme:** 2026-07-25 · Faz 4.5 (kod oturumu) + S2/S4 cevapları
-**Mevcut faz:** Faz 4.5 ✅ tamamlandı → sırada **Faz 5**
-**Sonraki oturumda ilk iş:** **push et ve CI'ya bak** — **dört** commit hâlâ uzakta yok
+**Son güncelleme:** 2026-07-26 · Faz 5A (kod oturumu)
+**Mevcut faz:** Faz 5A ✅ tamamlandı → sırada **`/faz-05b`**
+**Sonraki oturumda ilk iş:** yok — çalışma ağacı temiz, her şey push edildi, CI yeşil
 
-> Öğrenci ve veli modülü çalışıyor: liste, arama, filtre, form, detay, notlar, arşivleme.
-> Marka geçişi (ADR-024) uygulandı ve teste bağlandı.
+> **CI ilk kez tümüyle yeşil.** `Test · windows-latest` geçti, `.msi` ve `.dmg` üretildi.
+> Faz 2'nin kilometre taşı üç faz gecikmeyle kapandı: **şemanın Windows'ta kurulduğu
+> artık kanıtlı.** Nedeni Windows değildi ve `.nvmrc` de değildi — aşağıda §CI.
 >
-> **Faz 4 denetiminin beş artığı da kapandı** (aşağıda). Üçü gerçek uygulamada gözle
-> doğrulandı, Faz 4'te alınamayan **iki ekran görüntüsü de alındı.**
+> **Faz 5 üçe bölündü** (takvim en sona): **5A** motor + tanımlar + gruplar ✅ ·
+> **5B** seans işlemleri + Bugün · **5C** takvim + ilk Windows testi.
 >
-> **CI hâlâ kırmızı bilinen son durumda.** Nedeni bulundu — Windows'la ilgisi yok,
-> `npm ci` sürüm çakışmasıydı. Düzeltmesi yapıldı ama **doğrulanmadı**: `.nvmrc` dahil
-> **dört commit hâlâ push edilmedi**, fark ancak push sonrası görülür. İlk iş budur.
+> Seans üretim motoru çalışıyor ve gerçek uygulamada doğrulandı: açılışta 112 seans
+> üretti, uygulamadan tatil ilan edilen güne **hiç üretmedi**.
+
+---
+
+## Faz 5A — tamamlandı
+
+`npm run check` yeşil: **342 test** (177 TypeScript + 165 Rust) + typecheck + ESLint +
+clippy + rustfmt + paket denetimi. Faz 4.5'te 288'di; **+54 test.**
+
+**Migration eklenmedi** — S2/S4 cevapları şemanın hazır olduğunu doğrulamıştı
+(`subject.default_min`, `setting.default_session_minutes`, `study_group.capacity`).
+
+### Neden üçe bölündü
+
+Faz 5 tek oturuma sığmıyordu: 6 ekran, takvim komponent kütüphanesi, üretim motoru ve
+§7'nin test listesi. Sen takvimin en sona kalmasını ve oraya gelince **hazır
+kütüphanelerin değerlendirilmesini** istedin. Izgara dışındaki her şey mevcut
+komponentlerle kurulabildiği için bölünme ikiye değil üçe çıktı — ve takvim kararı
+beklerken iş durmadı.
+
+| Alt faz | Ne | Durum |
+|---|---|---|
+| **5A** | Seans motoru (Rust) + §7 testleri + Tanımlar (branş, tatil) + Gruplar liste & detay | ✅ |
+| **5B** | Ders ekle/düzenle · Şablondan oluştur · ertele/iptal/sil arayüzü · **Bugün ekranı** | `/faz-05b` |
+| **5C** | **Takvim** — önce "hazır kütüphane mi" ADR'si, sonra ekran · **ilk Windows testi** | `/faz-05c` |
+
+Bugün ekranı düz bir liste, ızgara gerektirmiyor — bu yüzden 5B'de, takvimi beklemeden.
+
+### Rust — `repo/schedule.rs`
+
+`academic.rs` tabloların CRUD'u; burası **ekranın istediği birleşik satır** ve zaman
+mantığı. Ayrım `roster.rs` ↔ `people.rs` ile aynı (ADR-025).
+
+| Fonksiyon | Sözleşme |
+|---|---|
+| `generate_sessions(today)` | Ufka kadar (`session_horizon_weeks`, 16) eksikleri üretir; **idempotent**, tatili atlar, iptal edilmişi diriltmez, **geçmişe üretmez** |
+| `detect_conflicts(…)` | Çakışan derslerin **adıyla** listesi; bitişik ders çakışma saymaz |
+| `delete_sessions(id, scope)` | `Only` / `Following` / `All`; işlenmiş ders hiçbir kapsamda silinmez |
+| `cancel_session` · `reschedule_session` | `status='cancelled'` (satır durur) · yoklaması alınmışı reddeder (R3.13) |
+| `group_rows` · `group_detail` · `save_group` | Grup projeksiyonu; grup + haftalık program tek transaction, ardından üretim (R5.5) |
+| `add_group_member` · `end_group_membership` · `group_capacity` | Kapasite **kontrol edilmez** (S2), çakışan açık kayıt **engellenir** (K-22) |
+
+**Açılışta çalışıyor:** `repo::ops::on_startup(conn, today)` → `lib.rs`. Hata uygulamayı
+açmayı **engellemez**, loglanır. Faz 7/8'in `accrue_due_installments`'ı aynı yere girecek.
+
+### Bu fazda alınan üç karar
+
+**1. Şablona bağlı tek seans "silinince" arşivlenmiyor, İPTAL ediliyor.**
+`ux_session_series_slot` kısmi bir indeks (`WHERE deleted_at IS NULL`): arşivleme slotu
+**boşaltır** ve `generate_sessions` dersi ertesi açılışta geri yazar — kullanıcı sildiği
+dersi sabah takvimde bulur. `VERI-MODELI §1.14` çözümü zaten yazıyordu: satır yerinde
+kalır, `status='cancelled'` olur. `Following`/`All` kapsamlarında arşivleme güvenli,
+çünkü seri kapanıyor ve şablon o tarihleri artık kapsamıyor. Testi var.
+
+**2. Üretim geçmişe seans yazmıyor.** `max(series.starts_on, today)`'dan başlıyor.
+Geçmişte olmayan bir seans ya hiç üretilmemiştir ya da bilerek kaldırılmıştır; ikisinde de
+sonradan yazmak **olmamış bir ders icat etmek** olurdu.
+
+**3. Grup seansında `unit_price` boş kalıyor, sıfır yazılmıyor.** Grup seansının tek bir
+ücreti yok — her üyenin fiyatı kendi `enrollment` satırında. Oraya `0` yazmak,
+`VERI-MODELI §5`'in `resolve_unit_price` zincirinde "bu ders bedava" anlamına gelen sessiz
+bir yedek üretirdi; o bölüm bunu açıkça yasaklıyor. Birebir seansta alan kayıttan
+kopyalanıyor (ADR-006 snapshot).
+
+### Ekranlar
+
+| Ne | Nerede |
+|---|---|
+| Tanımlar → Branşlar (satır içi düzenleme, 5 renkli kategori paleti) | `src/pages/tanimlar/SubjectsTab.tsx` |
+| Tanımlar → Tatil günleri + haftalık kapalı gün | `ClosedDaysTab.tsx` |
+| Gruplar listesi (çip · sıralama · sayfalama) | `src/pages/gruplar/GroupsPage.tsx` + `filters.ts` (testli) |
+| Grup detayı — özet şerit + 3 sekme | `GroupDetailPage.tsx` |
+| Grup formu (haftalık program satırları, öğretmen alanı) | `GroupForm.tsx` |
+
+`paginate` `lib/paginate.ts`'e taşındı: ADR-025 bütün liste ekranları için bağlayıcı, o
+hâlde parçası da ortak yerde durmalı. Çipler ve sıralama modülde kaldı — onlar ekranın
+kendi verisine bağlı.
+
+**Tanımlar'da iki sekme var, dört değil.** Tarifeler Faz 7'nin, Genel ayarlar ve Yedekleme
+Faz 10'un; boş sekme koymak çalışmayan bir düğme göstermek olurdu.
+
+### Gerçek uygulamada doğrulananlar
+
+Ekran `swiftc` ile derlenen CGEvent tıklayıcısıyla sürüldü (System Events'in `click at`
+komutu WKWebView'a ulaşmıyor — kalıcı bellekte yazılı).
+
+| Ne | Kanıt |
+|---|---|
+| **Açılış üretimi** | `[kurs] seans üretimi: 112 yeni, 16 mevcut, 0 tatil` |
+| **Tatil atlanıyor** | 07.09.2026 (Pazartesi) uygulamadan tatil ilan edildi, o günün seansları silindi, uygulama yeniden açıldı → 31.08 ve 14.09'da 2'şer seans var, **07.09'da hiç yok** |
+| **K9 tekilliği** | `matematik` reddedildi: *"Bu branş zaten kayıtlı. Büyük/küçük harf farkı yeni bir branş oluşturmaz — listeden mevcut branşı açın."* |
+| **Türkçe sıralama** | Gruplar: İngilizce → Matematik; Branşlar: Fizik → İngilizce → Matematik |
+| **Seans geçmişi** | Grup A'nın üretilmiş dersleri Pzt/Çar dönüşümlü, ufkun sonuna kadar |
+| **Kapasite (S2)** | Kapasite 3'e çekildi → doluluk `3/3`, çipler `Dolu 1` · `Boş kontenjan 1`. Öğrenci eklerken diyalog: *"Bu grup 3 kişilik ve dolu. 4. öğrenci eklensin mi?"* → **Yine de ekle** → doluluk `4/3` amber, altında `Kapasite aşıldı`. **Engellenmedi.** |
+
+Ekran görüntüsüyle yakalanan **iki yerleşim hatası** aynı oturumda düzeltildi: bölüm
+başlığının alt çizgisi açıklama metninin üstünden geçiyordu; haftalık program satırında
+saat kutusu `16:` diye kırpılıyordu (396px çekmecede üç alan tek satıra sığmıyor).
+
+Deneme sonrası `npm run seed -- --reset` çalıştırıldı — geliştirme veritabanı temiz.
+
+### Doğrulanmayanlar
+
+| Ne | Neden |
+|---|---|
+| **K-22 arayüzde** | Rust testi var (`ayni_brans_icin_ikinci_acik_kayit_reddedilir`). Arayüzden tetiklemek için aynı branşta ikinci bir grup gerekiyordu; seed'de yok. Üye seçici zaten mevcut üyeleri listeden düşürüyor |
+| **Seans işlemleri arayüzü** | Rust tarafı yazıldı ve testli; ekranı **5B**'de |
 
 ---
 
@@ -293,51 +399,66 @@ grupları Faz 5'te aynı listeye eklenecek — sonuç listesi şimdiden gruplu.
 
 ---
 
-## CI — ilk çalışma kırmızı, nedeni bulundu, düzeltmesi doğrulanmadı
+## CI — üç kırmızıdan sonra yeşil; ilk iki teşhis yanlıştı
 
-**CI #1 (Faz 3 commit'i) düştü.** Windows'la ilgisi yok: `Test · macos-latest` işi
-`npm ci` adımında öldü ve Windows işi hiç başlamadı.
+**CI #1–#3 hep aynı hatayla düştü.** Windows'la ilgisi yoktu; `npm ci` adımı ölüyordu:
 
 ```
 npm error `npm ci` can only install packages when your package.json and
 package-lock.json are in sync.
 npm error Invalid: lock file's picomatch@2.3.2 does not satisfy picomatch@4.0.5
+npm error Missing: picomatch@2.3.2 from lock file
 ```
 
-**Teşhis.** `npm ci` yerelde **geçiyor** (npm 10.9.4, Node 22.21.1). Fark CI'nın
-`node-version: 22` yazmasıydı: kayan bir aralık, her Node yayınında farklı bir npm
-getiriyor ve npm 11, npm 10'un ürettiği lock ağacını yeniden hesaplayıp reddediyor.
-Yani lock dosyası bozuk değil — **Node sürümü hiçbir yerde sabitlenmemişti.**
+### Yanlış teşhis (Faz 4'te yazılmıştı)
 
-**Düzeltme.** `.nvmrc` (`22.21.1`) eklendi; CI'daki iki `setup-node` adımı artık
-`node-version-file: .nvmrc` okuyor. `rust-toolchain.toml` ile aynı disiplin: yerel ve CI
-aynı dosyayı okur. `CLAUDE.md > Stack` bunu yazıyor.
+*"CI `node-version: 22` yazıyor, kayan aralık her yayında farklı bir npm getiriyor ve
+npm 11 lock ağacını reddediyor."* `.nvmrc` eklendi — **hata devam etti.**
 
-**Doğrulanmadı.** Düzeltmenin işe yaradığı ancak push sonrası görülür.
+### Doğru teşhis
 
-### Sonraki oturumun ilk işi — ve sonrasının sırası
+Bu oturumda ölçüldü, tahmin edilmedi. CI'ya kalıcı bir `node -v && npm -v` adımı eklendi:
 
-**Dört commit push edilmedi:** `9b913d1` (Faz 3 denetimi), `b7d1598` (Faz 4),
-`0097616` (Faz 4 denetimi) ve bu oturumunki (Faz 4.5). `.nvmrc` düzeltmesi `b7d1598`'in
-içinde, yani uzakta **hâlâ yok** — `git log origin/main..HEAD` dördünü de listeler.
+| Ne | Sonuç |
+|---|---|
+| CI'daki sürümler | `node v22.21.1`, `npm 10.9.4` — **yerelle birebir aynı** |
+| Aynı kilit dosyası, yerelde npm 10 / 11 / 12, temiz oda | üçü de **geçiyor** |
+| Aynı kilit dosyası, `--legacy-peer-deps=false` | **CI'daki hatanın aynısı** ✅ tekrar üretildi |
 
-```
-git push
-```
+Kök neden: makinenin `~/.npmrc`'sinde **`legacy-peer-deps=true`** var.
 
-| # | Ne | Kim |
-|---|---|---|
-| 1 | `git push` | **sen** |
-| 2 | CI — `.nvmrc` düzeltmesi işe yaradı mı, `Test · windows-latest` yeşil mi | sen bakarsın |
-| 3 | `/faz-05` — projenin en karmaşık fazı, temiz sayfayla | kod oturumu |
+- Kilit dosyası bu ayarla üretildiği için `fdir` köke çıkmış ve isteğe bağlı akran
+  bağımlılığı `picomatch ^3 || ^4` kökteki `picomatch@2.3.2`'ye düşmüş — geçersiz kenar.
+- Yerelde aynı ayar **`npm ci`'nin doğrulamasını da kapattığı için** hata hiç görünmüyor.
+- CI'da o ayar yok → kenar doğrulanıyor → `EUSAGE`.
 
-Actions sayfasında bakılacak tek şey: `Test · windows-latest` yeşil mi. **Windows
-makine gerekmiyor, `.msi` indirilmez, kurulmaz** (ADR-008); asıl kanıt testlerin gerçek
-migration'ları Windows'ta uygulaması. Artefakt kutusunda sıfır olmayan boyutta bir `.msi`
-listelenmesi yeterli.
+Yani bu, "yerelde çalışıyor" sınıfının ders kitabı örneği: hatayı **makinenin ayarı**
+gizliyordu, kod ya da sürüm değil.
 
-Hâlâ kırmızıysa **Faz 5'e başlamadan** çözülmeli — biriken doğrulanmamış kod artık
-dört faz ve Faz 5 WebView2'ye en duyarlı olanı.
+### Düzeltme
+
+1. Proje köküne **`.npmrc`** → `legacy-peer-deps=false`. `.nvmrc` ve `rust-toolchain.toml`
+   ile aynı disiplin: makinenin genel ayarı projeye sızmıyor, yerel ve CI aynı dosyayı
+   okuyor. Jetonlar ve özel kayıt defterleri etkilenmiyor — npm yapılandırmayı anahtar
+   bazında birleştiriyor, dosya bazında değil.
+2. `package-lock.json` bu ayarla yeniden üretildi: `fdir` + `picomatch@4.0.5` artık
+   `tinyglobby` ve `vite` altında, kök `picomatch@2.3.2` micromatch'te kaldı.
+3. `CLAUDE.md > Stack` gerekçesiyle birlikte yazıyor.
+
+`.nvmrc` **yerinde kalıyor**: teşhis yanlıştı ama sürümü sabitlemek doğru bir iş ve o
+sabitleme sayesinde CI'nın npm'i bilinen bir sürüm oldu — kök nedeni ayırmak mümkün hâle
+geldi.
+
+### Sonuç
+
+**CI tümüyle yeşil** (çalışma `30174924159` ve sonrası): `Test · windows-latest`,
+`Test · macos-latest`, `Paket · windows-latest`, `Paket · macos-latest`.
+
+`Test · windows-latest`'in yeşil olması **şemanın Windows'ta kurulduğunun kanıtı** —
+testler gerçek migration'ları uyguluyor. Windows makine gerekmedi, `.msi` indirilmedi
+(ADR-008); artefakt kutusunda sıfır olmayan boyutta bir `.msi` listeleniyor, yeterli.
+
+Faz 2'nin kilometre taşı böylece üç faz gecikmeyle kapandı.
 
 ---
 
@@ -346,8 +467,10 @@ dört faz ve Faz 5 WebView2'ye en duyarlı olanı.
 | Ne | Neden |
 |---|---|
 | `NoteList` / `NoteComposer` ayrı komponent olarak | Notlar `StudentDetailPage` içinde kuruldu. Tek ekranda kullanılan bir desen için `src/ui/`'ya komponent çıkarmak erken soyutlama olurdu; ikinci bir ekran not gösterirse çıkarılır |
-| Öğrenci detayında `Kayıtlar` sekmesi | `faz-04.md §3` sekmeleri `Bilgiler / Dersler / Ödemeler / Notlar` olarak sabitledi. `enrollment` ekranı Faz 5'te grup modülüyle geliyor |
-| `npm audit` 12 "high" | Hiçbiri Faz 3–4'te eklenenlerden değil; eslint/vite geliştirme araç zincirinin bilinen uyarıları, teslim edilen pakete girmiyorlar |
+| Öğrenci detayında `Kayıtlar` sekmesi | `faz-04.md §3` sekmeleri `Bilgiler / Dersler / Ödemeler / Notlar` olarak sabitledi. `enrollment` **yazma** yolu Faz 5A'da grup detayından geldi (Öğrenci ekle / Gruptan çıkar); öğrenci tarafındaki okuma sekmesi hâlâ yok |
+| `npm audit` 12 "high" | Hiçbiri Faz 3–5'te eklenenlerden değil; eslint/vite geliştirme araç zincirinin bilinen uyarıları, teslim edilen pakete girmiyorlar |
+| Grup detayında not **silme** | Öğrenci detayında var (`archive_student_note`); grupta yalnızca ekleme ve okuma kuruldu. Notun sahibi öğrenci, silinecek yer de orası — ikinci bir silme yolu açmak aynı kaydı iki ekrandan yönetmek olurdu |
+| `search_students` komutu | Faz 2'den beri duruyor, hiçbir ekran çağırmıyor: `student_list` aramayı da yapıyor. Faz 8/9'da kullanılmazsa kaldırılacak |
 
 **Faz 4'ten devreden iki ekran görüntüsü Faz 4.5'te alındı** (arşivleme onayı ve
 kaydetmeden kapatma uyarısı) — bu tablodan düştüler.
@@ -363,7 +486,7 @@ hesabıyla birlikte).
 ## Açık sorular — cevabını senden bekliyorum
 
 `docs/PRD.md` §9'da gerekçeleriyle. **S1 (ADR-021), S8, S2 ve S4 cevaplandı.**
-**Faz 5'i bekleten açık soru kalmadı.**
+**Faz 5B ve 5C'yi bekleten açık soru yok.**
 
 | # | Soru | Hangi faz |
 |---|---|---|
@@ -375,7 +498,8 @@ hesabıyla birlikte).
 | S10 | Kod imzalama sertifikası alınacak mı? | Faz 10 |
 
 **S2 ve S4 (2026-07-25).** İkisi de PRD'nin varsayımını onayladı, yani hiçbir belge yön
-değiştirmedi ve **şema değişmiyor** — Faz 5 migration eklemiyor:
+değiştirmedi ve **şema değişmedi** — Faz 5A migration eklemedi, ikisi de gerçek uygulamada
+doğrulandı (kapasite diyaloğu ve `Genel ayar` devralan süre):
 
 | # | Cevap | Zaten neredeydi |
 |---|---|---|
@@ -401,20 +525,19 @@ bu, ders hakkı sayacının ayrı sorunu (ADR-015: iki ayrı sayaç). Seçenekle
 
 ---
 
-## Faz 5'in en büyük riski
+## Faz 5C'nin riski — küçüldü ama bitmedi
 
-**Windows'ta hâlâ tek bir satır çalıştırılmadı — ve artık dört fazlık kod var.**
+**Windows artık boş bir varsayım değil.** `Test · windows-latest` yeşil: migration'lar
+gerçekten Windows'ta uygulanıyor, satır sonu kuralı (`.gitattributes`) tutuyor, import
+büyük/küçük harfi ve dosya yolları derleniyor, `.msi` üretiliyor.
 
-Risk Faz 4'te değişmedi; **büyüdü ve bir kere gerçekleşti.** CI #1'in düşmesi, hiç
-çalıştırılmamış bir doğrulama zincirinin sessizce bozuk kalabildiğinin kanıtı. Üstelik o
-arıza `npm ci`'deydi — yani asıl aradığımız Windows sorunlarına **daha sıra bile
-gelmedi**: satır sonu, dosya yolu, import büyük/küçük harfi, WebView2 davranışı ve Segoe
-UI altında kolon genişlikleri hâlâ denenmemiş durumda.
+Kalan risk **arayüz** tarafında ve tek bir ekranda toplanıyor: **takvim** (5C).
+Sürükle-bırak, ızgara yerleşimi, saat hesapları ve Segoe UI altında kolon genişlikleri —
+WebView2 farklarına en duyarlı yer burası ve CI bunu **çalıştırmıyor** (testler jsdom'da,
+paket işi yalnızca derliyor).
 
-Faz 5 takvimi getiriyor: sürükle-bırak, ızgara yerleşimi ve saat hesapları — WebView2
-farklarına en duyarlı ekran. Push edilmeden başlanırsa bir Windows hatası bugün bir
-migration, bir tasarım sistemi ve bir öğrenci modülünün altında; Faz 5'ten sonra bir de
-takvimin altında olacak.
+Bu yüzden 5C'nin sonunda ilk gerçek Windows testi duruyor ve Faz 10'a bırakılmıyor.
 
-`docs/YOL-HARITASI.md` zaten "Faz 5 sonu: kurs sahibine build gönderilir" diyor. O tarihe
-yeşil bir CI olmadan varılamaz.
+> Eski bu bölüm "Windows'ta hâlâ tek bir satır çalıştırılmadı" diyordu. **Artık geçerli
+> değil** — CI 2026-07-26'da yeşile döndü. Satır tarihî kayıt olarak değil, düzeltilerek
+> bırakıldı: bayat bir risk uyarısı gerçek olanı gizler.
