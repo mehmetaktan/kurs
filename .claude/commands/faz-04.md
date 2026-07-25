@@ -99,8 +99,14 @@ Tasarımdaki `Öğrenci detayı` ekranını kur. Sekmeler:
 
 ## 6. Testler
 
-Rust tarafında: arama (Türkçe karakter dahil), filtre, sayfalama, arşivleme/geri alma,
+Rust tarafında: arama (Türkçe karakter dahil), filtre, arşivleme/geri alma,
 veli ilişkisi (aynı veli iki öğrenciye bağlı).
+
+> **Düzeltildi (Faz 4 denetimi).** Bu satır önce sayfalamayı da Rust testleri arasında
+> sayıyordu; **ADR-025** sıralama ve sayfalamayı arayüze taşıdı (ADR-020 Türkçe
+> sıralamayı SQL'de yasakladığı için sıralanmamış listeyi bölmek yanlış sayfa üretir).
+> Sayfalama testi `src/pages/ogrenciler/filters.test.ts` içinde — eksik değil, **başka
+> katmanda**. Faz 4'ü geriye dönük denetleyen biri buraya bakıp "eksik" sanmasın.
 
 ---
 

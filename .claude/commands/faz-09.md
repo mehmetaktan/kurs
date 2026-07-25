@@ -4,9 +4,14 @@ description: Faz 9 — Dashboard ve raporlar
 
 # Faz 9 — Dashboard & Raporlar
 
-Önce oku: `CLAUDE.md`, `docs/DURUM.md`, `docs/EKRANLAR.md`.
+Önce oku: `CLAUDE.md`, `docs/DURUM.md`, `docs/EKRANLAR.md`,
+`docs/KARARLAR.md` (**ADR-018**, **ADR-025**).
 
 Grafik yazmadan önce **`dataviz` skill'ini yükle.**
+
+> **ADR-025 bu fazda bağlayıcı.** Rapor tabloları da liste ekranı: arama/filtre Rust'ta,
+> Türkçe sıralama ve sayfalama arayüzde. Özet rakamların (toplam tahsilat, toplam alacak)
+> hangi kümeyi topladığı **etikette yazılı olmak zorunda** — ADR-025 §"Özet rakamlar".
 
 ---
 

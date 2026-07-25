@@ -4,10 +4,17 @@ description: Faz 5 — Branş, grup, seans, takvim ve seri ders oluşturma
 
 # Faz 5 — Ders & Takvim
 
-Önce oku: `CLAUDE.md`, `docs/DURUM.md`, `docs/VERI-MODELI.md`, `docs/EKRANLAR.md`.
+Önce oku: `CLAUDE.md`, `docs/DURUM.md`, `docs/VERI-MODELI.md`, `docs/EKRANLAR.md`,
+`docs/KARARLAR.md` (**ADR-012**, **ADR-017**, **ADR-025**).
 
 **Projenin en karmaşık fazı. Önce plan modunda çalış, planı onaylatmadan kod yazma.**
 Faz büyükse ikiye bölmeyi öner — yarıda kalmaktansa bölünmüş olsun.
+
+> **ADR-025 bu fazda bağlayıcı.** Gruplar listesi de bir liste ekranı: arama ve veri
+> filtresi **Rust'ta** (`repo` katmanı, `search_name` orada), Türkçe sıralama ve
+> sayfalama **arayüzde** (`sortTr.ts` + sayfa altındaki `filters.ts` kalıbı). SQL'de
+> `ORDER BY` ile isim sıralama **yok** (ADR-020). Öğrenciler ekranındaki
+> `src/pages/ogrenciler/filters.ts` bu kalıbın referansı — yeniden icat etme, oradan al.
 
 ---
 

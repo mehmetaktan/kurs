@@ -1,15 +1,81 @@
 # Durum
 
-**Son güncelleme:** 2026-07-25 · Faz 4 sonu
-**Mevcut faz:** Faz 4 ✅ tamamlandı → sırada **Faz 5** (Ders, grup, takvim)
-**Sonraki oturumda ilk iş:** **push et ve CI'ya bak** (aşağıda), sonra `/faz-05`
+**Son güncelleme:** 2026-07-25 · Faz 4 denetimi (yönetici oturumu)
+**Mevcut faz:** Faz 4 ✅ tamamlandı, denetimi ✅ yapıldı → sırada **Faz 4.5**, sonra Faz 5
+**Sonraki oturumda ilk iş:** **push et ve CI'ya bak**, sonra `/faz-04b`
 
 > Öğrenci ve veli modülü çalışıyor: liste, arama, filtre, form, detay, notlar, arşivleme.
 > Marka geçişi (ADR-024) uygulandı ve teste bağlandı.
 >
 > **CI ilk kez çalıştı ve kırmızı geldi.** Nedeni bulundu — Windows'la ilgisi yok,
-> `npm ci` sürüm çakışmasıydı. Düzeltmesi bu oturumda yapıldı ama **doğrulanmadı**:
-> fark ancak push sonrası görülür. Faz 5'in ilk işi budur.
+> `npm ci` sürüm çakışmasıydı. Düzeltmesi yapıldı ama **doğrulanmadı**: `.nvmrc` dahil
+> **iki commit hâlâ push edilmedi**, fark ancak push sonrası görülür. İlk iş budur.
+>
+> **Denetim sonucu: para tarafı temiz, Faz 5'i bloklayan bulgu yok.** Beş düzeltme
+> `/faz-04b` (Faz 4.5, kısa oturum) olarak ayrıldı — Faz 5 projenin en karmaşık fazı,
+> artıklar oraya yüklenmedi.
+
+---
+
+## Faz 4 denetimi (2026-07-25, yönetici — kod yazılmadı)
+
+Altı boyut paralel denetlendi, her bulgu ayrı bir ajanla **çürütülmeye çalışıldı**.
+Model dağılımı CLAUDE.md disiplinine göre karışıktı: mekanik ADR taraması Haiku, kapsam
+ve belge Sonnet, **para ve defter Opus** (CLAUDE.md burada tasarrufu yasaklıyor).
+
+**59 kontrol temiz, 10 bulgu, 0 çürütüldü** — ama önem dereceleri karşıt doğrulamada
+düşürüldü: 3 "high" iddiadan biri medium'a, ikisi low'a indi.
+
+### Para tarafı — kanıtlanmış temiz
+
+Denetimin en önemli çıktısı bu. Opus ajanı `sqlite3` ile canlı doğrulama yaptı:
+
+| Ne | Kanıt |
+|---|---|
+| Bakiye projeksiyonu | `roster.rs` kendi `SUM`'ını yazmıyor; `v_student_balance` / `v_student_debt` view'larına `LEFT JOIN` ile bağlanıyor (satır 115-116). Ham `ledger_entry` üzerinde toplama yok |
+| **ADR-022 paritesi** | Üç halkalı zincir `sqlite3 :memory:`'de kuruldu: bakiye −25.000, `SUM(v_ledger_effective)` −25.000, borç 25.000 → tutarlı. Ters yön de sınandı |
+| Değişmez kapsamı | `assert_ledger_invariant` **sekiz** yerde, ikisi Faz 4'ün yeni dosyasında. Faz 4 hiç migration eklemedi, yeni view yok, kapsam dışına çıkan yol açılmadı |
+| Bakiye ↔ borç çelişemez | İkisi de aynı `v_ledger_effective`'ten türüyor; `balanceKurus < 0` ile `debtKurus > 0` matematiksel olarak eşdeğer. ADR-018'in istediği tam buydu |
+| Kuruş disiplini | Uçtan uca `i64`; ekranda tek aritmetik `Math.max(0, debtKurus)` tam sayı toplaması. `formatKurus` girdiyi `Number.isInteger` ile reddediyor |
+| Arşivleme paraya dokunmuyor | `archive_student` yalnızca `repo::archive::<Student>` çağırıyor; şema seviyesinde de `trg_ledger_immutable` kapatıyor |
+| ADR-015 iki sayaç | Kalan ders `v_package_remaining`'den, defterle bağı yok; `package.status`'e güvenilmiyor |
+| Gecikme hesabı | Saf tarih farkı, `julianday('now')` yok, `today` bind ediliyor (§0'a uygun) |
+
+**ADR uyum taraması 8/8 temiz** (ADR-002/003/004/005/007/008/020 + K5).
+
+### Ayakta kalan bulgular ve nereye gittiler
+
+| # | Bulgu | Önem | Nereye |
+|---|---|---|---|
+| 1 | **Veli araması yalnızca birincil veliyi görüyor** (`roster.rs:159`) — ikinci veli adıyla/telefonuyla arayınca öğrenci bulunamıyor, mükerrer kayıt riski. Testin de aynı kör noktası var | medium | **Faz 4.5 §1** |
+| 2 | **Bakiye kartı altyazısı** (`StudentDetailPage.tsx:294`) — `daysOverdue !== null` ikili dalı yüzünden borcunu tamamen ödemiş, defteri dolu öğrencide de "Henüz hareket yok" yazıyor | medium | **Faz 4.5 §2** |
+| 3 | **"Toplam alacak" çiplere kör** (`filters.ts:118`) — Rust süzgecine tepki veriyor, çiplere vermiyor | low | **ADR-026** + Faz 4.5 §3 |
+| 4 | **Telefon alanı maskesiz** (`StudentForm.tsx:255`) — `faz-04.md §2` "maskeli" diyordu, tarih yapıldı telefon yapılmadı | medium | **Faz 4.5 §4** |
+| 5 | **K-14 uyarısı borç tutarını yazmıyor** (`tr.ts:323`) | low | **Faz 4.5 §5** |
+| 6 | **ADR-025 bağlı faz komutlarında yazılı değildi** — faz-05/08/09 `KARARLAR.md`'yi bile okutmuyordu | medium | ✅ **düzeltildi** |
+| 7 | **`faz-04.md §6` hâlâ Rust'ta sayfalama testi istiyordu** — ADR-025 ile çelişiyordu | low | ✅ **düzeltildi** |
+| 8 | **`faz-08.md` "Aç" kolonu devrini bilmiyordu** | medium | ✅ **düzeltildi** |
+| 9 | **`CLAUDE.md`'de kimlik geçişi hâlâ gelecek zamanla yazılıydı** | low | ✅ **düzeltildi** |
+| 10 | **`views::total_receivable` atıl** — aynı para kavramının ikinci tanımı | low | **ADR-026** ile Faz 9'a bağlandı |
+
+### Verilen karar: ADR-026 — özet rakamlar
+
+Liste ekranının alt çubuğundaki para özeti **görünen satırları** toplar ve etiketi bunu
+söyler ("Görünen listenin alacağı"). Kurs geneli, süzgeçten bağımsız rakamların yeri
+**Dashboard** (Faz 9) — `views::total_receivable` orada kullanılır ve atıl kalmaz.
+
+Bugünkü ara durum kimsenin bilerek seçmeyeceği türdendi: "Branş: Matematik" seçince rakam
+değişiyor, "Borçlular" çipine basınca değişmiyor. `VERI-MODELI §1.23`'ün "arşivlenmiş
+sayılır" kuralı **korunuyor** — arşivli öğrenci kendi çipinde görünür ve o listenin
+toplamına girer.
+
+### Bu denetimde değişen belgeler
+
+`KARARLAR.md` (ADR-026) · `.claude/commands/faz-04b.md` (**yeni**) ·
+`faz-05.md` + `faz-09.md` (ADR-025 bağlayıcı notu + `KARARLAR.md` okuma listesine) ·
+`faz-08.md` (ADR-025 + "Aç" kolonu ve toplam alacak devri) ·
+`faz-04.md §6` (ADR-025 ile çelişen satır düzeltildi) · `CLAUDE.md` (bayat kimlik notu) ·
+`YOL-HARITASI.md`.
 
 ---
 
@@ -128,18 +194,34 @@ aynı dosyayı okur. `CLAUDE.md > Stack` bunu yazıyor.
 
 **Doğrulanmadı.** Düzeltmenin işe yaradığı ancak push sonrası görülür.
 
-### Sonraki oturumun ilk işi
+### Sonraki oturumun ilk işi — ve sonrasının sırası
+
+**İki commit push edilmedi:** `9b913d1` (Faz 3 denetimi) ve `b7d1598` (Faz 4). `.nvmrc`
+düzeltmesi ikincisinin içinde, yani uzakta **hâlâ yok**.
 
 ```
 git push
 ```
 
-Sonra Actions sayfasında bakılacak tek şey: `Test · windows-latest` yeşil mi. **Windows
+| # | Ne | Kim |
+|---|---|---|
+| 1 | `git push` | **sen** |
+| 2 | CI #2 — `.nvmrc` düzeltmesi işe yaradı mı, `Test · windows-latest` yeşil mi | sen bakarsın |
+| 3 | `/faz-04b` — Faz 4.5, beş düzeltme, **kısa oturum** | kod oturumu |
+| 4 | CI #3 — yeşil onay | kod oturumu |
+| 5 | `/faz-05` — projenin en karmaşık fazı, temiz sayfayla | kod oturumu |
+
+Actions sayfasında bakılacak tek şey: `Test · windows-latest` yeşil mi. **Windows
 makine gerekmiyor, `.msi` indirilmez, kurulmaz** (ADR-008); asıl kanıt testlerin gerçek
 migration'ları Windows'ta uygulaması. Artefakt kutusunda sıfır olmayan boyutta bir `.msi`
 listelenmesi yeterli.
 
-Hâlâ kırmızıysa **Faz 5'e başlamadan** çözülmeli.
+Hâlâ kırmızıysa **Faz 4.5'e başlamadan** çözülmeli — biriken doğrulanmamış kod artık
+üç faz.
+
+> `/faz-04b` **yeni bir slash komutu**: kullanılabilmesi için Claude Code'un yeniden
+> başlatılması gerekir (`CLAUDE.md` > Oturum protokolü). "Unknown command" hatasının
+> nedeni budur.
 
 ---
 

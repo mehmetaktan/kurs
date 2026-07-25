@@ -5,7 +5,17 @@ description: Faz 8 — Tahsilat, borçlu listesi, cari ekstre ve makbuz PDF
 # Faz 8 — Tahsilat & Makbuz
 
 Önce oku: `CLAUDE.md`, `docs/DURUM.md`, `docs/VERI-MODELI.md`, `docs/PRD.md`,
-`docs/KARARLAR.md` (ADR-014, **ADR-018**).
+`docs/KARARLAR.md` (ADR-014, **ADR-018**, **ADR-025**).
+
+> **Faz 4'ten devralınan iki iş — unutulmasın, ikisi de bu fazda kapanır:**
+>
+> 1. **Öğrenciler listesinin son kolonu.** Faz 4'te tasarımdaki `Tahsilat al` yerine
+>    geçici olarak **`Aç`** kondu, çünkü tahsilat o fazda yoktu ve çalışmayan bir düğme
+>    koymaktansa çalışan bir eylem konuldu. Bu fazda tasarıma döndür
+>    (`EKRANLAR.md` E1 / öğrenci listesi kolonları). Arşiv görünümündeki `Geri al`
+>    kolonu **kalır** (E2).
+> 2. **`Toplam alacak` rakamının tanımı.** ADR-025 §"Özet rakamlar" kuralına uydur ve
+>    `views::total_receivable`'ın ikinci tanımını ortadan kaldır — tek kaynak kalsın.
 
 ---
 

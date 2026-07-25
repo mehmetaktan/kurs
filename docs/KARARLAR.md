@@ -444,3 +444,53 @@ anında geri bildirim için, Rust'taki son söz. İkisi aynı `code` uzayını k
 değil doğru girdinin altına yerleşir.
 
 **Durum.** Kabul edildi.
+
+---
+
+## ADR-026 — Liste ekranlarının özet rakamı görünen listeyi toplar
+
+**Karar.** Bir liste ekranının alt çubuğundaki para özeti **ekranda o an görünen
+satırların** toplamıdır. Her süzgeçle birlikte değişir — arama, veri filtresi (branş,
+grup) ve çipler (Borçlular, Arşivlenmiş…) arasında ayrım yapılmaz. Etiketi bunu açıkça
+söyler: **"Görünen listenin alacağı"**, çıplak "Toplam alacak" değil.
+
+Kurs geneli, süzgeçten bağımsız rakamların yeri **liste ekranı değil, Dashboard'dur**
+(Faz 9). `repo::views::total_receivable` orada kullanılır.
+
+Bu, ADR-025'in dört parçalı iş bölümüne eklenen **beşinci satırdır**:
+
+| İş | Katman | Kural |
+|---|---|---|
+| Özet para rakamı | Arayüz | ADR-025'in son adımından (sayfalama öncesi süzülmüş liste) hesaplanır |
+
+**Gerekçe.** Faz 4 denetiminde çıktı: `StudentsPage`'in alt çubuğu Rust'tan gelen
+süzülmüş listeyi topluyordu, ama çipler yalnızca arayüzde uygulandığı için rakam
+**çiplere kördü**. Sonuç, kimsenin bilerek seçmeyeceği bir ara durum: "Branş: Matematik"
+seçince rakam değişiyor, "Borçlular" çipine basınca değişmiyor. Aynı ekranda biri
+diğerini açıklamayan iki sayı — teknik olmayan bir kullanıcının hangisine güveneceğini
+bilemeyeceği tam olarak bu.
+
+Görünen listeyi toplamanın seçilme sebebi, alt çubuğun **ne olduğu**: bir liste altbilgisi
+o listeyi tarif eder. `11 öğrenci gösteriliyor · 12 kayıt` satırının yanında duran para
+rakamının başka bir kümeyi toplaması, altbilginin kendi içinde tutarsız olması demekti.
+
+Elenen seçenek — rakamı süzgeçten tümüyle bağımsız kılmak — reddedilmedi, **taşındı**:
+kurs geneli toplam alacak gerçek bir ihtiyaç, ama yeri bir liste altbilgisi değil
+Dashboard. Orada hiçbir süzgeç yok, dolayısıyla tutarsızlık da doğmuyor.
+
+**Sonuç.** Üç şey bunun peşinden gelir:
+
+1. **`views::total_receivable` ölü kalmaz.** Bugün yalnızca testte çağrılıyor, ekrandaki
+   rakam TypeScript'te ikinci kez hesaplanıyor — aynı para kavramının iki tanımı. Rust
+   tarafı Faz 9'un tek kaynağı olur; liste altbilgisi ise ADR-025'in süzülmüş listesinden
+   türer ve bu **ikinci bir tanım değildir**, çünkü farklı bir soruyu cevaplar.
+2. **Arşivlenmiş borçlu görünürlüğü değişmez.** `VERI-MODELI §1.23` "borçlu listesi,
+   toplam alacak, cari ekstre → arşivlenmiş sayılır" diyor ve bu korunur: arşivli öğrenci
+   "Arşivlenmiş" çipinde görünür ve o listenin toplamına girer, Dashboard'un kurs geneli
+   rakamına da girer. Değişen tek şey, varsayılan görünümde **görünmeyen** bir satırın
+   toplama sessizce eklenmemesi.
+3. **Kural bütün liste ekranları için bağlayıcı** — Gruplar (Faz 5), Borçlular (Faz 8),
+   Raporlar (Faz 9). Bir liste altbilgisinde para rakamı varsa, etiketi hangi kümeyi
+   topladığını yazacak.
+
+**Durum.** Kabul edildi.

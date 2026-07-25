@@ -11,7 +11,9 @@
 | 3 | Tasarım sistemi — token'lar, komponentler, uygulama kabuğu | `/faz-03` | ✅ Tamamlandı — ADR-022 migration'ı da bu fazda kapandı |
 | 3.5 | **Faz 3 denetimi** — ADR uyumu, marka kararı (ADR-024) | `/yonetici` | ✅ Tamamlandı |
 | 4 | Öğrenci & Veli — CRUD, arama, detay sayfası | `/faz-04` | ✅ Tamamlandı — §0 marka geçişi (ADR-024) uygulandı, ADR-025 eklendi |
-| 5 | Ders & Takvim — branş, grup, seans, seri ders | `/faz-05` | ⬜ |
+| 4.4 | **Faz 4 denetimi** — 6 boyut, karşıt doğrulamalı; ADR-026 (özet rakamlar) | `/yonetici` | ✅ Tamamlandı |
+| 4.5 | **Faz 4 artıkları** — veli araması · bakiye altyazısı · toplam alacak · telefon maskesi · K-14 | `/faz-04b` | ⬜ **kısa oturum**, Faz 5'ten önce |
+| 5 | Ders & Takvim — branş, grup, seans, seri ders | `/faz-05` | ⬜ — ADR-025 bağlayıcı, komutta yazılı |
 | 6 | Yoklama & Telafi | `/faz-06` | ⬜ |
 | 7 | Fiyatlandırma & Ders Paketi | `/faz-07` | ⬜ |
 | 8 | Tahsilat & Makbuz | `/faz-08` | ⬜ |

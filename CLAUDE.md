@@ -204,7 +204,6 @@ Veritabanı `app_data_dir` altındadır (ADR-008), proje klasöründe değil:
 - macOS: `~/Library/Application Support/com.aktansoft.kurstakip/kurs.db`
 - Windows: `%APPDATA%\com.aktansoft.kurstakip\kurs.db`
 
-> **Kimlik Faz 4 §0'da değişiyor** (ADR-024): `com.aydinozelders.kurstakip` →
-> `com.aktansoft.kurstakip`. O değişiklik uygulanana kadar yerel makinedeki veritabanı
-> hâlâ eski klasörde; yeni klasörde sıfırdan kurulacak. Geliştirme verisi olduğu için
-> taşınmıyor — `npm run seed -- --reset` yeter.
+> Kimlik Faz 4 §0'da `com.aydinozelders.kurstakip`'ten değiştirildi (ADR-024) ve
+> `src-tauri/tests/identity.rs` ile `tauri.conf.json`'a çivilendi. Eski klasörde kalmış
+> bir geliştirme veritabanı varsa taşınmaz — `npm run seed -- --reset` yeter.
