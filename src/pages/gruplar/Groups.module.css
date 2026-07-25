@@ -125,13 +125,14 @@
 .panelHead {
   display: flex;
   gap: var(--space-4);
-  align-items: flex-end;
+  align-items: flex-start;
   justify-content: space-between;
   padding-bottom: var(--space-4);
 }
 
 .lead {
   max-width: 62ch;
+  margin: 0;
   font-size: var(--font-size-meta);
   line-height: var(--line-height-prose);
   color: var(--color-text-muted);
@@ -179,10 +180,21 @@
   border-radius: var(--radius-9);
 }
 
+/*
+ * Gün üstte tam genişlik, saat ve süre altında yan yana.
+ *
+ * Üçü tek satıra konsaydı 396px çekmecede saat kutusu `16:` diye kırpılıyordu
+ * (ekranda görüldü) — `TimePicker`'ın kendi açılır düğmesi de var ve o genişliği
+ * paylaşamıyor.
+ */
 .slotGrid {
   display: grid;
-  grid-template-columns: 1.2fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: var(--space-2);
+}
+
+.slotDay {
+  grid-column: 1 / -1;
 }
 
 .slotFoot {

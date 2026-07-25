@@ -273,6 +273,7 @@ export function GroupForm({ open, groupId, onClose, onSaved }: Props) {
                 <div key={slot.id ?? `new-${index}`} className={styles.slotCard}>
                   <div className={styles.slotGrid}>
                     <Select
+                      className={styles.slotDay}
                       label={tr.groups.form.weekday}
                       value={String(slot.weekday)}
                       options={WEEKDAYS.map((day) => ({

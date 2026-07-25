@@ -208,7 +208,9 @@ export function ClosedDaysTab() {
     <>
       <section className={styles.section}>
         <SectionHeader title={tr.definitions.closedDays.weekly.heading} />
-        <p className={styles.lead}>{tr.definitions.closedDays.weekly.lead}</p>
+        <div className={styles.sectionHead}>
+          <p className={styles.lead}>{tr.definitions.closedDays.weekly.lead}</p>
+        </div>
         <div className={styles.card}>
           <div className={styles.weekdayRow} role="group" aria-label={tr.definitions.closedDays.weekly.heading}>
             {WEEKDAYS.map((day) => (
@@ -224,11 +226,9 @@ export function ClosedDaysTab() {
       </section>
 
       <section className={styles.section}>
+        <SectionHeader title={tr.definitions.closedDays.heading} />
         <div className={styles.sectionHead}>
-          <div>
-            <SectionHeader title={tr.definitions.closedDays.heading} />
-            <p className={styles.lead}>{tr.definitions.closedDays.lead}</p>
-          </div>
+          <p className={styles.lead}>{tr.definitions.closedDays.lead}</p>
           <Button variant="primary" onClick={startCreate} disabled={editingId === DRAFT_ID}>
             {tr.definitions.closedDays.newDay}
           </Button>

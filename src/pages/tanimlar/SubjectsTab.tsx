@@ -243,11 +243,9 @@ export function SubjectsTab() {
 
   return (
     <section className={styles.section}>
+      <SectionHeader title={tr.definitions.subjects.heading} />
       <div className={styles.sectionHead}>
-        <div>
-          <SectionHeader title={tr.definitions.subjects.heading} />
-          <p className={styles.lead}>{tr.definitions.subjects.lead}</p>
-        </div>
+        <p className={styles.lead}>{tr.definitions.subjects.lead}</p>
         <Button variant="primary" onClick={startCreate} disabled={editingId === DRAFT_ID}>
           {tr.definitions.subjects.newSubject}
         </Button>

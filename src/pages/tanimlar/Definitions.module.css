@@ -11,16 +11,24 @@
   padding-bottom: var(--space-6);
 }
 
+/*
+ * Başlık kendi satırında, açıklama ve eylem altında.
+ *
+ * İkisi tek bir flex satırına konsaydı `SectionHeader`'ın alt çizgisi yalnızca sol
+ * kolonun genişliği kadar uzanır ve açıklama metninin üstünden geçerdi — ekranda
+ * görüldü. Ayraç bölümün tamamını ayırıyor, başlığın altını değil.
+ */
 .sectionHead {
   display: flex;
   gap: var(--space-4);
-  align-items: flex-end;
+  align-items: flex-start;
   justify-content: space-between;
-  padding-bottom: var(--space-4);
+  padding: var(--space-3) 0 var(--space-4);
 }
 
 .lead {
   max-width: 62ch;
+  margin: 0;
   font-size: var(--font-size-meta);
   line-height: var(--line-height-prose);
   color: var(--color-text-muted);
