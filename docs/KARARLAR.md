@@ -105,6 +105,12 @@ Format: her ADR'de **Karar / Gerekçe / Sonuç / Durum**.
 
 **Durum.** Kabul edildi.
 
+> **Netleştirme (2026-07-25).** **Geliştirme döngüsünde hiçbir Windows makine yok** — ne
+> fiziksel ne sanal. Geliştirici `.msi`'yi indirmez, kurmaz, açmaz; Windows'a dair her
+> doğrulama `windows-latest` CI işiyle yapılır. Faz 5 sonundaki "ilk gerçek Windows testi"
+> **kurs sahibinin kendi bilgisayarında** yapılır; ona gönderilecek paket CI artifact'idir.
+> Bu, CI'ın ne zaman kurulacağını değil, kimin neyi doğruladığını netleştirir — karar aynı.
+
 ---
 
 ## ADR-009 — WhatsApp/SMS hatırlatma v2'ye ertelendi
@@ -264,5 +270,27 @@ Format: her ADR'de **Karar / Gerekçe / Sonuç / Durum**.
 **Gerekçe.** PRD §9 S1 kurs sahibine soruldu, cevap: aktarılacak dijital veri yok (2026-07-25). Varsayım doğrulandığı için soru kapandı.
 
 **Sonuç.** Faz 4 planlandığı gibi kalır, bölünmesi gerekmiyor. **Dışa** aktarma kapsamda kalır (cari ekstre CSV, BOM'lu UTF-8 — R4.15). İleride gerçek bir aktarım ihtiyacı doğarsa ayrı bir ADR ile açılır.
+
+**Durum.** Kabul edildi.
+
+---
+
+## ADR-022 — Ters kayıt zinciri uçtan uca netlenir (zincir paritesi)
+
+**Karar.** `v_ledger_effective` "ters kaydedilmiş satırı ve ters kaydın kendisini at" kuralıyla değil, **ters kayıt zincirinin uzunluğuna** göre tanımlanır: her zincir, ters kaydı olmayan (`kind <> 'reversal'`) bir **başlık satırından** başlar; zincir **tek** uzunluktaysa başlık satırı geçerlidir, **çift** uzunluktaysa zincir tümüyle düşer. Uygulama Faz 3'te `002_ledger_effective_parity.sql` migration'ıyla gelir; `ledger_entry` tablosuna, kısmi UNIQUE indekslere ve kullanıcı akışına dokunulmaz.
+
+Bu tanımın getirdiği ve testle çivilenen değişmez:
+
+> **Her öğrenci için `SUM(v_ledger_effective.amount) = v_student_balance.balance_kurus`.**
+
+**Gerekçe.** Eski tanım zincirin en fazla **iki** halkalı olacağını varsayıyordu (borç + tersi). `VERI-MODELI.md §4`'ün yoklama düzeltme akışı ise üç halkalı bir zincir üretiyor (Geldi → Mazeretli → Geldi) ve şema buna izin veriyor. Sonuç: aynı öğrenci Öğrenci detayında **−250 ₺ borçlu**, borçlu listesinde **borçsuz** görünüyordu — ADR-018'in ortadan kaldırmak için yazıldığı arızanın aynısı, bu kez tek bir view'ın içinde.
+
+Denetimde `sqlite3` ile sekiz senaryo çalıştırıldı ve **ikinci, o güne kadar görülmemiş bir arıza** çıktı: iptal edilmiş bir tahsilatın iptalini geri almak (tahsilat → ters kayıt → ters kaydın tersi) borcu olmayan öğrenciyi borçlu listesine **yanlışlıkla sokuyordu**. İki arızanın kök sebebi aynı: zincir uzunluğu varsayımı. Parite tanımı ikisini birden kapatıyor ve doğruluğu tek bir değişmeze indirgiyor — bakiye ile borçlu listesi artık **yapı gereği** aynı deftere bakıyor.
+
+Elenen iki seçenek: (a) düzeltmenin üçüncü adımında yeni bir `session_charge` yazmak — `ux_ledger_attendance` gevşetilmeliydi, yani aynı yoklamanın iki kez ücretlendirilmesini engelleyen mühür bir view hatası uğruna feda edilirdi (PRD K-4/K-5). (b) ters kaydın tersini yasaklamak — muhasebede meşru bir işlem şema seviyesinde yasaklanır, kullanıcı yoklamayı iptal edip yeniden girmek zorunda kalır, telafi bağlantıları ve paket kullanım satırları arşivlenmiş bir yoklamayı işaret ederdi.
+
+**Sonuç.** View içinde bir `WITH RECURSIVE` bulunur. Zincirler doğrusaldır: `ux_ledger_reverses` bir satırın en fazla bir kez ters kaydedilmesini garanti eder, dallanma imkânsızdır. Döngü de imkânsızdır — `reverses_id` var olan bir satırı işaret etmek zorundadır (yabancı anahtar) ve `trg_ledger_immutable` her `UPDATE`'i reddeder (K5), dolayısıyla zincir daima geriye doğru gider. `~100` öğrenci ölçeğinde maliyet ölçülemez.
+
+Ters kayıt satırları hâlâ `v_ledger_effective`'te görünmez (geçerli olan daima başlık satırıdır), dolayısıyla `v_open_charge`'ın vade mantığı — taksitte `installment.due_on`, ders başında ders günü — olduğu gibi korunur. `package_usage` tarafındaki düzeltme zinciri bu ADR'nin **kapsamı dışındadır**; ders hakkı ayrı bir sayaçtır (ADR-015) ve kararı Faz 6'ya aittir (`faz-06.md §3b`).
 
 **Durum.** Kabul edildi.

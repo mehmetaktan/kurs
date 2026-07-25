@@ -45,8 +45,14 @@ Kilit gözlem: defterdeki her negatif satır tanımı gereği vadesi gelmiş bor
 gelince yazılır. Tutar `−bakiye`; eksik olan tek parça **vade tarihi**, o da defter üzerinde
 FIFO yaşlandırmayla bulunur:
 
+> **Sonraki not (Faz 2 denetimi → ADR-022).** Aşağıdaki `v_ledger_effective` tanımı bu
+> denetimde yazıldığı hâliyle duruyor ve **artık geçerli değil**: ters kayıt zincirinin en
+> fazla iki halkalı olacağını varsayıyor, üç halkalı zincirde borcu görünmez kılıyor.
+> Yürürlükteki tanım `VERI-MODELI.md §1.23`'te (zincir paritesi). Bu bölüm tarihsel kayıt
+> olarak değiştirilmedi.
+
 ```sql
--- Ters kayıtları netleyen yardımcı görünüm
+-- Ters kayıtları netleyen yardımcı görünüm (ESKİ — ADR-022 ile değişti)
 CREATE VIEW v_ledger_effective AS
 SELECT l.* FROM ledger_entry l
 WHERE l.deleted_at IS NULL

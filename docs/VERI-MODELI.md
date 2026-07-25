@@ -953,14 +953,23 @@ FROM student s
 LEFT JOIN ledger_entry l ON l.student_id = s.id AND l.deleted_at IS NULL
 GROUP BY s.id;
 
--- Ters kayıtları netleyen taban görünüm: ters kaydın kendisi de, ters kaydedilmiş
--- orijinal satır da düşer. Geriye yalnızca "hâlâ geçerli" hareketler kalır.
+-- Ters kayıt zincirini uçtan uca netleyen taban görünüm (ADR-022).
+-- Her zincir bir BAŞLIK satırından başlar (kind <> 'reversal'). Zincir TEK
+-- uzunluktaysa başlık satırı geçerlidir, ÇİFT uzunluktaysa zincir tümüyle düşer.
+-- Değişmez: SUM(v_ledger_effective.amount) = v_student_balance.balance_kurus
 CREATE VIEW v_ledger_effective AS
+WITH RECURSIVE chain(head_id, cur_id, depth) AS (
+  SELECT l.id, l.id, 0 FROM ledger_entry l
+  WHERE l.deleted_at IS NULL AND l.kind <> 'reversal'
+  UNION ALL
+  SELECT c.head_id, r.id, c.depth + 1
+  FROM chain c
+  JOIN ledger_entry r ON r.reverses_id = c.cur_id AND r.deleted_at IS NULL
+),
+depth_of AS (SELECT head_id, MAX(depth) AS n FROM chain GROUP BY head_id)
 SELECT l.* FROM ledger_entry l
-WHERE l.deleted_at IS NULL
-  AND l.kind <> 'reversal'
-  AND NOT EXISTS (SELECT 1 FROM ledger_entry r
-                  WHERE r.reverses_id = l.id AND r.deleted_at IS NULL);
+JOIN depth_of d ON d.head_id = l.id
+WHERE d.n % 2 = 0;
 
 -- Deftere yazılmış her borç satırı, KENDİ vadesiyle.
 -- Taksit borcunda vade = installment.due_on (tahakkuk günü değil — uygulama geç
@@ -1019,6 +1028,35 @@ LEFT JOIN (
 WHERE i.deleted_at IS NULL
   AND i.amount > COALESCE(a.paid, 0);
 ```
+
+#### Ters kayıt zinciri neden pariteyle netleniyor (ADR-022)
+
+İlk tanım şuydu: *"ters kaydı olan satırı at, ters kayıtların kendisini de at."* Bu, zincirin
+en fazla **iki** halkalı olacağını varsayıyor. Oysa §4'ün yoklama düzeltme akışı üç halkalı
+bir zincir üretiyor ve şema buna izin veriyor — sonuç, aynı öğrencinin iki ekranda iki farklı
+borcu. Faz 2 denetiminde `sqlite3` ile sekiz senaryo çalıştırıldı:
+
+| Senaryo | Zincir | Bakiye | Eski tanım | Parite (ADR-022) |
+|---|---|---|---|---|
+| Sade ders borcu | 1 | −250 ₺ | 250 ₺ ✅ | 250 ₺ ✅ |
+| Ders işlendi, sonra iptal | 2 | 0 | 0 ✅ | 0 ✅ |
+| **Geldi → Mazeretli → Geldi** | 3 | −250 ₺ | **0** ❌ | 250 ₺ ✅ |
+| Mazeretli'ye geri dönüldü | 4 | 0 | 0 ✅ | 0 ✅ |
+| Tahsilat iptal edildi | 2 | −250 ₺ | 250 ₺ ✅ | 250 ₺ ✅ |
+| **Tahsilat iptali geri alındı** | 3 | 0 | **250 ₺** ❌ | 0 ✅ |
+| Taksit borcu + kısmi tahsilat | 1 | −300 ₺ | 300 ₺ ✅ | 300 ₺ ✅ |
+| Arşivli borçlu | 1 | −250 ₺ | 250 ₺ ✅ | 250 ₺ ✅ |
+
+İkinci kırmızı satır o güne kadar hiç görülmemişti: iptal edilmiş bir tahsilatın iptalini geri
+almak, **borcu olmayan öğrenciyi borçlu listesine sokuyordu.** Aynı kök sebep, ters yönde.
+
+Parite tanımı doğruluğu tek bir cümleye indirger ve bu cümle test edilebilir:
+`SUM(v_ledger_effective.amount) = v_student_balance.balance_kurus` — her öğrenci için, her
+zaman. Bakiye ve borçlu listesi artık aynı deftere **yapı gereği** bakıyor.
+
+Zincirler doğrusaldır (`ux_ledger_reverses` dallanmayı engeller) ve döngü kuramaz:
+`reverses_id` var olan bir satırı işaret etmek zorunda (yabancı anahtar) ve `trg_ledger_immutable`
+her `UPDATE`'i reddediyor (K5) — zincir daima geriye doğru gider, `WITH RECURSIVE` daima biter.
 
 #### Neden borçlu listesi defterden okuyor (ADR-018)
 
@@ -1192,6 +1230,11 @@ mekanizmayla — **ters kaydın tersiyle** — yazılır:
 Defter tarafı ek DDL gerektirmiyor: `ux_ledger_attendance` yalnızca `kind='session_charge'`
 satırlarını süzüyor, ters kayıtlar serbest. `ux_ledger_reverses` her satırın en fazla bir kez
 ters kaydedilmesini sağladığı için zincir dallanamaz — 2. adım iki kez yazılamaz.
+
+> **Faz 2 denetimi (kapandı — ADR-022).** Yazma tarafı sorunsuz çalışıyordu ama `§1.23`'teki
+> `v_ledger_effective` üç halkalı zinciri okuyamıyor, 3. adımdan sonra borcu **görünmez**
+> kılıyordu: Öğrenci detayı −250 ₺ borçlu, borçlu listesi borçsuz. Düzeltme, zincir
+> paritesiyle tanımlanan yeni view — akış ve indeksler aynen korunuyor.
 
 > ⚠️ **Faz 6'ya devredilen açık nokta.** `ux_pkgusage_att` `(attendance_id, delta)` üzerinde
 > tekil olduğu için 3. adımda ikinci bir `delta=−1` satırı yazılamaz. Ders hakkı tarafında
@@ -1378,6 +1421,17 @@ CLAUDE.md: *"Para ile ilgili her fonksiyonun testi olur. Bu pazarlık konusu de�
 | `sort_tr(&[&str])` | `Çınar < Demir`, `İnce < Kaya`, `ışık < iyi` (ADR-020) |
 
 Testler in-memory SQLite üzerinde, gerçek migration'lar uygulanarak çalışır (ADR-002).
+
+**Şema değişmezi (ADR-022).** Fonksiyon testlerinden bağımsız olarak, her senaryo kurulumunun
+sonunda şu eşitlik sınanır — bakiye ile borçlu listesinin ayrışmasını yakalayan tek satır:
+
+```sql
+-- her öğrenci için sıfır satır dönmeli
+SELECT b.student_id FROM v_student_balance b
+LEFT JOIN (SELECT student_id, SUM(amount) AS eff FROM v_ledger_effective GROUP BY student_id) e
+       ON e.student_id = b.student_id
+WHERE COALESCE(e.eff, 0) <> b.balance_kurus;
+```
 
 **Hiçbir testte tarih SQLite'tan okunmaz** (`§0` `'now'` kuralı). `today` her zaman
 parametredir; aksi hâlde testler CI makinesinin saat dilimine bağlı olur ve macOS'ta geçip

@@ -123,13 +123,21 @@ nasıl tetiklerim, `.msi`'yi nereden indiririm.
 1. Uygulama macOS'ta açılıyor: "Kurs Takip" başlıklı pencere + veritabanı bağlantısının
    çalıştığını gösteren bir satır (ör. seed'lenmiş öğrenci sayısı). Ekran görüntüsü al, göster.
 2. **CI'da `windows-latest` iş akışı yeşil** — migration'lar ve şema mühürlerinin testleri dahil.
-3. GitHub Actions'tan **indirilebilir bir `.msi` artifact'i var**.
+3. GitHub Actions'ın **Paket · windows-latest** işi yeşil ve çalışmanın Artifacts kutusunda
+   sıfır olmayan boyutlu bir `.msi` paketi listeleniyor. **İndirmeye gerek yok** — kontrol
+   Actions sayfasında gözle yapılır.
 
-> `.msi`'nin gerçek bir Windows makinesinde **kurulup açılması** bu fazın kriteri değil —
-> ADR-008 ilk gerçek Windows testini Faz 5 sonuna koydu ve geliştirme macOS'ta yapılıyor.
-> Madde 2 o testin yerini tutmaz, ama şema/derleme sınıfındaki hataları Faz 5'i beklemeden
-> yakalar. `docs/DURUM.md`'deki "Windows'ta açılan bir `.msi` olmadan tamamlanmış sayılmaz"
-> ifadesi bu üç maddeyle değiştirildi.
+> **Geliştirme döngüsünde Windows makine yok.** Ne `.msi` indirilir ne kurulur; Windows'a
+> dair her doğrulama CI'da yapılır. `.msi`'yi gerçekten kurup açmak ADR-008 gereği Faz 5
+> sonunda **kurs sahibinin makinesinde** olacak — geliştiricinin işi değil.
+>
+> Madde 2 o testin yerini tutmaz ama şema ve derleme sınıfındaki hataları Faz 5'i
+> beklemeden yakalar: testler gerçek migration'ları uyguladığı için Windows'ta geçen bir
+> test, şemanın Windows'ta kurulduğunun kanıtıdır. Madde 3 ise yalnızca "paketleme adımı
+> çöküyor mu" sorusunu cevaplar.
+>
+> `docs/DURUM.md`'deki "Windows'ta açılan bir `.msi` olmadan tamamlanmış sayılmaz" ifadesi
+> bu üç maddeyle değiştirildi.
 
 ---
 

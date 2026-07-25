@@ -1,82 +1,115 @@
 # Durum
 
 **Son güncelleme:** 2026-07-25
-**Mevcut faz:** Faz 1 tamamlandı + **denetlendi ve düzeltildi** → sırada **Faz 2**
-**Sonraki oturumda ilk iş:** `/faz-02` (Tauri iskeleti, migration, seed, Windows CI)
+**Mevcut faz:** Faz 2 kod olarak tamamlandı + yönetici denetimi yapıldı → sırada **Faz 3**
+**Sonraki oturumda ilk iş:** `/faz-03` — ilk maddesi ADR-022 migration'ı (`faz-03.md §0`)
+
+> Faz 2'nin 3 kabul kriterinden **1'i sağlandı** (macOS'ta açılıyor); 2 ve 3 CI'da doğrulanacak
+> ve depo GitHub'a gidene kadar bekliyor. Bu Faz 3'ü **bloklamıyor** — Faz 3 ekranları macOS'ta
+> geliştirilecek. Push yapıldığında Actions sayfasına bakmak yeterli.
 
 ---
 
-## Faz 1 (Plan) — tamamlandı
+## Faz 2 (İskelet & CI) — tamamlandı
 
-- `design-ref/` altına 4 ekran indirildi: `Bugun`, `Takvim`, `Öğrenciler`, `Öğrenci detayı`.
-  **Sonraki oturumlar tekrar indirmez.** `support.js` ve `.thumbnail` bilinçli olarak alınmadı.
-- Yazılan belgeler: `VERI-MODELI.md` (21 tablo + view'lar), `PRD.md`, `EKRANLAR.md`,
-  `TASARIM-SISTEMI.md`, `KARARLAR.md` (ADR-011…017)
-- Tasarımdan çıkan ve planda olmayan 8 bulgu — en kritiği `teacher` tablosu; ayrıca taksit
-  sistemi, haftalık şablon, tatil yönetimi, yedekleme kaydı
+`npm run check` yeşil: **107 test** (85 Rust + 22 TypeScript). Uygulama macOS'ta açılıyor;
+veritabanı `app_data_dir` altında, SQLite 3.53.2 `bundled`, WAL açık, yabancı anahtarlar açık.
 
-## Faz 1 denetimi (yönetici oturumu) — tamamlandı
-
-Şema Faz 2'de gerçek SQL'e dönüşmeden önce çok yönlü ve karşıt-doğrulamalı denetimden geçti.
-6 denetçi + her bulgu için ayrı bir çürütücü; SQL iddiaları `sqlite3` ile **çalıştırılarak**
-sınandı. **30 bulgu, hiçbiri çürütülmedi** (birkaçının şiddeti düşürüldü) → 25 ayrı sorun.
-
-Tam rapor kanıtlarıyla: **`docs/DENETIM-FAZ1.md`**
-
-### Denetim sonucu düzeltilenler
-
-| Nerede | Ne değişti |
+| Ne | Durum |
 |---|---|
-| `VERI-MODELI.md §0` | `'now'` kuralı (SQLite `'now'` **UTC** döner, ADR-017'nin tersi) · K7–K9 yapısal kararları · tüm `DEFAULT`'lar `localtime` |
-| `VERI-MODELI.md §1.19` | Defter mührü kapatıldı: sütunsuz trigger + `CHECK (deleted_at IS NULL)` · `ux_ledger_payment` · `ux_ledger_reverses` · `trg_ledger_reversal_valid` · tahsilat mühürleri |
-| `VERI-MODELI.md §1.23` | **Borçlu listesi defter tabanlı oldu** (ADR-018): `v_ledger_effective` → `v_open_charge` → `v_student_debt`. Arşivli borçlu artık kaybolmuyor; `package.status`'a iş mantığı bağlı değil |
-| `VERI-MODELI.md §4` | İki yeni bölüm: yoklama düzeltmesi · tahsilat iptali |
-| `VERI-MODELI.md §5` | Tahakkuk `INSERT...SELECT` olmaktan çıktı — sessizce ücretlendirilmeyen ders sorunu |
-| `VERI-MODELI.md §1.4/1.8/1.14/1.3/1.9` | `search_name` · seans üretim ufku · `teacher` başlangıç satırı · çakışan kayıt yasağı |
-| `KARARLAR.md` | **ADR-018** borçlu listesi · **ADR-019** yedekleme `VACUUM INTO` · **ADR-020** Türkçe sıralama · **ADR-021** içe aktarma yok |
-| `PRD.md` | K-19…K-23 koruyucu kuralları · **S1 cevaplandı** |
-| `EKRANLAR.md` | Bugün ekranı borç satırının kaynağı düzeltildi |
-| Faz komutları | `faz-02`, `faz-05`, `faz-06`, `faz-07`, `faz-08`, `faz-10` gerçekle hizalandı |
+| `001_initial.sql` | 21 tablo + `schema_migration`, 6 view, 6 trigger, 37 indeks — `VERI-MODELI.md`'den birebir, sıfır sapma |
+| Başlangıç verisi | 15 `setting` + tek `teacher` — migration'da, seed'de değil |
+| Migration çalıştırıcı | SHA-256 checksum, `include_str!` ile derlemeye gömülü; değiştirilmiş migration açılışta Türkçe mesajla durduruyor |
+| Repository | `Record` trait'i ile 21 tabloya tipli `get`/`list`/`archive`/`restore`/`count`; `ledger_entry`'de `update`/`archive` **yok** (K5) |
+| `search_name` · `phone_digits` | Repository üretiyor, çağırana bırakılmıyor |
+| CI | `.github/workflows/ci.yml` — Test + Paket, `windows-latest` ve `macos-latest` |
 
-### En ağır üç bulgu (hepsi düzeltildi)
+### Faz 2 kendi denetimi — 9 bulgu, 5 gerçek
 
-1. **Borçlu listesi ders başı ödeyenleri hiç göstermiyordu.** `v_student_overdue` yalnızca
-   `installment`'tan besleniyordu; ders başı borcu `ledger_entry`'de doğuyor. PRD'nin dört
-   ana sorusundan biri yanlış cevaplanıyordu.
-2. **Defterin değişmezlik mührü delikti.** `deleted_at` korumasızdı → tek UPDATE ile bakiye
-   izsiz değişiyor, üstelik taksit bir daha tahakkuk etmiyordu (borç kalıcı kayboluyordu).
-3. **Yedekleme çalışmıyordu.** WAL'da `.db` kopyalayan yedek boş çıkıyor ve `integrity_check`
-   buna "ok" diyor; geri yükleme de bayat `-wal` yüzünden sessizce hiçbir şey yapmıyordu.
+- **`INSERT OR REPLACE` defter mührünü deliyordu.** Örtük `DELETE`, `recursive_triggers`
+  kapalıyken `trg_ledger_no_delete`'i hiç ateşlemiyor — defter satırı izsiz kayboluyordu.
+  Düzeltme: `PRAGMA recursive_triggers = ON` + 4 regresyon testi (negatif kontrol yapıldı).
+- `group_members_on` arşivli öğrenciyi yoklama listesinde bırakıyordu.
+- Seed hedef bakiyeyi tutturamayınca sessizce vazgeçiyordu; hedefler mutlak kuruş yerine
+  ödeme biçimine bağlandı (mutlak hedefler gerçek tarihe bağlıydı, testler sabit `TODAY`
+  kullandığı için yeşil geçiyordu).
+- **`parseKurus` ile `parse_kurus` ayrışıyordu:** `'1.2,3.4'` Rust'ta hata, TS'te `1234`.
+  TS Rust'ın sırasına çekildi, bozuk girdi listesi iki tarafta eşitlendi, vitest `check`'e
+  ve CI'a bağlandı.
 
-### Denetlendi, sorun çıkmadı
+## Faz 2 yönetici denetimi (bu oturum)
 
-Trigger'lar, dışlayıcı `CHECK`, `GENERATED ... STORED` sütunları, kısmi UNIQUE indeksler ve
-şema kuruluş sırası **çalıştırılarak** doğrulandı — hepsi doğru. Şemanın iskeleti sağlamdı;
-sorunlar mühürlerde ve iki view'daydı.
+**Kararlara uygunluk: 7/7 temiz.** Frontend'de SQL yok (ADR-002) · float yok (ADR-003) ·
+saklanan bakiye sütunu yok (ADR-004) · `DELETE FROM`/`DROP TABLE` yok (ADR-005) · platforma
+özel API yok (ADR-008) · JSX'te çıplak Türkçe yok (ADR-007) · Türkçe metin kolonunda
+`ORDER BY` yok (ADR-020).
+
+### Devredilen karar cevaplandı → **ADR-022**
+
+Faz 2'nin sorduğu soru (`v_ledger_effective` üç halkalı zinciri okuyamıyor) `sqlite3` ile
+sekiz senaryo çalıştırılarak karara bağlandı. Seçenek 1 — **zincir paritesi** — onaylandı.
+
+Denetim sırasında **ikinci bir arıza** çıktı, Faz 2'nin raporunda yoktu:
+
+| Senaryo | Zincir | Bakiye | Eski tanım | ADR-022 |
+|---|---|---|---|---|
+| Geldi → Mazeretli → Geldi | 3 | −250 ₺ | **borç yok** ❌ | 250 ₺ ✅ |
+| **Tahsilat iptali geri alınır** | 3 | 0 | **250 ₺ borç** ❌ | borç yok ✅ |
+
+İkincisi ters yönde aynı hata: borcu olmayan öğrenciyi borçlu listesine sokuyor. Parite
+tanımı ikisini birden kapatıyor ve doğruluğu test edilebilir tek bir değişmeze indiriyor:
+
+> her öğrenci için `SUM(v_ledger_effective.amount) = v_student_balance.balance_kurus`
+
+Uygulaması **Faz 3'ün ilk maddesi**: `002_ledger_effective_parity.sql` + 4 test
+(`faz-03.md §0`). `001_initial.sql` elle düzeltilmez — checksum mührü bunun için var.
 
 ---
 
-## Faz 6'ya devredilen tek açık karar
+## Açık işler
 
-`package_usage` tarafında yoklama düzeltme zinciri **iki adımda tıkanıyor**
-(`ux_pkgusage_att` `(attendance_id, delta)` üzerinde tekil). Geldi → Mazeretli → Geldi
-dizisinde ikinci `delta=−1` yazılamıyor. Seçenekler ve karar `faz-06.md §3b`'de yazılı.
-Faz 2'de DDL **olduğu gibi** yazılır.
+### 1. GitHub'a push — senin elinde, Faz 2'nin son iki kriteri buna bağlı
 
-## Yarım kalan / bilinçli ertelenen
+**Depo henüz GitHub'a gitmedi** (`git remote` boş), o yüzden hiçbir CI çalışması olmadı.
+Kabul kriteri 2 ve 3 bu yüzden ⏳. CI yerelde sınandı: YAML parse edildi, macOS paketlemesi
+gerçekten çalıştırıldı ve bir hata yakalandı (dmg adımı `.app`'i tüketiyor, artifact yolu
+`*.app` arıyordu → macOS işi hep kırmızı olurdu; düzeltildi).
+
+```
+gh auth login
+gh repo create kurs-takip --private --source=. --remote=origin --push
+```
+
+`gh auth login` interaktif — sohbete `! gh auth login` yazarak buradan da çalıştırabilirsin.
+Push ile birlikte workflow kendiliğinden başlar; ilk çalışma ~15–25 dk (Rust derlemesi
+önbelleksiz).
+
+> **Windows makine yok — hiçbir aşamada gerekmiyor** (ADR-008 netleştirmesi).
+> `.msi` **indirilmez, kurulmaz.** Actions sayfasında bakılacak tek şey: `Test · windows-latest`
+> yeşil mi (asıl kanıt bu — testler gerçek migration'ları uyguluyor) ve Artifacts kutusunda
+> sıfır olmayan boyutta bir `.msi` listeleniyor mu. `.msi`'yi gerçekten kurup açmak Faz 5
+> sonunda **kurs sahibinin bilgisayarında** olacak; gönderilecek paket CI artifact'idir.
+
+### 2. Faz 6'ya devredilen açık karar — ders hakkı tarafı
+
+`ux_pkgusage_att` `(attendance_id, delta)` üzerinde tekil olduğu için düzeltme zincirinin
+üçüncü adımında ikinci `delta = −1` yazılamıyor. **Defter tarafı ADR-022 ile kapandı**;
+bu, ders hakkı sayacının ayrı sorunu (ADR-015: iki ayrı sayaç). Seçenekler ve ADR-022'nin
+getirdiği yeni gerekçe `faz-06.md §3b`'de.
+
+### 3. Bilinçli ertelenenler
 
 | Ne | Neden |
 |---|---|
 | `design-ref/support.js` indirilmedi | Claude Design'ın render motoru, bizim kodumuz değil. Komut `design-ref/README.md`'de |
-| `CLAUDE.md > Komutlar` hâlâ boş | Faz 2'de `pnpm`/`cargo` komutları belirlenince doldurulacak |
 | Takvimde öğretmen filtresi + Gün görünümü çoklu sütun | ADR-011 — tek öğretmen. Şema hazır, arayüz sadeleşti |
 
 ---
 
 ## Açık sorular — cevabını senden bekliyorum
 
-`docs/PRD.md` §9'da gerekçeleriyle. **S1 cevaplandı (ADR-021).** Kalanların hiçbiri Faz 2'yi
-bloklamıyor; her birinin varsayılan varsayımı var.
+`docs/PRD.md` §9'da gerekçeleriyle. **S1 cevaplandı (ADR-021).** Hiçbiri Faz 3'ü bloklamıyor;
+her birinin varsayılan varsayımı var.
 
 | # | Soru | Hangi faz |
 |---|---|---|
@@ -92,15 +125,12 @@ bloklamıyor; her birinin varsayılan varsayımı var.
 
 ---
 
-## Faz 2'nin riski
+## Faz 3'ün riski
 
-Denetim üç riskten ikisini adıyla `faz-02.md`'ye yazdı: `rusqlite` **`bundled`** özelliği
-(şema SQLite **3.31+** istiyor) ve `rust-toolchain.toml` ile sürüm sabitleme. Üçüncüsü —
-migration'ların gerçekten çalışması — artık `sqlite3` ile doğrulanmış durumda.
+Tasarım token'ları ve komponent kütüphanesi düşük riskli. Asıl dikkat iki yerde:
 
-Yeni önlem: **Rust testleri `windows-latest` üzerinde de koşacak.** Testler gerçek
-migration'ları uyguladığı için Windows'ta geçen bir test, şemanın Windows'ta kurulduğunun
-kanıtı olur — kimsenin Windows makinesine dokunmasına gerek kalmadan.
-
-`faz-02.md §9` fazın kabul kriterini üç maddeye bağladı. `.msi`'nin gerçek bir Windows
-makinesinde kurulup açılması Faz 2'nin değil, **ADR-008 gereği Faz 5 sonunun** işi.
+1. **ADR-022 migration'ı arayüzden önce bitmeli.** Borçlu listesini okuyan ilk ekran
+   yazılmadan şema doğru olmalı; yanlış şemanın üstüne kurulan ekran iki kez yazılır.
+2. **`format.ts` ile `money.rs` ayrışmaya devam edebilir.** Faz 2 bir ayrışma buldu;
+   tarih ve telefon biçimleyicileri eklenirken aynı tuzak var. Her iki tarafın bozuk girdi
+   listesi birlikte güncellenir.

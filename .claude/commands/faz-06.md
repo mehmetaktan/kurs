@@ -49,12 +49,21 @@ paket mantığını burada kurma.
 düzeltme **ikinci bir `session_charge` yazmaz**, ters kaydın tersini yazar
 (`ux_ledger_attendance` ikinciyi zaten reddeder).
 
-> **Karar senden bekleniyor.** Defter tarafı çözülü ama `package_usage` tarafında
-> `ux_pkgusage_att` `(attendance_id, delta)` üzerinde tekil olduğu için düzeltme zinciri
-> **iki adımda tıkanıyor**: Geldi → Mazeretli → Geldi dizisinde ikinci `delta=−1` yazılamıyor.
+> **Karar senden bekleniyor.** Defter tarafı **tümüyle kapandı** — yazma tarafı Faz 1'de,
+> okuma tarafı **ADR-022** ile (zincir paritesi, `002_ledger_effective_parity.sql`).
+> Ama `package_usage` tarafında `ux_pkgusage_att` `(attendance_id, delta)` üzerinde tekil
+> olduğu için düzeltme zinciri **iki adımda tıkanıyor**: Geldi → Mazeretli → Geldi dizisinde
+> ikinci `delta=−1` yazılamıyor.
+>
 > İki seçenek: (a) indekse `cycle` sütunu eklemek, (b) `package_usage`'ı da ters-kayıt zinciri
-> modeline geçirmek. Kararı ver, **ADR yaz**, migration'ı bu fazda aç.
-> Bu tek satır bu fazın en riskli parçası — önce onu çöz, sonra ekrana geç.
+> modeline geçirmek. **(b) lehine yeni bir gerekçe var:** ADR-022 defter tarafında tam olarak
+> bu modeli seçti; ders hakkını da aynı modele geçirmek iki sayacı tek bir zihinsel modelde
+> birleştirir ve `v_package_remaining` için ADR-022'nin değişmezinin eşi yazılabilir hâle gelir
+> (`SUM(delta)` ile kalan hak asla ayrışmaz). (a) daha ucuz ama iki farklı düzeltme dili bırakır.
+>
+> Kararı ver, **ADR yaz**, migration'ı bu fazda aç. Para/defter kararı olduğu için doğrulamayı
+> en güçlü modelle yap (CLAUDE.md ajan kuralı). Bu tek satır bu fazın en riskli parçası —
+> önce onu çöz, sonra ekrana geç.
 
 ## 4. Öğrenci detayı > Dersler sekmesi
 
