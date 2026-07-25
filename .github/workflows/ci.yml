@@ -90,6 +90,12 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
 
+      # `npm ci` bu projede iki kez düştü ve ikisinde de "hangi npm koştu" sorusu
+      # cevapsızdı. Sürüm yerelde `node -v` / `npm -v` ile bilinir; CI'da bilinmiyorsa
+      # teşhis tahmine dönüyor. İki satır, kalıcı.
+      - name: Node ve npm sürümleri
+        run: node -v && npm -v
+
       - run: npm ci
 
       - name: Tip denetimi (TypeScript)
