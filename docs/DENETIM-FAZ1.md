@@ -403,7 +403,7 @@ seans üretilmemiş. Bir `setting` anahtarı (üretim ufku) ve aynı seri+slot i
 | C7 | `faz-02.md`'de `rusqlite`'ın `bundled` özelliği ve `rust-toolchain.toml` **adıyla yazılmamış**. Şemanın SQLite tabanı **3.31.0** (`GENERATED ALWAYS ... STORED`). Açılışta `sqlite_version()` loglanmalı | Faz 2 |
 | C8 | `.gitattributes` yok → Windows CI checkout'unda migration dosyaları CRLF olur ve `schema_migration.checksum` (SHA-256) tutmaz; uygulama açılışta "migration değiştirilmiş" hatası verir | Faz 2 |
 | C9 | Veritabanı ve kullanıcı çıktıları `%APPDATA%` (Roaming, **gizli klasör**) altında. Kullanıcı makbuz PDF'ini (R4.13) kendi başına bulamaz; yedek dosyası da oraya yazılırsa OneDrive kapsamı dışında kalır | Faz 2 / Faz 10 |
-| C10 | `faz-05.md` branş CRUD'unda "varsayılan süre" istiyor ama ne `subject`'te ne `setting`'de böyle bir alan var — PRD S4'ün cevabının saklanacağı yer yok | Faz 5 |
+| C10 | ~~`faz-05.md` branş CRUD'unda "varsayılan süre" istiyor ama ne `subject`'te ne `setting`'de böyle bir alan var — PRD S4'ün cevabının saklanacağı yer yok~~ → **KAPANDI (Faz 2).** `subject.default_min` (`001_initial.sql:59`) ve `setting.default_session_minutes = '60'` (satır 628) eklendi. **S4 2026-07-25'te cevaplandı ve cevap tam da bu değer** — Faz 5 bu iş için migration **eklemez** | ~~Faz 5~~ |
 
 ---
 

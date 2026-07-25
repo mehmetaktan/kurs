@@ -1,8 +1,8 @@
 # Durum
 
-**Son güncelleme:** 2026-07-25 · Faz 4.5 (kod oturumu)
+**Son güncelleme:** 2026-07-25 · Faz 4.5 (kod oturumu) + S2/S4 cevapları
 **Mevcut faz:** Faz 4.5 ✅ tamamlandı → sırada **Faz 5**
-**Sonraki oturumda ilk iş:** **push et ve CI'ya bak** — üç commit hâlâ uzakta yok
+**Sonraki oturumda ilk iş:** **push et ve CI'ya bak** — **dört** commit hâlâ uzakta yok
 
 > Öğrenci ve veli modülü çalışıyor: liste, arama, filtre, form, detay, notlar, arşivleme.
 > Marka geçişi (ADR-024) uygulandı ve teste bağlandı.
@@ -12,7 +12,7 @@
 >
 > **CI hâlâ kırmızı bilinen son durumda.** Nedeni bulundu — Windows'la ilgisi yok,
 > `npm ci` sürüm çakışmasıydı. Düzeltmesi yapıldı ama **doğrulanmadı**: `.nvmrc` dahil
-> **üç commit hâlâ push edilmedi**, fark ancak push sonrası görülür. İlk iş budur.
+> **dört commit hâlâ push edilmedi**, fark ancak push sonrası görülür. İlk iş budur.
 
 ---
 
@@ -362,19 +362,28 @@ hesabıyla birlikte).
 
 ## Açık sorular — cevabını senden bekliyorum
 
-`docs/PRD.md` §9'da gerekçeleriyle. **S1 (ADR-021) ve S8 cevaplandı.**
-**S2 ve S4 Faz 5'i doğrudan etkiliyor** — sıradaki oturumda karşına çıkacak.
+`docs/PRD.md` §9'da gerekçeleriyle. **S1 (ADR-021), S8, S2 ve S4 cevaplandı.**
+**Faz 5'i bekleten açık soru kalmadı.**
 
 | # | Soru | Hangi faz |
 |---|---|---|
-| **S2** | Grup kapasitesi aşımı engellensin mi, uyarı mı? | **Faz 5** |
-| **S4** | Standart ders süresi kaç dakika? | **Faz 5** |
 | S3 | Paketlerin son kullanma tarihi var mı? | Faz 7 |
 | S6 | Dönem ortasında ayrılanın kalan paket parası iade mi, alacak mı? | Faz 7 |
 | S5 | Makbuz numarası otomatik mi artsın? | Faz 8 |
 | S7 | "Devam oranı" hangi pencerede hesaplansın? | Faz 9 |
 | S9 | Bilgisayarındaki Windows sürümü ne? | Faz 10 öncesi |
 | S10 | Kod imzalama sertifikası alınacak mı? | Faz 10 |
+
+**S2 ve S4 (2026-07-25).** İkisi de PRD'nin varsayımını onayladı, yani hiçbir belge yön
+değiştirmedi ve **şema değişmiyor** — Faz 5 migration eklemiyor:
+
+| # | Cevap | Zaten neredeydi |
+|---|---|---|
+| **S2** | Kapasite aşımında **onay istenir, engellenmez**. `group.capacity` hedeftir, kısıt değil; üyelik sayısında CHECK/trigger **konmaz** | `PRD R5.6` · `PRD K-8` · `EKRANLAR.md §309` |
+| **S4** | **Varsayılan 60 dk**, branşa özel değer `subject.default_min` ile geçersiz kılınabilir | `setting.default_session_minutes = '60'` (`001_initial.sql:628`) · `subject.default_min` (satır 59) |
+
+İkisi de `faz-05.md`'ye (§1 ve §2) bağlayıcı not olarak yazıldı. ADR açılmadı: yeni bir
+karar değil, yazılı varsayımın onayı — S8'le aynı kalıp.
 
 > S7 için Faz 4 bir **varsayım** kullandı: devam oranı tüm işlenen dersler üzerinden
 > hesaplanıyor ve kartın altında "Tüm işlenen dersler" yazıyor — sayı belirsiz kalmasın

@@ -328,9 +328,9 @@ Cevaplanmadan ilgili faz **tamamlanamaz**.
 | # | Soru | Hangi faz | Cevap gelmezse varsayım |
 |---|---|---|---|
 | ~~**S1**~~ | ~~Şu an Excel/defter kullanıyor musun?~~ → **CEVAPLANDI (2026-07-25): hayır, sıfırdan başlıyor.** İçe aktarma yazılmaz, Faz 4 planlandığı gibi kalır. Bkz. **ADR-021**. | ~~Faz 4~~ | — |
-| **S2** | Grup kapasitesi aşımı engellensin mi, uyarı mı yeter? | Faz 5 | Onay istenir, engellenmez |
+| ~~**S2**~~ | ~~Grup kapasitesi aşımı engellensin mi, uyarı mı yeter?~~ → **CEVAPLANDI (2026-07-25): onay istenir, engellenmez.** Varsayımın onayı; `R5.6`, `K-8` ve `EKRANLAR.md §309` zaten bunu yazıyordu, üçü de değişmiyor. Kapasite `group.capacity`'de duruyor ve **şema seviyesinde zorlanmaz** — üyelik sayısında CHECK/trigger yok, kural arayüzün onay diyaloğudur. | ~~Faz 5~~ | — |
 | **S3** | Paketlerin son kullanma tarihi var mı? (örn. "3 ay içinde kullanılmalı") | Faz 7 | Süresiz |
-| **S4** | Standart ders süresi kaç dakika? Tasarımda 60 ve 90 var. | Faz 5 | Varsayılan 60, değiştirilebilir |
+| ~~**S4**~~ | ~~Standart ders süresi kaç dakika? Tasarımda 60 ve 90 var.~~ → **CEVAPLANDI (2026-07-25): varsayılan 60 dk, değiştirilebilir.** Varsayımın onayı, migration'da hazır: `setting.default_session_minutes = '60'`, branşa özel değer `subject.default_min` (NULL = genel varsayılan). **Şema değişmiyor, migration eklenmiyor.** Takvim ızgarası 60 dakikalık dilime oturur; 90 dakikalık ders serbest, tek tek girilir. | ~~Faz 5~~ | — |
 | **S5** | Makbuz numarası otomatik mi artsın, elle mi girilsin? | Faz 8 | Otomatik, elle düzeltilebilir |
 | **S6** | Öğrenci dönem ortasında ayrılırsa kalan paket parası iade mi edilir, alacak mı kalır? | Faz 7 | Alacak (avans) olarak kalır |
 | **S7** | "Devam oranı" hangi pencerede hesaplansın? Tasarım "son 8 hafta" trendi gösteriyor. | Faz 9 | Tüm zaman + son 8 hafta trendi |

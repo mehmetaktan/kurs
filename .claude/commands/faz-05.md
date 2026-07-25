@@ -21,7 +21,11 @@ Faz büyükse ikiye bölmeyi öner — yarıda kalmaktansa bölünmüş olsun.
 ## 1. Branş yönetimi
 
 Basit CRUD: ad, renk (takvimde ayırt etmek için), **varsayılan süre** (`subject.default_min`;
-boşsa `setting.default_session_minutes`, varsayılan 60 — PRD S4).
+boşsa `setting.default_session_minutes`, varsayılan 60).
+
+> **PRD S4 cevaplandı (2026-07-25): varsayılan 60 dakika, değiştirilebilir.** İkisi de
+> migration'da hazır — **şema değişmiyor, bu faz migration eklemiyor.** Takvim ızgarası
+> 60 dakikalık dilime oturur; 90 dakikalık ders serbest, seansta tek tek girilir.
 
 `search_name` **Rust'ta üretilir** (`§0 K9`) ve tekillik onun üzerindedir: `Matematik` ile
 `matematik` aynı branştır. Listeleme `ORDER BY` ile değil, `sortTr` ile sıralanır (ADR-020).
@@ -29,12 +33,20 @@ boşsa `setting.default_session_minutes`, varsayılan 60 — PRD S4).
 ## 2. Grup yönetimi
 
 - Grup oluştur: ad, branş, kapasite, haftalık program, **öğretmen**
-- Öğrenci ekle / çıkar, kapasite kontrolü
+- Öğrenci ekle / çıkar, kapasite kontrolü — **onay iste, engelleme** (aşağıda)
 - **Katılma ve ayrılma tarihi tutulur** — geçmiş yoklamalar bozulmayacak (VERI-MODELI.md)
 - Grup listesi: doluluk oranı görünsün
 - Grup detayının **Notlar** sekmesi: ayrı bir tablo **açılmaz**; grup üyelerinin
   `student_note` kayıtlarının birleşik akışı gösterilir, not eklerken öğrenci seçtirilir
 - Aynı öğrenci + branş için **çakışan açık kayıt engellenir** (PRD K-22)
+
+> **PRD S2 cevaplandı (2026-07-25): kapasite aşımında onay istenir, engellenmez.**
+> `R5.6` · `K-8` · `EKRANLAR.md §309` ile aynı yön. Diyalog kaç kişilik gruba kaçıncı
+> öğrencinin eklendiğini **söylesin** ("Bu grup 6 kişilik ve dolu. 7. öğrenci eklensin
+> mi?"); kullanıcı onaylarsa kayıt yazılır. **Şemaya CHECK ya da trigger konmaz** —
+> `group.capacity` bir hedeftir, kısıt değil. Grup listesindeki doluluk oranı aşımı
+> görünür kılar. Aynı dil §6'daki çakışma uyarısıyla tutarlı: program ve kapasiteyle
+> ilgili her şey uyarır, para ve geçmişle ilgili her şey engeller (PRD §7 genel ilke).
 
 > **Öğretmen alanı (ADR-011).** `teacher` tablosu tek satır ve o satırı migration yazıyor.
 > Ama `teacher_id`'yi **yazan** bir ekran yoksa 5 tablodaki alan NULL kalır ve K-1/R3.11
