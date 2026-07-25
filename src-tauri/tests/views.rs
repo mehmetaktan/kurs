@@ -512,27 +512,31 @@ fn gecikme_gun_sayisi_bugunden_hesaplanir() {
     );
 }
 
-/// ⚠️ AÇIK KARAR — bu test mevcut (çelişkili) davranışı ÇİVİLER, doğrulamaz.
+// ─── ADR-022: ters kayıt zinciri paritesi ────────────────────────────────────
+//
+// `002_ledger_effective_parity.sql` zincirin uzunluğuna bakar: zincir tek uzunluktaysa
+// başlık satırı geçerlidir, çift uzunluktaysa zincir tümüyle düşer. Aşağıdaki dört test
+// zincir uzunluğu 1–4'ü ve ADR'nin değişmezini çiviler.
+//
+// Uzunluk 1 → `ders_basi_borclu_listede_cikar`, uzunluk 2 → `ters_kaydedilmis_borc_cikmaz`.
+
+/// Uzunluk 3 — `VERI-MODELI.md §4`'ün yoklama düzeltme akışı:
+///   1. "Geldi"        → session_charge(−250)
+///   2. "Mazeretli"    → reversal(+250, reverses = 1)
+///   3. Tekrar "Geldi" → reversal(−250, reverses = 2)
 ///
-/// `VERI-MODELI.md §4` yoklama düzeltmesini "ters kaydın tersi" ile tarif ediyor:
-///   1. "Geldi"      → session_charge(−250)
-///   2. "Mazeretli"  → reversal(+250, reverses=1)
-///   3. Tekrar "Geldi" → reversal(−250, reverses=2)
+/// Zincir tek uzunlukta olduğu için başlık satırı geçerli: öğrenci gerçekten 250 ₺
+/// borçlu ve borçlu listesinde de öyle görünüyor.
 ///
-/// Üçüncü adım yazıldığında bakiye doğru (−250: öğrenci borçlu), ama `v_ledger_effective`
-/// `kind <> 'reversal'` süzdüğü için 2. ve 3. satırları eler, 1. satırı da "ters kaydedilmiş"
-/// sayıp eler — geriye hiçbir borç kalmaz. Sonuç: **Öğrenci detayı −250 ₺ borç gösterirken
-/// borçlu listesi o öğrenciyi hiç göstermez.** ADR-018'in ortadan kaldırmak için yazıldığı
-/// "aynı öğrenci, iki ekran, iki farklı borç" durumunun aynısı.
-///
-/// Bu Faz 2 kodunun değil, kilitli şema tasarımının sorunu; düzeltmesi ya `v_ledger_effective`
-/// değişikliği (yeni migration) ya da düzeltme zincirinin başka bir mekanizmayla yazılması.
-/// Faz 1 zaten bu zincirin `package_usage` yarısını Faz 6'ya devretmişti (`faz-06.md §3b`);
-/// defter yarısı da oraya ait. Karar verilince bu test GÜNCELLENMELİ.
-///
-/// Ayrıntı ve seçenekler: `docs/DURUM.md` → "Faz 2'den çıkan açık karar".
+/// **Bu test ADR-022 ile tersine çevrildi.** Eski adı
+/// `bilinen_acik_karar_ters_kaydin_tersi_bakiye_ile_borcu_ayristirir`, eski iddiası
+/// "borçlu listesi bu borcu görmüyor (0)" idi ve kilitli şemadaki çelişkiyi ÇİVİLİYORDU:
+/// 001'in tanımı `kind <> 'reversal'` ile 2. ve 3. satırları, "ters kaydedilmiş" olduğu
+/// için de 1. satırı eliyor, geriye hiç borç kalmıyordu. Öğrenci detayı −250 ₺ borç
+/// gösterirken borçlu listesi öğrenciyi hiç göstermiyordu — ADR-018'in ortadan kaldırmak
+/// için yazıldığı "aynı öğrenci, iki ekran, iki farklı borç" durumunun aynısı.
 #[test]
-fn bilinen_acik_karar_ters_kaydin_tersi_bakiye_ile_borcu_ayristirir() {
+fn yoklama_duzeltme_zinciri_borcu_borclu_listesinde_gosterir() {
     let conn = conn();
     let id = student(&conn, "Fatma Öztürk");
 
@@ -542,21 +546,149 @@ fn bilinen_acik_karar_ters_kaydin_tersi_bakiye_ile_borcu_ayristirir() {
     repo::finance::insert_reversal(&conn, iptal, "2026-03-04", Some("Tekrar Geldi"))
         .expect("3. adım: düzeltmenin düzeltmesi — §4 bunu öngörüyor");
 
-    // Bakiye DOĞRU: öğrenci gerçekten 250 ₺ borçlu.
     assert_eq!(
         repo::views::student_balance(&conn, id)
             .unwrap()
             .unwrap()
             .balance_kurus,
         -25000,
-        "defter toplamı doğru"
+        "defter toplamı: öğrenci 250 ₺ borçlu"
+    );
+    assert_eq!(
+        debt_of(&conn, id),
+        25000,
+        "borçlu listesi bakiyeyle aynı borcu göstermeli (ADR-022)"
     );
 
-    // Borçlu listesi ise onu HİÇ göstermiyor — çelişki burada.
+    let debtors = repo::views::student_debts(&conn).unwrap();
+    assert_eq!(debtors.len(), 1);
+    assert_eq!(
+        debtors[0].oldest_due_on.as_deref(),
+        Some("2026-03-02"),
+        "vade geçerli olan BAŞLIK satırının günü — düzeltmenin günü değil"
+    );
+
+    assert_ledger_invariant(&conn);
+}
+
+/// Uzunluk 3, ters yönde — denetimde çıkan ikinci arıza (ADR-022 gerekçesi).
+///
+/// Tahsilat iptal edilir, sonra iptalin kendisi geri alınır. Bakiye sıfır: öğrencinin
+/// borcu yok. 001'in tanımı ise tahsilat başlığını "ters kaydedilmiş" sayıp eliyor,
+/// borcu ayakta bırakıyor ve **borcu olmayan öğrenciyi borçlu listesine sokuyordu.**
+#[test]
+fn tahsilat_iptalinin_geri_alinmasi_borc_yaratmaz() {
+    let conn = conn();
+    let id = student(&conn, "Zeynep Ak");
+
+    ledger(&conn, id, "2026-03-02", "session_charge", -25000);
+    let payment = ledger(&conn, id, "2026-03-05", "payment", 25000);
+    assert_eq!(debt_of(&conn, id), 0, "tahsilat borcu kapatmalı");
+
+    // Tahsilat sehven girilmiş sayılır → öğrenci yeniden borçlu.
+    let iptal = repo::finance::insert_reversal(&conn, payment, "2026-03-06", Some("sehven"))
+        .expect("tahsilat iptali");
+    assert_eq!(
+        debt_of(&conn, id),
+        25000,
+        "tahsilat iptal edilince borç geri gelmeli"
+    );
+    assert_ledger_invariant(&conn);
+
+    // İptal de yanlıştı, geri alınır → tahsilat yeniden geçerli.
+    repo::finance::insert_reversal(&conn, iptal, "2026-03-07", Some("iptal geri alındı"))
+        .expect("iptalin iptali");
+
+    assert_eq!(
+        repo::views::student_balance(&conn, id)
+            .unwrap()
+            .unwrap()
+            .balance_kurus,
+        0,
+        "bakiye sıfır: borç tahsil edilmiş durumda"
+    );
     assert_eq!(
         debt_of(&conn, id),
         0,
-        "AÇIK KARAR: borçlu listesi bu borcu görmüyor. Karar verilip düzeltilince \
-         bu beklenti 25000 olacak ve bu testin adı/yorumu silinecek."
+        "borcu olmayan öğrenci borçlu listesinde ÇIKMAMALI (ADR-022)"
+    );
+    assert!(
+        repo::views::student_debts(&conn).unwrap().is_empty(),
+        "borçlu listesi boş olmalı"
+    );
+
+    assert_ledger_invariant(&conn);
+}
+
+/// Uzunluk 4 — düzeltmenin düzeltmesinin düzeltmesi. Zincir çift uzunlukta olduğu için
+/// tümüyle düşer: bakiye de borç da sıfıra döner. Parite kuralının tek bir zincirde
+/// dönüşümlü çalıştığının kanıtı.
+#[test]
+fn zincir_uzunlugu_dortte_bakiye_ve_borc_sifira_doner() {
+    let conn = conn();
+    let id = student(&conn, "Burak Doğan");
+
+    let mut last = ledger(&conn, id, "2026-03-02", "session_charge", -25000);
+    for (index, day) in ["2026-03-03", "2026-03-04", "2026-03-05"]
+        .iter()
+        .enumerate()
+    {
+        last = repo::finance::insert_reversal(&conn, last, day, Some("düzeltme"))
+            .unwrap_or_else(|err| panic!("{}. ters kayıt yazılmalı: {err:?}", index + 2));
+    }
+
+    assert_eq!(
+        repo::views::student_balance(&conn, id)
+            .unwrap()
+            .unwrap()
+            .balance_kurus,
+        0,
+        "−250 +250 −250 +250 = 0"
+    );
+    assert_eq!(debt_of(&conn, id), 0, "çift uzunlukta zincir tümüyle düşer");
+    assert_ledger_invariant(&conn);
+}
+
+/// ADR-022'nin değişmezi, dört zincir uzunluğu bir arada:
+/// `SUM(v_ledger_effective.amount) = v_student_balance.balance_kurus`.
+///
+/// Tek bir öğrencide doğru olması yetmez — asıl iddia bunun **her** öğrenci için, karışık
+/// zincirlerin bir arada durduğu bir veritabanında geçerli olması. Aynı değişmez seed
+/// verisi üzerinde de sınanıyor (`tests/seed_data.rs`).
+#[test]
+fn parite_degismezi_karisik_zincirlerde_korunur() {
+    let conn = conn();
+
+    // Uzunluk 1: dokunulmamış borç.
+    let sade = student(&conn, "Mehmet Aslan");
+    ledger(&conn, sade, "2026-03-02", "session_charge", -25000);
+
+    // Uzunluk 2..4: her öğrencide bir halka daha.
+    for (name, links) in [("Ayşe Demir", 1), ("Selin Aksoy", 2), ("Ali Vural", 3)] {
+        let id = student(&conn, name);
+        let mut last = ledger(&conn, id, "2026-03-02", "session_charge", -30000);
+        for step in 0..links {
+            let day = format!("2026-03-{:02}", 3 + step);
+            last = repo::finance::insert_reversal(&conn, last, &day, Some("düzeltme"))
+                .expect("ters kayıt yazılmalı");
+        }
+    }
+
+    // Ödemesi ve avansı olan, hiç ters kaydı olmayan öğrenci de tabloda bulunsun.
+    let avansli = student(&conn, "Ceren Ünal");
+    ledger(&conn, avansli, "2026-03-02", "session_charge", -25000);
+    ledger(&conn, avansli, "2026-03-03", "payment", 40000);
+
+    assert_ledger_invariant(&conn);
+
+    // Değişmez "ikisi de yanlış ama eşit" hâlinde de geçer; borç tarafını ayrıca çivile.
+    assert_eq!(debt_of(&conn, sade), 25000, "uzunluk 1: borç ayakta");
+    assert_eq!(debt_of(&conn, avansli), 0, "avanslı öğrenci borçlu değil");
+    let debtors = repo::views::student_debts(&conn).unwrap();
+    assert_eq!(
+        debtors.len(),
+        2,
+        "borçlu yalnızca TEK uzunluktaki zincirler: Mehmet (1) ve Selin (3). \
+         Ayşe (2) ve Ali (4) çift uzunlukta, zincirleri tümüyle düştü"
     );
 }

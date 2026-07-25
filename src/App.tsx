@@ -1,91 +1,41 @@
-import { useCallback, useEffect, useState } from 'react'
-import { tr } from './i18n/tr'
-import { fetchAppStatus, type AppError, type AppStatus } from './lib/api'
+import { lazy, Suspense } from 'react'
+import { resolveRoute, useRoute } from './lib/router'
+import { NotFoundPage, PlaceholderPage } from './pages/PlaceholderPage'
+import { AppShell } from './shell/AppShell'
+import { DEV_ROUTES, PAGES } from './shell/routes'
+import { LoadingState, ToastProvider } from './ui'
 
 /**
- * Faz 2 ekranı. Burada ürün arayüzü YOK — tek işi veritabanı bağlantısının gerçekten
- * kurulduğunu göstermek (faz-02 §9.1). Gerçek kabuk Faz 3'te gelir.
+ * Uygulama kökü: yönlendirme + kabuk.
  *
- * Her liste/veri ekranı gibi bunun da üç durumu var: yükleniyor · hata · dolu.
+ * **Geliştirici sayfaları üretim derlemesine girmez.** `import.meta.env.DEV` üretimde
+ * `false` sabitine dönüşüyor, ölü dal eleniyor ve `import()` hiç ulaşılamaz hâle geldiği
+ * için Rollup o chunk'ı üretmiyor. Kanıtı `npm run web:build` sonrası `dist/` içinde
+ * showcase işaretçisinin bulunmaması (bkz. `docs/DURUM.md`).
  */
+const DevShowcase = import.meta.env.DEV ? lazy(() => import('./dev/Showcase')) : null
+const DevStatus = import.meta.env.DEV ? lazy(() => import('./dev/Status')) : null
+
 export default function App() {
-  const [status, setStatus] = useState<AppStatus | null>(null)
-  const [error, setError] = useState<AppError | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      setStatus(await fetchAppStatus())
-    } catch (err) {
-      setError(err as AppError)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    void load()
-  }, [load])
+  const route = useRoute()
 
   return (
-    <main className="shell">
-      <header className="shell__head">
-        <h1>{tr.app.name}</h1>
-        <p className="muted">{tr.app.tagline}</p>
-      </header>
-
-      {loading && <p className="muted">{tr.status.loading}</p>}
-
-      {!loading && error && (
-        <section className="card card--error">
-          <h2>{tr.errors.title}</h2>
-          <p>{error.message}</p>
-          <button type="button" onClick={() => void load()}>
-            {tr.errors.retry}
-          </button>
-        </section>
-      )}
-
-      {!loading && !error && status && (
-        <section className="card">
-          <h2>{tr.status.heading}</h2>
-          <p className="muted">{tr.status.subtitle}</p>
-
-          <p className="ok">{tr.status.healthy}</p>
-
-          <dl className="facts">
-            <Fact label={tr.status.institution} value={status.institutionName} />
-            <Fact label={tr.status.teacher} value={status.teacherName} />
-            <Fact label={tr.status.studentCount} value={String(status.studentCount)} />
-            <Fact label={tr.status.sessionCount} value={String(status.sessionCount)} />
-            <Fact label={tr.status.ledgerCount} value={String(status.ledgerCount)} />
-            <Fact label={tr.status.sqliteVersion} value={status.sqliteVersion} />
-            <Fact label={tr.status.journalMode} value={status.journalMode} />
-            <Fact
-              label={tr.status.foreignKeys}
-              value={status.foreignKeys ? tr.status.on : tr.status.off}
-            />
-            <Fact
-              label={tr.status.migrations}
-              value={status.appliedMigrations.join(', ')}
-            />
-            <Fact label={tr.status.dbPath} value={status.dbPath} mono />
-          </dl>
-
-          {status.studentCount === 0 && <p className="muted">{tr.status.seedHint}</p>}
-        </section>
-      )}
-    </main>
+    <ToastProvider>
+      <AppShell currentPath={route.path}>
+        <Suspense fallback={<LoadingState />}>
+          <RoutedPage path={route.path} />
+        </Suspense>
+      </AppShell>
+    </ToastProvider>
   )
 }
 
-function Fact({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <>
-      <dt>{label}</dt>
-      <dd className={mono ? 'mono' : undefined}>{value}</dd>
-    </>
-  )
+function RoutedPage({ path }: { path: string }) {
+  if (DevShowcase && path === DEV_ROUTES.showcase) return <DevShowcase />
+  if (DevStatus && path === DEV_ROUTES.status) return <DevStatus />
+
+  const match = resolveRoute(PAGES, path)
+  if (!match) return <NotFoundPage />
+
+  return <PlaceholderPage page={match.route} />
 }

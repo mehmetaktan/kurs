@@ -1,7 +1,9 @@
 # Tasarım Sistemi
 
-`design-ref/` altındaki 4 ekrandan çıkarıldı. **Faz 3'te CSS değişkenlerine dönüşecek.**
-Yeni ekran tasarlarken buradaki değerlerin dışına çıkılmaz; yeni görsel dil icat edilmez.
+`design-ref/` altındaki 4 ekrandan çıkarıldı. **Faz 3'te CSS değişkenlerine dönüştü:
+`src/styles/tokens.css`.** Yeni ekran tasarlarken buradaki değerlerin dışına çıkılmaz;
+yeni görsel dil icat edilmez. Bileşen dosyalarında hardcoded hex/px bulunmaz — hepsi
+token'dan okunur.
 
 Karakteri tek cümleyle: **sıcak gri kağıt üzerinde ince çizgili, ikonsuz, yoğun bir masaüstü
 arayüzü.** Renk yalnızca durum bildirir; dekoratif renk yok.
@@ -264,64 +266,73 @@ riskini sıfırlar.
 
 ## 6. Komponent envanteri
 
-Faz 3'te kurulacak liste. Varyantlar tasarımda **fiilen gözlemlenenlerdir**.
+Varyantlar tasarımda **fiilen gözlemlenenlerdir**.
+
+> **Faz 3 durumu.** Token'lar `src/styles/tokens.css`'te, komponentler `src/ui/`,
+> kabuk `src/shell/` altında. Aşağıdaki tablolarda ✅ yazılanlar yazıldı ve
+> `/dev/komponentler` sayfasında bütün varyantlarıyla duruyor.
+>
+> **Takvim komponentleri (23–27) Faz 5'e, `NoteList`/`NoteComposer` (22) Faz 4'e
+> bırakıldı** — ikisi de kendi ekranının veri modeline bağlı; boşlukta yazılırsa ekran
+> gelince yeniden yazılır. Faz 3 ayrıca tasarımda olmayan üç komponent üretti:
+> `DatePicker`, `TimePicker`, `Pagination` (faz komutunun listesinde vardı).
 
 ### Yerleşim
 
 | # | Komponent | Varyantlar / notlar |
 |---|---|---|
-| 1 | `AppShell` | 216px sabit kenar çubuğu + esnek ana alan. `height:100vh; overflow:hidden`, `min-width:1280px` |
-| 2 | `SidebarNav` | öğe: varsayılan / hover / aktif; sağda opsiyonel sayı rozeti |
-| 3 | `PageHeader` | başlık + alt başlık; sağda arama ve birincil eylem |
-| 4 | `Toolbar` | takvim üst çubuğu — gezinme, etiket, filtre, görünüm, eylem |
-| 5 | `StatusBar` | alt bilgi çubuğu: solda sayaç, sağda toplam |
+| 1 | `AppShell` ✅ | 216px sabit kenar çubuğu + esnek ana alan. `height:100vh; overflow:hidden`, `min-width:1280px` |
+| 2 | `SidebarNav` ✅ | öğe: varsayılan / hover / aktif; sağda opsiyonel sayı rozeti |
+| 3 | `PageHeader` ✅ | başlık + alt başlık; sağda arama ve birincil eylem |
+| 4 | `Toolbar` ⏭ Faz 5 | takvim üst çubuğu — gezinme, etiket, filtre, görünüm, eylem |
+| 5 | `StatusBar` ✅ | alt bilgi çubuğu: solda sayaç, sağda toplam |
 
 ### Girdi ve eylem
 
 | # | Komponent | Varyantlar |
 |---|---|---|
-| 6 | `Button` | **primary** (koyu) · **secondary** (`#efedea` + kenar) · **ghost** (şeffaf + kenar) · **warning** (`#f2e0c4`) · **icon** (32×32) · boyut: normal / küçük (`5px 10px`) |
-| 7 | `SearchInput` | sağda `Ctrl K` veya `↵ aç` ipucu; odakta kenar `#b3ada3` |
-| 8 | `Select` | yerel `<select>`, `appearance:none` + `▾` |
-| 9 | `SegmentedControl` | Hafta/Gün; aktif koyu, pasif beyaz |
-| 10 | `StepperGroup` | `‹ Bugün ›` — tek kapsayıcıda üç düğme |
-| 11 | `FilterChip` | aktif / pasif; sağda opsiyonel sayı |
-| 12 | `Textarea` | kenarlıksız, kart içinde; altında eylem satırı |
-| 13 | `Kbd` | `Ctrl K`, `Esc`, `←`, `→` |
+| 6 | `Button` ✅ | **primary** (koyu) · **secondary** (`#efedea` + kenar) · **ghost** (şeffaf + kenar) · **warning** (`#f2e0c4`) · **icon** (32×32) · boyut: normal / küçük (`5px 10px`) |
+| 7 | `SearchInput` ✅ | sağda `Ctrl K` veya `↵ aç` ipucu; odakta kenar `#b3ada3` |
+| 8 | `Select` ✅ | yerel `<select>`, `appearance:none` + `▾` |
+| 9 | `SegmentedControl` ✅ | Hafta/Gün; aktif koyu, pasif beyaz |
+| 10 | `StepperGroup` ✅ | `‹ Bugün ›` — tek kapsayıcıda üç düğme |
+| 11 | `FilterChip` ✅ | aktif / pasif; sağda opsiyonel sayı |
+| 12 | `Textarea` ✅ | kenarlıksız, kart içinde; altında eylem satırı |
+| 13 | `Kbd` ✅ | `Ctrl K`, `Esc`, `←`, `→` |
 
 ### Veri gösterimi
 
 | # | Komponent | Varyantlar |
 |---|---|---|
-| 14 | `DataTable` | CSS Grid tabanlı (`<table>` değil); yapışkan başlık, satır hover, tıklanabilir satır, yoğunluk ayarı, sağa hizalı sayı kolonları |
-| 15 | `StatCard` | etiket (11px büyük harf) + 30px değer + alt yazı; opsiyonel sağ eylem düğmesi; **boş varyantı `—`** |
-| 16 | `StatusDot` | dolu / halka × yeşil, amber, kırmızı, gri |
-| 17 | `Badge` | borç (kırmızı) · tatil (gri) · takvim etiketi (amber/gri) |
-| 18 | `Tabs` | alt çizgi `inset 0 -2px 0`; başlıkta sayı |
-| 19 | `Avatar` | baş harfler; 44 / 46 / 52px |
-| 20 | `SectionHeader` | başlık + sağda meta; altında `1px solid #dcd9d3` |
-| 21 | `Legend` | takvim renk açıklaması şeridi |
-| 22 | `NoteList` + `NoteComposer` | yazar + tarih + gövde |
+| 14 | `DataTable` ✅ (`Table`) | CSS Grid tabanlı (`<table>` değil); yapışkan başlık, satır hover, tıklanabilir satır, yoğunluk ayarı, sağa hizalı sayı kolonları |
+| 15 | `StatCard` ✅ | etiket (11px büyük harf) + 30px değer + alt yazı; opsiyonel sağ eylem düğmesi; **boş varyantı `—`** |
+| 16 | `StatusDot` ✅ | dolu / halka × yeşil, amber, kırmızı, gri |
+| 17 | `Badge` ✅ | borç (kırmızı) · tatil (gri) · takvim etiketi (amber/gri) |
+| 18 | `Tabs` ✅ | alt çizgi `inset 0 -2px 0`; başlıkta sayı |
+| 19 | `Avatar` ✅ | baş harfler; 44 / 46 / 52px |
+| 20 | `SectionHeader` ✅ | başlık + sağda meta; altında `1px solid #dcd9d3` |
+| 21 | `Legend` ⏭ Faz 5 | takvim renk açıklaması şeridi |
+| 22 | `NoteList` + `NoteComposer` ⏭ Faz 4 | yazar + tarih + gövde |
 
 ### Takvim
 
 | # | Komponent | Notlar |
 |---|---|---|
-| 23 | `CalendarGrid` | 56px saat cetveli + esnek sütunlar (min 128px); 08:00–22:00 (`480–1320` dk); 30 dk = 30px (rahat) / 22px (sıkı); çift katmanlı ızgara çizgisi |
-| 24 | `SessionBlock` | **grup** (`#e8e3db`) · **birebir** (`#fff`) · **telafi/tek seferlik** (kesikli kenar) · **yoklama eksik** (amber + sol şerit) · **geçmiş** (`opacity:.5`) · **çakışma** (turuncu kontur + `!`) · **sürüklenen** (gölge) · **küçük** (150px, grup/öğrenci detayında) |
-| 25 | `NowIndicator` | 1.5px `#d59029` çizgi + sol nokta + "şimdi" etiketi |
-| 26 | `ClosedDayOverlay` | 45° taralı; "ders bırakılamaz" hapı |
-| 27 | `DropTarget` | kesikli amber çerçeve; 30 dk'ya kilitlenir |
+| 23 | `CalendarGrid` ⏭ Faz 5 | 56px saat cetveli + esnek sütunlar (min 128px); 08:00–22:00 (`480–1320` dk); 30 dk = 30px (rahat) / 22px (sıkı); çift katmanlı ızgara çizgisi |
+| 24 | `SessionBlock` ⏭ Faz 5 | **grup** (`#e8e3db`) · **birebir** (`#fff`) · **telafi/tek seferlik** (kesikli kenar) · **yoklama eksik** (amber + sol şerit) · **geçmiş** (`opacity:.5`) · **çakışma** (turuncu kontur + `!`) · **sürüklenen** (gölge) · **küçük** (150px, grup/öğrenci detayında) |
+| 25 | `NowIndicator` ⏭ Faz 5 | 1.5px `#d59029` çizgi + sol nokta + "şimdi" etiketi |
+| 26 | `ClosedDayOverlay` ⏭ Faz 5 | 45° taralı; "ders bırakılamaz" hapı |
+| 27 | `DropTarget` ⏭ Faz 5 | kesikli amber çerçeve; 30 dk'ya kilitlenir |
 
 ### Geri bildirim
 
 | # | Komponent | Notlar |
 |---|---|---|
-| 28 | `Modal` | 384px, ortalanmış; başlık + gövde + dikey seçenek düğmeleri + "Vazgeç" bağlantısı |
-| 29 | `Drawer` | sağdan 396px; başlık / kaydırılan gövde / sabit eylem çubuğu |
-| 30 | `EmptyState` | 46–52px ikon dairesi + başlık + açıklama + eylem(ler). **Üç bağlam:** ilk kullanım / filtre sonuçsuz / arama sonuçsuz |
-| 31 | `OverlayEmptyState` | takvim üstünde yarı saydam örtü içinde `EmptyState` |
-| 32 | `Toast` | alt-orta, koyu, 2200 ms |
+| 28 | `Modal` ✅ (+ `ConfirmDialog`) | 384px, ortalanmış; başlık + gövde + dikey seçenek düğmeleri + "Vazgeç" bağlantısı |
+| 29 | `Drawer` ✅ | sağdan 396px; başlık / kaydırılan gövde / sabit eylem çubuğu |
+| 30 | `EmptyState` ✅ | 46–52px ikon dairesi + başlık + açıklama + eylem(ler). **Üç bağlam:** ilk kullanım / filtre sonuçsuz / arama sonuçsuz |
+| 31 | `OverlayEmptyState` ⏭ Faz 5 | takvim üstünde yarı saydam örtü içinde `EmptyState` |
+| 32 | `Toast` ✅ | alt-orta, koyu, 2200 ms |
 
 ---
 

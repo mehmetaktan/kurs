@@ -1,0 +1,211 @@
+/*
+ * Tasarım token'ları — TEK KAYNAK.
+ *
+ * Değerler `docs/TASARIM-SISTEMI.md` §1–§4 ve §8'den birebir alındı; o belge de
+ * `design-ref/` altındaki 4 ekrandan çıkarıldı. Komponent dosyalarında hardcoded hex
+ * ya da px BULUNMAZ — hepsi buradan `var()` ile okunur. Yeni bir değer gerekiyorsa
+ * önce buraya token açılır, belge güncellenir; bileşenin içine yazılmaz.
+ *
+ * Adlandırma: renkler `--color-*`, tipografi `--font-*`, aralık `--space-*`,
+ * yarıçap `--radius-*`, gölge `--shadow-*`, sabit ölçüler `--measure-*`.
+ */
+:root {
+  /* ── §1.1 Yüzeyler ──────────────────────────────────────────────────────── */
+  --color-surface-canvas: #fbfaf8; /* uygulama zemini; koyu düğme üzerindeki metin */
+  --color-surface-raised: #faf9f6; /* özet şerit, takvim başlık satırı */
+  --color-surface-bar: #f7f6f3; /* alt bilgi çubuğu */
+  --color-surface-sidebar: #f2f1ee; /* kenar çubuğu, boş durum ikon dairesi */
+  --color-surface-card: #ffffff; /* kart, girdi, açılır liste, birebir ders bloğu */
+  --color-surface-muted: #efedea; /* ikincil düğme zemini */
+  --color-surface-hover: #eae8e3; /* menü öğesi hover */
+  --color-surface-selected: #e5e2dc; /* aktif menü, avatar, seçili çip */
+  --color-surface-block: #e8e3db; /* grup ders bloğu */
+  --color-surface-row-hover: #f4f2ef; /* tablo satırı hover */
+
+  /* ── §1.2 Kenarlıklar ───────────────────────────────────────────────────── */
+  --color-border-strong: #dcd9d3; /* girdi kenarı, bölüm alt çizgisi */
+  --color-border-default: #e2dfd9; /* kenar çubuğu ayracı, düğme kenarı */
+  --color-border-subtle: #e7e5e0; /* tablo satır ayracı, başlık alt çizgisi */
+  --color-border-faint: #edeae5; /* en ince ayraç */
+  --color-border-block: #d8d3ca; /* takvim ders bloğu kenarı */
+  --color-border-focus: #b3ada3; /* girdi odaklandığında */
+  --color-border-chip-active: #d8d4cd; /* seçili filtre çipi kenarı */
+  --color-grid-minor: #f2efea; /* takvim 30 dk çizgisi */
+  --color-grid-major: #e7e3dc; /* takvim 60 dk çizgisi */
+
+  /* ── §1.3 Metin ─────────────────────────────────────────────────────────── */
+  --color-text-primary: #2f2d2a; /* başlık, öğrenci adı, tutar */
+  --color-text-secondary: #4a4741; /* tablo hücresi, menü öğesi */
+  --color-text-tertiary: #736f68; /* saat, tarih, açıklama */
+  --color-text-quaternary: #8f8a80; /* takvim bloğu meta satırı */
+  --color-text-muted: #9a958d; /* kolon başlığı, etiket, yardım metni */
+  --color-text-placeholder: #a8a39a; /* girdi placeholder */
+  --color-text-disabled: #b0aaa0; /* "Bekleniyor", klavye ipucu */
+  --color-text-empty: #cfcabf; /* boş değer tiresi (—) */
+  --color-text-on-dark: #fbfaf8; /* koyu düğme / toast üzerinde */
+  --color-text-on-dark-muted: #c9c5bd; /* koyu düğme alt satırı */
+
+  /* ── §1.4 Eylem — birincil düğme EKRANDA TEKTİR ─────────────────────────── */
+  --color-action-primary: #2f2d2a;
+  --color-action-primary-hover: #1f1d1b;
+  --color-action-primary-text: #fbfaf8;
+
+  /* ── §1.5 Durum — kırmızı YALNIZCA para için ─────────────────────────────── */
+  --color-success: #5f8f6b; /* aktif öğrenci, "Geldi", ödenmiş taksit */
+  --color-warn: #b57314; /* yoklama girilmedi, paketi bitiyor, "Mazeretli" */
+  --color-warn-accent: #d59029; /* sol iç gölge şeridi, "şimdi" çizgisi */
+  --color-warn-text: #8a5710; /* amber düğme ve etiket metni */
+  --color-warn-bg: #f9f1e4;
+  --color-warn-bg-row: #faf3e8; /* yoklaması eksik satır zemini */
+  --color-warn-bg-strong: #f2e0c4; /* amber düğme zemini */
+  --color-warn-bg-hover: #ecd5ac; /* amber düğme hover */
+  --color-warn-border: #e6c893;
+  --color-warn-line: #ecdcc1; /* "şimdi" ayracının çizgisi */
+  --color-danger: #a83a2b; /* borç tutarı, borç rozeti, "Mazeretsiz" */
+  --color-danger-bg: #f4ddd7;
+  --color-conflict: #cf7a4a; /* takvimde çakışma */
+  --color-neutral: #b0aaa0; /* pasif öğrenci halkası, "İptal" */
+  --color-neutral-bg: #efece6;
+  --color-neutral-border: #e2dfd9;
+
+  /* ── §1.6 Kategori paleti — MVP'de branş rengi (subject.color) ───────────── */
+  --color-cat-green: #5f8f6b;
+  --color-cat-blue: #6a86a8;
+  --color-cat-amber: #b57314;
+  --color-cat-purple: #9079a6;
+  --color-cat-gray: #8a8079;
+
+  /* ── §1.7 Örtü ve efektler ──────────────────────────────────────────────── */
+  --scrim-modal: rgb(31 29 27 / 30%);
+  --scrim-drawer: rgb(31 29 27 / 28%);
+  --scrim-soft: rgb(251 250 248 / 74%); /* içerik seçilir kalır */
+  --shade-past: rgb(120 110 95 / 5%);
+
+  /* ── §2 Tipografi ───────────────────────────────────────────────────────── */
+  /* Sistem font yığını: makinede kurulu özel font varsayılmaz. Windows'ta Segoe UI'ye
+     düşer — macOS'taki Helvetica Neue'den bir tık geniş, kabul edilebilir. */
+  --font-family: "Helvetica Neue", helvetica, "Segoe UI", arial, sans-serif;
+  --font-family-mono: ui-monospace, sfmono-regular, "SF Mono", menlo, consolas, monospace;
+
+  /* Sıçrama 13 → 15 → 17 → 19 → 30. 14px yok. */
+  --font-size-display: 30px; /* özet kartındaki büyük sayı */
+  --font-size-title-lg: 19px; /* öğrenci detayı adı */
+  --font-size-title: 17px; /* sayfa başlığı */
+  --font-size-title-sm: 16px; /* çekmece başlığı */
+  --font-size-subtitle: 15px; /* modal başlığı, boş durum başlığı */
+  --font-size-body: 13px; /* VARSAYILAN */
+  --font-size-control: 12.5px; /* segment düğmesi, filtre çipi */
+  --font-size-meta: 12px; /* kolon başlığı, açıklama, rozet */
+  --font-size-caption: 11px; /* kart etiketi (BAKİYE), saat cetveli */
+  --font-size-micro: 10px; /* takvim bloğu içi */
+
+  /* Yalnızca 400 ve 600. 700 iki yerde: bugünün takvim başlığı ve çakışma rozeti. */
+  --font-weight-regular: 400;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --line-height-tight: 1;
+  --line-height-normal: 1.5;
+  --line-height-prose: 1.55;
+  --letter-spacing-display: -0.02em;
+  --letter-spacing-title: -0.01em;
+  --letter-spacing-caps: 0.02em;
+
+  /* ── §3 Aralık — gözlenen değerler; 4'e YUVARLANMAZ (optik hizalama) ─────── */
+  --space-0-5: 2px;
+  --space-1: 4px;
+  --space-1-5: 6px;
+  --space-2: 8px;
+  --space-2-5: 10px;
+  --space-3: 12px;
+  --space-3-5: 14px;
+  --space-4: 16px;
+  --space-4-5: 18px;
+  --space-5: 20px;
+  --space-5-5: 22px;
+  --space-6: 24px;
+  --space-6-5: 26px;
+  --space-7: 28px; /* ana içerik yatay dolgusu */
+  --space-8: 32px;
+  --space-10: 40px; /* boş durum dikey dolgusu */
+
+  /* Tasarımın TEK SAYILI optik değerleri — §3 bunları açıkça sayıyor (5, 7, 9, 11, 13, 17)
+     ve "en yakın 4'e yuvarlanmaz" diyor. Merdivenin birimi 4px olduğu için çeyrek
+     adımlarla adlandırıldılar: 9px = 2.25 × 4. */
+  --space-0-75: 3px;
+  --space-1-25: 5px;
+  --space-1-75: 7px;
+  --space-2-25: 9px; /* girdi/düğme dikey dolgusu — en yaygın tek sayı */
+  --space-2-75: 11px;
+  --space-3-25: 13px;
+  --space-4-25: 17px;
+  --space-8-5: 34px; /* içerik alanının alt dolgusu */
+
+  /* ── §4 Köşe yarıçapı ───────────────────────────────────────────────────── */
+  --radius-3: 3px; /* açıklama şeridindeki renk örneği */
+  --radius-4: 4px; /* klavye tuşu rozeti */
+  --radius-6: 6px; /* menü öğesi, küçük düğme */
+  --radius-7: 7px; /* düğme, girdi, takvim bloğu — en yaygın */
+  --radius-8: 8px; /* segment kabı, toast */
+  --radius-9: 9px; /* not kutusu, menü sayı rozeti */
+  --radius-10: 10px; /* özet kartı */
+  --radius-12: 12px; /* modal, boş durum kartı, durum hapı */
+  --radius-16: 16px; /* filtre çipi */
+  --radius-full: 50%; /* avatar, durum noktası */
+
+  /* ── §4 Gölge — nadir ve derin; kartlarda gölge yok, kenarlık var ────────── */
+  --shadow-modal: 0 24px 60px -30px rgb(0 0 0 / 50%);
+  --shadow-overlay: 0 18px 44px -26px rgb(0 0 0 / 35%);
+  --shadow-drawer: -16px 0 40px -24px rgb(0 0 0 / 30%);
+  --shadow-toast: 0 10px 30px -14px rgb(0 0 0 / 55%);
+  --shadow-drag: 0 14px 28px -10px rgb(0 0 0 / 50%);
+
+  /* İç gölge accent olarak */
+  --inset-attention: inset 3px 0 0 var(--color-warn-accent); /* "yoklama girilmedi" */
+  --inset-tab-active: inset 0 -2px 0 var(--color-action-primary);
+
+  /* ── §8 Sabit ölçüler — responsive yok, masaüstü ─────────────────────────── */
+  --measure-app-min-width: 1280px;
+  --measure-sidebar: 216px;
+  --measure-drawer: 396px;
+  --measure-modal: 384px;
+  --measure-empty-card: 370px;
+  --measure-content-max: 1320px;
+  --measure-time-gutter: 56px; /* takvim saat cetveli (Faz 5) */
+  --measure-calendar-col: 128px; /* takvim sütunu min (Faz 5) */
+  --measure-search: 300px;
+  --measure-icon-button: 32px;
+
+  /* Özet şerit kolonları — §8: "kolon kuralı BAĞLAYICIDIR", aynı oranlar Grup detayı
+     ekranında da kullanılacak. Tek token = tek kaynak; iki ekranda ayrı yazılırsa
+     zamanla ayrışır. */
+  --stat-strip-columns:
+    minmax(240px, 1.5fr) minmax(190px, 1fr) minmax(190px, 1fr) minmax(200px, 1.15fr);
+
+  /* Komponent iç ölçüleri */
+  --measure-scrollbar: 11px;
+  --measure-search-hint-space: 74px; /* ipucu rozetine ayrılan sağ dolgu */
+  --measure-textarea-min: 76px;
+  --measure-checkbox: 15px;
+  --measure-badge-line: 18px;
+  --measure-status-dot: 7px;
+  --measure-state-icon: 52px;
+  --measure-day-cell: 30px; /* ay ızgarası sütun genişliği */
+  --measure-day-cell-height: 26px;
+  --measure-slot-column: 62px; /* saat listesi sütunu */
+  --measure-slot-list-max: 208px;
+
+  /* Katman sırası — tasarımdaki z-index değerleri */
+  --z-sticky: 1;
+  --z-calendar-header: 5;
+  --z-drawer: 20;
+  --z-modal: 30;
+  --z-toast: 40;
+
+  /* Odak halkası: tasarımda tanımlı DEĞİL (girdide yalnızca kenar rengi değişiyor).
+     Klavye ile tam gezinilebilirlik kabul şartı olduğu için eklendi; koyu nötr,
+     görsel dile uyuyor ve her zeminde görünüyor. */
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+  --focus-ring-color: var(--color-action-primary);
+}

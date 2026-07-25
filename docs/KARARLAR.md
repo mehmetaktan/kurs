@@ -294,3 +294,23 @@ Elenen iki seçenek: (a) düzeltmenin üçüncü adımında yeni bir `session_ch
 Ters kayıt satırları hâlâ `v_ledger_effective`'te görünmez (geçerli olan daima başlık satırıdır), dolayısıyla `v_open_charge`'ın vade mantığı — taksitte `installment.due_on`, ders başında ders günü — olduğu gibi korunur. `package_usage` tarafındaki düzeltme zinciri bu ADR'nin **kapsamı dışındadır**; ders hakkı ayrı bir sayaçtır (ADR-015) ve kararı Faz 6'ya aittir (`faz-06.md §3b`).
 
 **Durum.** Kabul edildi.
+
+---
+
+## ADR-023 — Yönlendirme kendi hash router'ımızla, kütüphanesiz
+
+**Karar.** Sayfa yönlendirmesi `src/lib/router.ts` içindeki ~120 satırlık hash tabanlı çözümle yapılır: `parseHash`, `matchRoute`, `resolveRoute`, `useRoute`, `navigate`. Yönlendirme kütüphanesi (react-router-dom) kurulmaz. Rota ve menü tablosu tek yerde, `src/shell/routes.ts` içinde durur.
+
+**Gerekçe.** İhtiyaç 7 üst düzey sayfa ve `/ogrenciler/:id` biçiminde birkaç detay rotası. Bunun için gereken tek şey desen eşleştirmesi; iç içe yerleşim, veri yükleyici, kod bölme ya da sunucu tarafı render yok ve olmayacak (masaüstü, tek pencere, çevrimdışı).
+
+Hash seçilmesinin ayrı bir sebebi var: uygulama `tauri://localhost` üzerinden tek bir `index.html` ile servis ediliyor. History API kullanılsaydı `/ogrenciler/42` adresinde yenileme yapıldığında WebView2 o yolda bir dosya arar ve boş pencere açardı. Hash'te bu arıza sınıfı yok, geri/ileri tuşları da çalışmaya devam ediyor.
+
+Kütüphane tarafında ise bakım yükü var: react-router 7 "framework mode"a doğru evriliyor, SPA kullanımı ikincil hâle geliyor. Kilitli bir sürümde kalmak da sürüm yükseltmelerinde kırılma riskini ileri bir tarihe atmak demek. Aynı muhakemeyle ikon kütüphanesi de kurulmadı (`TASARIM-SISTEMI.md` §5).
+
+**Sonuç.** Kütüphanenin bedava verdiği güvence testle satın alınıyor: `src/lib/router.test.ts` desen eşleştirmesini, sondaki eğik çizgiyi, yüzde kodlamasını, boş parametrenin reddini ve rota sırasını çiviliyor. Sıra bağlayıcı — sabit yollar parametreli yollardan **önce** yazılır, yoksa `/ogrenciler/yeni` adresi `:id = 'yeni'` olarak eşleşir; bu da testte yazılı.
+
+Bir yan etkisi: "içeriğe atla" bağlantısı `<a href="#icerik">` olamıyor, çünkü hash'i yazmak rotayı değiştirir. Onun yerine odağı programla taşıyan bir düğme kullanılıyor (`AppShell`).
+
+İhtiyaç büyürse (iç içe yerleşim, geçiş animasyonu, rota bazlı kod bölme) bu karar yeniden değerlendirilir; rota tablosu tek dosyada olduğu için geçiş maliyeti düşük.
+
+**Durum.** Kabul edildi.

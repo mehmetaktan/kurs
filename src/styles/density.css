@@ -1,0 +1,19 @@
+/*
+ * Satır yoğunluğu — gerçek bir kullanıcı ayarı (`setting.row_density`).
+ *
+ * Tasarımda üç ekranda birden `rahat / sıkı` seçeneği var. Varsayılan rahat; kök öğeye
+ * `data-density="tight"` yazıldığında bütün tablolar ve takvim aynı anda sıkışır.
+ * Ayarı okuyup kök öğeye yazma işi Faz 10'a ait (Tanımlar → Genel).
+ *
+ * Bu iki token'ı okuyan her komponent yoğunluk ayarına kendiliğinden uyar; komponentin
+ * içinde "rahat/sıkı" diye bir dal olmaz.
+ */
+:root {
+  --row-pad-y: 13px; /* tablo satırı dikey dolgu */
+  --calendar-slot-height: 30px; /* takvim 30 dk yüksekliği (Faz 5) */
+}
+
+:root[data-density="tight"] {
+  --row-pad-y: 9px;
+  --calendar-slot-height: 22px;
+}

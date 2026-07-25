@@ -334,7 +334,7 @@ Cevaplanmadan ilgili faz **tamamlanamaz**.
 | **S5** | Makbuz numarası otomatik mi artsın, elle mi girilsin? | Faz 8 | Otomatik, elle düzeltilebilir |
 | **S6** | Öğrenci dönem ortasında ayrılırsa kalan paket parası iade mi edilir, alacak mı kalır? | Faz 7 | Alacak (avans) olarak kalır |
 | **S7** | "Devam oranı" hangi pencerede hesaplansın? Tasarım "son 8 hafta" trendi gösteriyor. | Faz 9 | Tüm zaman + son 8 hafta trendi |
-| **S8** | Raporlar 7. menü öğesi mi olsun, Bugün ekranının altında mı? | Faz 9 | 7. menü öğesi |
+| ~~**S8**~~ | ~~Raporlar 7. menü öğesi mi olsun, Bugün ekranının altında mı?~~ → **CEVAPLANDI (2026-07-25): 7. menü öğesi.** `EKRANLAR.md`'nin (a) seçeneği; menüde yer vardı, görsel dil değişmedi. Faz 3'te kenar çubuğuna eklendi, içeriği Faz 9'da gelecek. | ~~Faz 9~~ | — |
 | **S9** | Bilgisayarındaki Windows sürümü ne? (SmartScreen ve WebView2 için) | Faz 10 | Windows 10/11, WebView2 kurulu değil varsayılır |
 | **S10** | Kod imzalama sertifikası alınacak mı? | Faz 10 | Alınmaz; kullanıcıya yönerge verilir |
 

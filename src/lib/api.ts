@@ -51,3 +51,22 @@ export interface AppStatus {
 export function fetchAppStatus(): Promise<AppStatus> {
   return call<AppStatus>('app_status')
 }
+
+/**
+ * `v_student_debt` satırı — src-tauri/src/model.rs `StudentDebt` ile birebir
+ * (`#[serde(rename_all = "camelCase")]`).
+ */
+export interface StudentDebt {
+  studentId: number
+  debtKurus: number
+  /** FIFO ile ilk kapanmamış borcun vadesi (`'YYYY-MM-DD'`). Borç yoksa `null`. */
+  oldestDueOn: string | null
+}
+
+/**
+ * Borçlu listesi — tek kaynak defter (ADR-018), zincir paritesiyle netlenmiş
+ * (ADR-022). Kenar çubuğundaki Ödemeler rozeti bunun uzunluğunu gösteriyor.
+ */
+export function fetchStudentDebts(): Promise<StudentDebt[]> {
+  return call<StudentDebt[]>('student_debts')
+}

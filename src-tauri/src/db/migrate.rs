@@ -19,11 +19,18 @@ pub struct Migration {
 }
 
 /// Sıra bağlayıcı: yalnızca sona ekleme yapılır, aradaki dosya değiştirilmez.
-pub const MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    name: "001_initial",
-    sql: include_str!("../../migrations/001_initial.sql"),
-}];
+pub const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        name: "001_initial",
+        sql: include_str!("../../migrations/001_initial.sql"),
+    },
+    Migration {
+        version: 2,
+        name: "002_ledger_effective_parity",
+        sql: include_str!("../../migrations/002_ledger_effective_parity.sql"),
+    },
+];
 
 /// `schema_migration` tablosu ilk migration'dan ÖNCE var olmak zorunda — hangi
 /// migration'ların uygulandığını okumak için gerekiyor (yumurta-tavuk). Bu yüzden
@@ -146,19 +153,29 @@ mod tests {
     }
 
     #[test]
-    fn migration_dosyasi_gomulu_ve_bos_degil() {
-        assert_eq!(MIGRATIONS.len(), 1);
+    fn migration_dosyalari_gomulu_ve_bos_degil() {
+        assert_eq!(MIGRATIONS.len(), 2);
         assert!(MIGRATIONS[0].sql.contains("CREATE TABLE ledger_entry"));
+        assert!(MIGRATIONS[1].sql.contains("CREATE VIEW v_ledger_effective"));
+
+        // Sürüm numaraları 1'den başlayarak boşluksuz artar: `run` sırayla uyguluyor,
+        // atlanan bir numara sessizce uygulanmamış bir migration demek olurdu.
+        for (index, migration) in MIGRATIONS.iter().enumerate() {
+            assert_eq!(migration.version, index as i64 + 1, "{}", migration.name);
+        }
     }
 
     #[test]
-    fn migration_dosyasi_lf_ile_gomulu() {
+    fn migration_dosyalari_lf_ile_gomulu() {
         // Derleme anında CRLF'e dönmüş bir dosya, çalıştığı makinede farklı checksum
         // üretip açılışta "migration değiştirilmiş" hatası verirdi.
-        assert!(
-            !MIGRATIONS[0].sql.contains('\r'),
-            "001_initial.sql CRLF içeriyor — .gitattributes çalışmamış"
-        );
+        for migration in MIGRATIONS {
+            assert!(
+                !migration.sql.contains('\r'),
+                "{}.sql CRLF içeriyor — .gitattributes çalışmamış",
+                migration.name
+            );
+        }
     }
 
     #[test]
@@ -166,14 +183,14 @@ mod tests {
         let conn = db::open_in_memory().unwrap();
 
         let first = run(&conn).unwrap();
-        assert_eq!(first.applied_now, vec![1]);
+        assert_eq!(first.applied_now, vec![1, 2]);
 
         let second = run(&conn).unwrap();
         assert!(
             second.applied_now.is_empty(),
             "ikinci çalıştırma yeniden uygulamamalı"
         );
-        assert_eq!(second.all_applied, vec![1]);
+        assert_eq!(second.all_applied, vec![1, 2]);
     }
 
     #[test]

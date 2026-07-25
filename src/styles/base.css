@@ -1,0 +1,82 @@
+/*
+ * Temel katman: reset, tipografi, kaydırma çubuğu, odak halkası.
+ * Değerlerin hepsi `tokens.css`'ten gelir; burada hardcoded hex/px yok.
+ */
+@import "./tokens.css";
+@import "./density.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-normal);
+  color: var(--color-text-primary);
+  background: var(--color-surface-canvas);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizelegibility;
+
+  /* TASARIM-SISTEMI §2.3 pazarlıksız kural: her sayı tabular. Tutar, tarih, saat,
+     telefon, sayaç, oran. Tek tek komponentlere bırakılırsa biri mutlaka atlanır ve
+     alt alta gelen rakamlar kayar; global vermek kuralı yapı gereği ihlal edilemez
+     kılıyor. Uygulamada "sayı olmayan uzun metin" zaten yok. */
+  font-variant-numeric: tabular-nums;
+}
+
+input,
+button,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+::placeholder {
+  color: var(--color-text-placeholder);
+}
+
+/* Odak halkası. `:focus-visible` — fareyle tıklamada çıkmaz, klavyede çıkar. */
+:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Windows'ta varsayılan kaydırma çubuğu bundan kalın ve farklı görünür; WebView2
+   `-webkit-scrollbar` kurallarını destekliyor. */
+::-webkit-scrollbar {
+  width: var(--measure-scrollbar);
+  height: var(--measure-scrollbar);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border: var(--space-0-75) solid var(--color-surface-canvas);
+  border-radius: var(--radius-6);
+}
+
+/* Boş durum ve modal açıklamaları */
+.prose {
+  line-height: var(--line-height-prose);
+  text-wrap: pretty;
+}
+
+/* Yalnızca ekran okuyucu için — "içeriğe geç" bağlantısı odaklanınca görünür olur. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

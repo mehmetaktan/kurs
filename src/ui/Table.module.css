@@ -1,0 +1,71 @@
+/*
+ * `<table>` DEĞİL, CSS Grid. Tasarım kolon genişliklerini grid track'i olarak veriyor
+ * (`minmax(160px,1.6fr) 150px 96px …`) ve yapışkan başlık + tıklanabilir satır bu
+ * yerleşimle çok daha az kodla kuruluyor. Erişilebilirlik `role` ile korunuyor.
+ */
+
+.table {
+  display: block;
+  min-width: 0;
+}
+
+.head,
+.row {
+  display: grid;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.head {
+  position: relative;
+  z-index: var(--z-sticky);
+  padding: var(--space-2-75) var(--space-3);
+  font-size: var(--font-size-meta);
+  color: var(--color-text-muted);
+  background: var(--color-surface-canvas);
+  border-bottom: 1px solid var(--color-border-strong);
+}
+
+.headSticky {
+  position: sticky;
+  top: 0;
+}
+
+.row {
+  /* Yoğunluk ayarı: rahat 13px, sıkı 9px (density.css). */
+  padding: var(--row-pad-y) var(--space-3);
+  font-size: var(--font-size-body);
+  color: var(--color-text-secondary);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.rowClickable {
+  cursor: pointer;
+}
+
+.rowClickable:hover {
+  background: var(--color-surface-row-hover);
+}
+
+/* "Yoklama girilmedi" satırı: amber zemin + sol turuncu şerit. Sıradan bir satır değil. */
+.rowAttention {
+  background: var(--color-warn-bg-row);
+  box-shadow: var(--inset-attention);
+}
+
+.cell {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.alignEnd {
+  text-align: right;
+}
+
+.empty {
+  padding: var(--space-10) var(--space-1);
+  color: var(--color-text-muted);
+  text-align: center;
+}

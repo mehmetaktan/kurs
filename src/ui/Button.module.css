@@ -1,0 +1,103 @@
+.button {
+  display: inline-flex;
+  gap: var(--space-1-5);
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-radius: var(--radius-7);
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+/* Birincil düğme EKRANDA TEKTİR (TASARIM-SISTEMI §1.4). */
+.primary {
+  color: var(--color-action-primary-text);
+  background: var(--color-action-primary);
+  border-color: transparent;
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--color-action-primary-hover);
+}
+
+.secondary {
+  color: var(--color-text-secondary);
+  background: var(--color-surface-muted);
+  border-color: var(--color-border-default);
+}
+
+.secondary:hover:not(:disabled) {
+  background: var(--color-surface-selected);
+}
+
+.ghost {
+  color: var(--color-text-secondary);
+  background: transparent;
+  border-color: var(--color-border-default);
+}
+
+.ghost:hover:not(:disabled) {
+  background: var(--color-surface-muted);
+}
+
+.warning {
+  color: var(--color-warn-text);
+  background: var(--color-warn-bg-strong);
+  border-color: transparent;
+}
+
+.warning:hover:not(:disabled) {
+  background: var(--color-warn-bg-hover);
+}
+
+/* Yıkıcı eylem düğmesi — her yıkıcı işlemde onay diyaloğu da çıkar (CLAUDE.md > Arayüz). */
+.danger {
+  color: var(--color-danger);
+  background: var(--color-danger-bg);
+  border-color: transparent;
+}
+
+.danger:hover:not(:disabled) {
+  filter: brightness(0.97);
+}
+
+.normal {
+  padding: var(--space-2-25) var(--space-4);
+}
+
+.small {
+  padding: var(--space-1-25) var(--space-2-5);
+  font-size: var(--font-size-meta);
+  border-radius: var(--radius-6);
+}
+
+/* 32×32 — takvim üst çubuğundaki ‹ › ve çekmece kapatma düğmesi. */
+.icon {
+  width: var(--measure-icon-button);
+  height: var(--measure-icon-button);
+  padding: 0;
+  font-size: var(--font-size-title);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-tight);
+  color: var(--color-text-secondary);
+  background: transparent;
+  border-color: transparent;
+  border-radius: var(--radius-6);
+}
+
+.icon:hover:not(:disabled) {
+  color: var(--color-text-primary);
+  background: var(--color-surface-hover);
+}
+
+/* Tam genişlik — çekmece alt eylem çubuğunda "Tahsilat al" böyle duruyor. */
+.block {
+  flex: 1;
+}

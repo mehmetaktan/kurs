@@ -201,6 +201,15 @@ fn seed_ters_kaydedilmis_bir_ders_icerir() {
     assert_eq!(effective_reversals, 0);
 }
 
+/// ADR-022'nin değişmezi, seed verisinin tamamı üzerinde: 12 öğrenci, taksitler, avans,
+/// arşivli borçlu ve bir ters kayıt bir arada. Tek senaryoda doğru olan bir view tanımı
+/// karışık veride bozulabilir; asıl güvence bu.
+#[test]
+fn seed_parite_degismezini_korur() {
+    let (conn, _) = seeded();
+    common::assert_ledger_invariant(&conn);
+}
+
 #[test]
 fn seed_iki_aktif_paketi_olan_ogrenci_icerir() {
     let (conn, _) = seeded();

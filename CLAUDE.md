@@ -49,14 +49,22 @@ Tauri 2 + React + TypeScript + Vite + SQLite (rusqlite, `bundled`)
 Sürümler kilitli: Rust `rust-toolchain.toml`'da, Tauri CLI `package.json`'da caret'siz.
 CI aynı dosyaları okur — yerelde çalışan sürüm CI'da da çalışır.
 
-## Klasör yapısı (Faz 2)
+## Klasör yapısı (Faz 3)
 
 ```
 kurs/
 ├── .github/workflows/ci.yml   Windows + macOS test & paket
+├── scripts/verify-bundle.mjs  üretim paketinde /dev sayfası kalmadığını doğrular
 ├── src/                       React arayüzü
 │   ├── i18n/tr.ts             BÜTÜN Türkçe metinler (ADR-007)
-│   └── lib/                   api.ts · format.ts (kuruş) · sortTr.ts (ADR-020)
+│   ├── styles/                tokens.css (TEK kaynak) · base.css · density.css
+│   ├── ui/                    komponent kütüphanesi — ekranlar buradan alır
+│   ├── shell/                 AppShell · SidebarNav · PageHeader · routes.ts
+│   ├── pages/                 ekranlar (Faz 3'te placeholder)
+│   ├── dev/                   /dev/komponentler · /dev/durum — ÜRETİME GİRMEZ
+│   ├── test/setup.ts          vitest + jsdom temizliği
+│   └── lib/                   api.ts · format.ts (kuruş, tarih, telefon) ·
+│                              sortTr.ts (ADR-020) · router.ts (ADR-023)
 └── src-tauri/
     ├── migrations/            şemanın tek kaynağı — sıralı, checksum'lı, elle düzeltilmez
     ├── capabilities/          Tauri 2 yetki dosyaları
@@ -147,12 +155,13 @@ Hepsi proje kökünden çalışır.
 |---|---|
 | `npm run dev` | Uygulamayı geliştirme kipinde açar (Vite + Tauri, canlı yenileme) |
 | `npm run build` | Kurulum paketi üretir (macOS'ta `.app`/`.dmg`, Windows'ta `.msi`) |
-| `npm run check` | **Kapı**: typecheck + lint (ESLint & clippy) + biçim + testler |
+| `npm run check` | **Kapı**: typecheck + lint (ESLint & clippy) + biçim + testler + paket denetimi |
 | `npm test` | Bütün testler — önce vitest (arayüz), sonra cargo (Rust) |
 | `npm run test:web` | Yalnızca arayüz testleri (vitest) |
 | `npm run test:rust` | Yalnızca Rust testleri (`--all-features`) |
 | `npm run seed` | Demo verisi yükler · `-- --reset` sıfırdan, `-- --db yol.db` başka dosyaya |
 | `npm run fmt` | Rust kodunu biçimler (`check` bunu yalnızca **denetler**) |
+| `npm run verify:bundle` | Üretim paketini derler ve `/dev` sayfalarının girmediğini doğrular |
 
 `npm run check` commit öncesi çalıştırılır; CI de aynı adımları koşar.
 

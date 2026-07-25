@@ -1,0 +1,91 @@
+/*
+ * Geliştirici sayfalarının yerleşimi (/dev/komponentler, /dev/durum).
+ *
+ * Buradaki 620px / 220px / 180px gibi değerler token'lanmadı: ürün tasarımına ait
+ * ölçüler değil, yalnızca bu geliştirici sayfasının ızgara genişlikleri. Üretim
+ * paketine girmiyor (bkz. scripts/verify-bundle.mjs).
+ */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.intro {
+  max-width: 620px;
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-prose);
+  color: var(--color-text-muted);
+  text-wrap: pretty;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3-5);
+}
+
+.subhead {
+  font-size: var(--font-size-meta);
+  color: var(--color-text-muted);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2-5);
+  align-items: center;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--space-3-5);
+  align-items: start;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.drawerRow {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--space-2-25) 0;
+  font-size: var(--font-size-body);
+  border-bottom: 1px solid var(--color-border-faint);
+}
+
+.drawerKey {
+  color: var(--color-text-tertiary);
+}
+
+/* Faz 2 teşhis paneli (/dev/durum). */
+.facts {
+  display: grid;
+  grid-template-columns: minmax(180px, auto) 1fr;
+  gap: var(--space-2) var(--space-5);
+  margin: 0;
+  font-size: var(--font-size-body);
+}
+
+.facts dt {
+  color: var(--color-text-muted);
+}
+
+.facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.mono {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-meta);
+}
+
+.ok {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-success);
+}

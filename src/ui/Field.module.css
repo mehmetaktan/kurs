@@ -1,0 +1,109 @@
+/* Girdi ailesinin ortak stili: Input, Textarea, Select, DatePicker, TimePicker. */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1-5);
+}
+
+.label {
+  font-size: var(--font-size-meta);
+  color: var(--color-text-muted);
+}
+
+.control {
+  width: 100%;
+  padding: var(--space-2-25) var(--space-3);
+  font-size: var(--font-size-body);
+  color: var(--color-text-primary);
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-7);
+  outline: none;
+}
+
+.control:focus {
+  border-color: var(--color-border-focus);
+}
+
+.control:disabled {
+  color: var(--color-text-disabled);
+  cursor: not-allowed;
+  background: var(--color-surface-muted);
+}
+
+.invalid {
+  border-color: var(--color-danger);
+}
+
+/* Hata metni Türkçe ve EYLEM önerir; ham hata kodu gösterilmez (CLAUDE.md > Arayüz). */
+.error {
+  font-size: var(--font-size-meta);
+  color: var(--color-danger);
+}
+
+.hint {
+  font-size: var(--font-size-meta);
+  color: var(--color-text-muted);
+}
+
+.textarea {
+  min-height: var(--measure-textarea-min);
+  line-height: var(--line-height-prose);
+  resize: vertical;
+}
+
+/* Kart içinde kenarlıksız duran not yazma kutusu (Öğrenci detayı → Notlar). */
+.textareaBare {
+  background: transparent;
+  border-color: transparent;
+}
+
+.textareaBare:focus {
+  border-color: var(--color-border-focus);
+}
+
+/* Yerel <select> + kendi oku: `appearance:none` olmadan Windows'ta gri sistem oku çıkar. */
+.selectWrap {
+  position: relative;
+}
+
+.select {
+  padding-right: var(--space-7);
+  appearance: none;
+  cursor: pointer;
+}
+
+.caret {
+  position: absolute;
+  top: 50%;
+  right: var(--space-2-75);
+  font-size: var(--font-size-micro);
+  color: var(--color-text-muted);
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+/* Onay kutusu — tasarımda yok, aynı görsel dilde üretildi. */
+.checkbox {
+  display: inline-flex;
+  gap: var(--space-2);
+  align-items: center;
+  font-size: var(--font-size-body);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.checkbox input {
+  width: var(--measure-checkbox);
+  height: var(--measure-checkbox);
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--color-action-primary);
+}
+
+.checkbox input:disabled,
+.checkboxDisabled {
+  color: var(--color-text-disabled);
+  cursor: not-allowed;
+}

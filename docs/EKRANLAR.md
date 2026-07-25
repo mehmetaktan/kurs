@@ -17,14 +17,15 @@ Tasarımdaki kenar çubuğu 6 öğe taşıyor:
 | 4 | **Gruplar** | — | ⬜ tasarlanacak |
 | 5 | **Ödemeler** | — (menüde borçlu sayısı rozeti var) | ⬜ tasarlanacak |
 | 6 | **Tanımlar** | — | ⬜ tasarlanacak |
-| 7 | **Raporlar** | — | ⚠️ **tasarımda yok, eklenmesi öneriliyor** |
+| 7 | **Raporlar** | — | ✅ **menüye eklendi (Faz 3)** — tasarımda yoktu |
 
 Alt bilgi: kurum adı (`Aydın Özel Ders`) ve `Sürüm 1.0 · Yerel`.
 "Yerel" ibaresi kasıtlı: kullanıcıya verinin buluta gitmediğini söylüyor.
 
-> **Karar gerekiyor.** Yol haritasında Faz 9 "Dashboard ve raporlar" var ama tasarımın
-> menüsünde Raporlar yok. İki seçenek: (a) 7. menü öğesi eklemek — görsel dil değişmez,
-> menüde yer var; (b) raporları Bugün ekranının altına yerleştirmek. **(a) öneriliyor.**
+> **Karar verildi (2026-07-25, PRD S8): (a) — 7. menü öğesi.** Yol haritasında Faz 9
+> "Dashboard ve raporlar" var, tasarımın menüsünde Raporlar yoktu. Menüde yer vardı ve
+> görsel dil değişmedi. Faz 3'te kenar çubuğuna eklendi (`src/shell/routes.ts`),
+> sayfa placeholder olarak duruyor; içeriği Faz 9'da gelecek.
 
 ---
 

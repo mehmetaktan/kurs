@@ -1,79 +1,130 @@
 # Durum
 
 **Son güncelleme:** 2026-07-25
-**Mevcut faz:** Faz 2 kod olarak tamamlandı + yönetici denetimi yapıldı → sırada **Faz 3**
-**Sonraki oturumda ilk iş:** `/faz-03` — ilk maddesi ADR-022 migration'ı (`faz-03.md §0`)
+**Mevcut faz:** Faz 3 tamamlandı → sırada **Faz 4** (Öğrenci ve veli modülü)
+**Sonraki oturumda ilk iş:** `/faz-04`
 
-> Faz 2'nin 3 kabul kriterinden **1'i sağlandı** (macOS'ta açılıyor); 2 ve 3 CI'da doğrulanacak
-> ve depo GitHub'a gidene kadar bekliyor. Bu Faz 3'ü **bloklamıyor** — Faz 3 ekranları macOS'ta
-> geliştirilecek. Push yapıldığında Actions sayfasına bakmak yeterli.
+> Faz 2'den devreden tek açık iş (ADR-022 migration'ı) **kapandı.** Şema artık doğru;
+> borçlu listesini okuyan ekranlar bunun üstüne kurulabilir.
+>
+> **Depo hâlâ GitHub'a gitmedi** — Faz 2'nin iki kabul kriteri ve Windows doğrulaması
+> bu yüzden bekliyor. Bu, Faz 4'ün en büyük riski (aşağıda).
 
 ---
 
-## Faz 2 (İskelet & CI) — tamamlandı
+## Faz 3 (Tasarım sistemi & kabuk) — tamamlandı
 
-`npm run check` yeşil: **107 test** (85 Rust + 22 TypeScript). Uygulama macOS'ta açılıyor;
-veritabanı `app_data_dir` altında, SQLite 3.53.2 `bundled`, WAL açık, yabancı anahtarlar açık.
+`npm run check` yeşil: **197 test** (89 Rust + 108 TypeScript) + typecheck + ESLint +
+clippy + rustfmt + **yeni paket denetimi**.
 
-| Ne | Durum |
+| Ne | Nerede |
 |---|---|
-| `001_initial.sql` | 21 tablo + `schema_migration`, 6 view, 6 trigger, 37 indeks — `VERI-MODELI.md`'den birebir, sıfır sapma |
-| Başlangıç verisi | 15 `setting` + tek `teacher` — migration'da, seed'de değil |
-| Migration çalıştırıcı | SHA-256 checksum, `include_str!` ile derlemeye gömülü; değiştirilmiş migration açılışta Türkçe mesajla durduruyor |
-| Repository | `Record` trait'i ile 21 tabloya tipli `get`/`list`/`archive`/`restore`/`count`; `ledger_entry`'de `update`/`archive` **yok** (K5) |
-| `search_name` · `phone_digits` | Repository üretiyor, çağırana bırakılmıyor |
-| CI | `.github/workflows/ci.yml` — Test + Paket, `windows-latest` ve `macos-latest` |
+| Token'lar | `src/styles/tokens.css` — TEK kaynak; renk, tipografi, aralık, yarıçap, gölge, sabit ölçüler |
+| Komponentler | `src/ui/` — 28 komponent, varyantları ve disabled/hata durumlarıyla |
+| Kabuk | `src/shell/` — `AppShell` · `SidebarNav` (7 öğe) · `PageHeader` · `StatusBar` · `routes.ts` |
+| Yönlendirme | `src/lib/router.ts` — hash tabanlı, kütüphanesiz (**ADR-023**) |
+| Türkçe altyapı | `src/lib/format.ts` — tarih, saat, telefon, arama normalleştirmesi |
+| Showcase | `/dev/komponentler` ve `/dev/durum` — üretim paketine **girmiyor** |
 
-### Faz 2 kendi denetimi — 9 bulgu, 5 gerçek
+### §0 — ADR-022 migration'ı (devir borcu kapandı)
 
-- **`INSERT OR REPLACE` defter mührünü deliyordu.** Örtük `DELETE`, `recursive_triggers`
-  kapalıyken `trg_ledger_no_delete`'i hiç ateşlemiyor — defter satırı izsiz kayboluyordu.
-  Düzeltme: `PRAGMA recursive_triggers = ON` + 4 regresyon testi (negatif kontrol yapıldı).
-- `group_members_on` arşivli öğrenciyi yoklama listesinde bırakıyordu.
-- Seed hedef bakiyeyi tutturamayınca sessizce vazgeçiyordu; hedefler mutlak kuruş yerine
-  ödeme biçimine bağlandı (mutlak hedefler gerçek tarihe bağlıydı, testler sabit `TODAY`
-  kullandığı için yeşil geçiyordu).
-- **`parseKurus` ile `parse_kurus` ayrışıyordu:** `'1.2,3.4'` Rust'ta hata, TS'te `1234`.
-  TS Rust'ın sırasına çekildi, bozuk girdi listesi iki tarafta eşitlendi, vitest `check`'e
-  ve CI'a bağlandı.
+`src-tauri/migrations/002_ledger_effective_parity.sql`. DDL `VERI-MODELI.md §1.23` ile
+**birebir aynı** (`diff` ile doğrulandı). `001_initial.sql`'e dokunulmadı.
 
-## Faz 2 yönetici denetimi (bu oturum)
+Dört test yazıldı ve **negatif kontrolü yapıldı** — migration kaydı `migrate.rs`'ten
+geçici olarak çıkarıldığında üçü düşüyor, geri konduğunda geçiyor:
 
-**Kararlara uygunluk: 7/7 temiz.** Frontend'de SQL yok (ADR-002) · float yok (ADR-003) ·
-saklanan bakiye sütunu yok (ADR-004) · `DELETE FROM`/`DROP TABLE` yok (ADR-005) · platforma
-özel API yok (ADR-008) · JSX'te çıplak Türkçe yok (ADR-007) · Türkçe metin kolonunda
-`ORDER BY` yok (ADR-020).
+| Test | İddia |
+|---|---|
+| `yoklama_duzeltme_zinciri_borcu_borclu_listesinde_gosterir` | Uzunluk 3 → borçlu listesi 250 ₺ gösterir (**eski test tersine çevrildi**) |
+| `tahsilat_iptalinin_geri_alinmasi_borc_yaratmaz` | Uzunluk 3, ters yön → borcu olmayan öğrenci listede çıkmaz |
+| `parite_degismezi_karisik_zincirlerde_korunur` | Uzunluk 1–4 bir arada + avanslı öğrenci → değişmez korunur |
+| `zincir_uzunlugu_dortte_bakiye_ve_borc_sifira_doner` | Uzunluk 4 → ikisi de sıfır |
 
-### Devredilen karar cevaplandı → **ADR-022**
+Değişmez `tests/common/mod.rs` içinde `assert_ledger_invariant` olarak duruyor ve
+**seed verisinin tamamı üzerinde de** koşuyor (`seed_parite_degismezini_korur`).
 
-Faz 2'nin sorduğu soru (`v_ledger_effective` üç halkalı zinciri okuyamıyor) `sqlite3` ile
-sekiz senaryo çalıştırılarak karara bağlandı. Seçenek 1 — **zincir paritesi** — onaylandı.
+Uçtan uca kanıt: `npm run seed` sonrası uygulama açıldı, `migration: [1, 2]` uygulandı ve
+kenar çubuğundaki **Ödemeler rozeti 7 borçlu** gösterdi — bu sayı `v_student_debt`'ten,
+yani yeni view'dan geliyor.
 
-Denetim sırasında **ikinci bir arıza** çıktı, Faz 2'nin raporunda yoktu:
+### Bu oturumda bulunan iki gerçek hata (düzeltildi)
 
-| Senaryo | Zincir | Bakiye | Eski tanım | ADR-022 |
-|---|---|---|---|---|
-| Geldi → Mazeretli → Geldi | 3 | −250 ₺ | **borç yok** ❌ | 250 ₺ ✅ |
-| **Tahsilat iptali geri alınır** | 3 | 0 | **250 ₺ borç** ❌ | borç yok ✅ |
+- **`ModalOption` başlık ve ipucu yan yana akıyordu.** `<span>` satır içi olduğu için
+  `margin-top` hiç uygulanmıyor, tasarımın iki satırlı düğmesi tek satıra düşüyordu.
+  Ekran görüntüsüne bakarken görüldü — testler bunu yakalamaz, `display: block` eklendi.
+- **Showcase tablosunda "Son ders" ham ISO yazıyordu** (`2026-05-02`). Referans sayfası
+  doğru kullanımı göstermek zorunda; `formatDate` eklendi.
 
-İkincisi ters yönde aynı hata: borcu olmayan öğrenciyi borçlu listesine sokuyor. Parite
-tanımı ikisini birden kapatıyor ve doğruluğu test edilebilir tek bir değişmeze indiriyor:
+### Yeni kapı: `npm run verify:bundle`
 
-> her öğrenci için `SUM(v_ledger_effective.amount) = v_student_balance.balance_kurus`
+Showcase'in üretim paketine girmediği garantisi kırılgandı — bir yerde **statik** `import`
+etmek yeter ve kimse fark etmez, çünkü uygulama çalışmaya devam eder; sadece kurs
+sahibine gönderilen pakette bir geliştirici sayfası taşınır.
 
-Uygulaması **Faz 3'ün ilk maddesi**: `002_ledger_effective_parity.sql` + 4 test
-(`faz-03.md §0`). `001_initial.sql` elle düzeltilmez — checksum mührü bunun için var.
+`scripts/verify-bundle.mjs` bunu kapıya bağladı: derlenen `dist/` içinde 5 geliştirici
+işaretçisi aranıyor, ayrıca kabuk metinlerinin **var olduğu** doğrulanıyor (boş bir
+`dist`'e bakıp "temiz" demesin). Negatif kontrolü yapıldı: sızıntı varken çıkış kodu 1.
+
+### Windows'a dönük iki bilinçli karar
+
+- **`DatePicker` / `TimePicker` yerel `<input type="date">` KULLANMIYOR.** WebView2'de
+  biçim Windows'un bölge ayarına bağlı; İngilizce Windows'ta kullanıcı `mm/dd/yyyy`
+  görür ve 25 Temmuz yerine başka bir güne kaydeder. Ayrıştırma testli `format.ts`'te.
+- **Gün/ay adları `toLocaleDateString('tr')` ile üretilmiyor**, `tr.ts`'te sabit liste.
+  ICU verisi eksik kurulmuş bir Windows'ta İngilizce gün adı dönebilir. Aynı gerekçe
+  `normalizeTr` için de geçerli (`'I'` → `'i'` riski).
+
+### Parite disiplini sürdürüldü
+
+| TS | Rust | Ortak vektörler |
+|---|---|---|
+| `formatKurus` / `parseKurus` | `money::format_kurus` / `parse_kurus` | Faz 2'den beri |
+| `phoneDigits` | `text::phone_digits` | **bu fazda eklendi** |
+| `normalizeTr` | `text::search_name` | **bu fazda eklendi** |
+
+Rust tarafındaki test modülüne de ikizine işaret eden not düşüldü. Tarih/saat
+biçimleyicisinin henüz Rust karşılığı **yok**; Faz 8 makbuz için yazınca vektörler
+ortak listeye taşınacak (not `format.ts` başında).
+
+---
+
+## Bilinçli ertelenenler
+
+| Ne | Neden |
+|---|---|
+| `CalendarGrid` `SessionBlock` `NowIndicator` `ClosedDayOverlay` `DropTarget` `Legend` `OverlayEmptyState` `Toolbar` | **Faz 5.** Hepsi takvim ekranının veri modeline bağlı; boşlukta yazılırsa ekran gelince yeniden yazılır. `TASARIM-SISTEMI §6`'da ⏭ ile işaretli |
+| `NoteList` / `NoteComposer` | **Faz 4** — aynı gerekçe, öğrenci notlarıyla birlikte |
+| Global arama sonuçları (`Ctrl K`) | Panel ve kısayol bağlandı, **sonuç kaynağı yok**: öğrenci/grup/ders listeleri Faz 4–5'te geliyor. Kısayolun hiçbir şey yapmaması, olmamasından kötü olurdu |
+| Sayfa içerikleri | Placeholder — her biri hangi fazda dolacağını söylüyor (`routes.ts`) |
+| `design-ref/support.js` | Claude Design'ın render motoru, bizim kodumuz değil |
+
+## Doğrulanmayan tek şey
+
+**Yapışkan tablo başlığı (`stickyHeader`).** Showcase'te gerçek bir kaydırma kabı içinde
+tam sınanmadı; başlığın satırların üstünde kalıp kalmadığı gözle net görülmedi. Asıl
+testi Faz 4'ün öğrenci listesi olacak — orada yapışkan başlık ekranın gereği.
+
+## Bağımlılık notu
+
+Üç geliştirme bağımlılığı eklendi, hepsi caret'siz kilitli: `jsdom`,
+`@testing-library/react`, `@testing-library/dom` (üçüncüsü v16'da peer dependency,
+zorunlu). `@testing-library/jest-dom` **kurulmadı** — kolaylık eşleştiricileri için
+dördüncü bir bağımlılık taşımak yerine testler `textContent` / `getAttribute` okuyor.
+
+`npm audit` 12 "high" gösteriyor; **hiçbiri bu fazda eklenenlerden değil** — eslint ve
+vite geliştirme araç zincirinin bilinen uyarıları, teslim edilen pakete girmiyorlar.
+Sürüm kilitleme disiplinini faz ortasında bozmamak için dokunulmadı. Ayrı bir turda
+ele alınabilir; aciliyeti yok çünkü ikisi de yalnızca geliştirme makinesinde çalışıyor.
 
 ---
 
 ## Açık işler
 
-### 1. GitHub'a push — senin elinde, Faz 2'nin son iki kriteri buna bağlı
+### 1. GitHub'a push — senin elinde, artık geciken bir iş
 
-**Depo henüz GitHub'a gitmedi** (`git remote` boş), o yüzden hiçbir CI çalışması olmadı.
-Kabul kriteri 2 ve 3 bu yüzden ⏳. CI yerelde sınandı: YAML parse edildi, macOS paketlemesi
-gerçekten çalıştırıldı ve bir hata yakalandı (dmg adımı `.app`'i tüketiyor, artifact yolu
-`*.app` arıyordu → macOS işi hep kırmızı olurdu; düzeltildi).
+**Depo hâlâ GitHub'a gitmedi** (`git remote` boş), hiçbir CI çalışması olmadı. Faz 2'nin
+kabul kriteri 2 ve 3 bu yüzden hâlâ ⏳ — ve şimdi **iki fazlık doğrulanmamış kod** birikti.
 
 ```
 gh auth login
@@ -81,56 +132,50 @@ gh repo create kurs-takip --private --source=. --remote=origin --push
 ```
 
 `gh auth login` interaktif — sohbete `! gh auth login` yazarak buradan da çalıştırabilirsin.
-Push ile birlikte workflow kendiliğinden başlar; ilk çalışma ~15–25 dk (Rust derlemesi
-önbelleksiz).
+Push ile workflow kendiliğinden başlar; ilk çalışma ~15–25 dk (Rust derlemesi önbelleksiz).
 
-> **Windows makine yok — hiçbir aşamada gerekmiyor** (ADR-008 netleştirmesi).
-> `.msi` **indirilmez, kurulmaz.** Actions sayfasında bakılacak tek şey: `Test · windows-latest`
-> yeşil mi (asıl kanıt bu — testler gerçek migration'ları uyguluyor) ve Artifacts kutusunda
-> sıfır olmayan boyutta bir `.msi` listeleniyor mu. `.msi`'yi gerçekten kurup açmak Faz 5
-> sonunda **kurs sahibinin bilgisayarında** olacak; gönderilecek paket CI artifact'idir.
+> **Windows makine yok — hiçbir aşamada gerekmiyor** (ADR-008). `.msi` **indirilmez,
+> kurulmaz.** Actions sayfasında bakılacak tek şey: `Test · windows-latest` yeşil mi
+> (asıl kanıt bu — testler gerçek migration'ları uyguluyor) ve Artifacts kutusunda sıfır
+> olmayan boyutta bir `.msi` listeleniyor mu. `.msi`'yi gerçekten kurup açmak Faz 5
+> sonunda **kurs sahibinin bilgisayarında** olacak.
 
 ### 2. Faz 6'ya devredilen açık karar — ders hakkı tarafı
 
 `ux_pkgusage_att` `(attendance_id, delta)` üzerinde tekil olduğu için düzeltme zincirinin
 üçüncü adımında ikinci `delta = −1` yazılamıyor. **Defter tarafı ADR-022 ile kapandı**;
-bu, ders hakkı sayacının ayrı sorunu (ADR-015: iki ayrı sayaç). Seçenekler ve ADR-022'nin
-getirdiği yeni gerekçe `faz-06.md §3b`'de.
-
-### 3. Bilinçli ertelenenler
-
-| Ne | Neden |
-|---|---|
-| `design-ref/support.js` indirilmedi | Claude Design'ın render motoru, bizim kodumuz değil. Komut `design-ref/README.md`'de |
-| Takvimde öğretmen filtresi + Gün görünümü çoklu sütun | ADR-011 — tek öğretmen. Şema hazır, arayüz sadeleşti |
+bu, ders hakkı sayacının ayrı sorunu (ADR-015: iki ayrı sayaç). Seçenekler `faz-06.md §3b`'de.
 
 ---
 
 ## Açık sorular — cevabını senden bekliyorum
 
-`docs/PRD.md` §9'da gerekçeleriyle. **S1 cevaplandı (ADR-021).** Hiçbiri Faz 3'ü bloklamıyor;
-her birinin varsayılan varsayımı var.
+`docs/PRD.md` §9'da gerekçeleriyle. **S1 (ADR-021) ve S8 cevaplandı.** Hiçbiri Faz 4'ü
+bloklamıyor; her birinin varsayılan varsayımı var.
 
 | # | Soru | Hangi faz |
 |---|---|---|
 | S2 | Grup kapasitesi aşımı engellensin mi, uyarı mı? | Faz 5 |
-| S4 | Standart ders süresi kaç dakika? | Faz 5 — şemada yeri açıldı (`subject.default_min`) |
+| S4 | Standart ders süresi kaç dakika? | Faz 5 |
 | S3 | Paketlerin son kullanma tarihi var mı? | Faz 7 |
 | S6 | Dönem ortasında ayrılanın kalan paket parası iade mi, alacak mı? | Faz 7 |
 | S5 | Makbuz numarası otomatik mi artsın? | Faz 8 |
 | S7 | "Devam oranı" hangi pencerede hesaplansın? | Faz 9 |
-| S8 | Raporlar 7. menü öğesi mi olsun? | Faz 9 |
 | S9 | Bilgisayarındaki Windows sürümü ne? | **Faz 10 öncesi** |
 | S10 | Kod imzalama sertifikası alınacak mı? | Faz 10 |
 
 ---
 
-## Faz 3'ün riski
+## Faz 4'ün en büyük riski
 
-Tasarım token'ları ve komponent kütüphanesi düşük riskli. Asıl dikkat iki yerde:
+**Windows'ta hiç çalıştırılmamış iki fazlık kod birikti.** Faz 2 şemayı, Faz 3 arayüzün
+tamamını yazdı; ikisi de yalnızca macOS'ta koştu. Faz 4 gerçek ekranları bunun üstüne
+kuracak. Bir Windows sorunu (satır sonu, dosya yolu, import büyük/küçük harfi, WebView2
+davranışı) bugün bir migration ve bir tasarım sistemi katmanının altında; Faz 4'ten sonra
+bir de öğrenci modülünün altında olacak. **Push edilmezse hata ucuz olmaktan çıkar.**
 
-1. **ADR-022 migration'ı arayüzden önce bitmeli.** Borçlu listesini okuyan ilk ekran
-   yazılmadan şema doğru olmalı; yanlış şemanın üstüne kurulan ekran iki kez yazılır.
-2. **`format.ts` ile `money.rs` ayrışmaya devam edebilir.** Faz 2 bir ayrışma buldu;
-   tarih ve telefon biçimleyicileri eklenirken aynı tuzak var. Her iki tarafın bozuk girdi
-   listesi birlikte güncellenir.
+İkinci risk daha küçük ama gerçek: kolon genişlikleri ve kaydırma çubuğu **Segoe UI**
+altında doğrulanmadı. Tasarımın 13px yoğun tablosu Windows'ta bir tık geniş çizilir;
+`Öğrenciler` tablosunun 8 kolonu taşarsa bu Faz 4'te görülür — ama yalnızca CI ekran
+görüntüsü ya da kurs sahibinin bilgisayarı varsa. Şimdilik yalnızca `min-width: 1280px`
+güvencesi var.

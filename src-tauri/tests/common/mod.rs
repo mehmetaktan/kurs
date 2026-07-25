@@ -139,6 +139,40 @@ pub fn group_session(conn: &Connection, group_id: i64, subject_id: i64, day: &st
     .expect("seans eklenmeli")
 }
 
+/// ADR-022'nin değişmezi (VERI-MODELI.md §6): **her** öğrenci için
+/// `SUM(v_ledger_effective.amount) = v_student_balance.balance_kurus`.
+///
+/// Bakiye bütün defter satırlarını (ters kayıtlar dahil) toplar; `v_ledger_effective`
+/// ise zincir paritesine göre yalnızca geçerli başlık satırlarını verir. İkisinin eşit
+/// kalması, bakiyenin ve borçlu listesinin **yapı gereği** aynı deftere baktığının tek
+/// cümlelik kanıtı. Zincir kuran her senaryonun sonunda çağrılır.
+pub fn assert_ledger_invariant(conn: &Connection) {
+    let mut stmt = conn
+        .prepare(
+            "SELECT b.student_id, b.balance_kurus, \
+                    COALESCE((SELECT SUM(e.amount) FROM v_ledger_effective e \
+                              WHERE e.student_id = b.student_id), 0) \
+             FROM v_student_balance b",
+        )
+        .expect("değişmez sorgusu hazırlanmalı");
+
+    let rows: Vec<(i64, i64, i64)> = stmt
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+        .expect("değişmez sorgusu çalışmalı")
+        .collect::<rusqlite::Result<_>>()
+        .expect("satırlar okunmalı");
+
+    assert!(!rows.is_empty(), "değişmez boş veri üzerinde sınanamaz");
+
+    for (student_id, balance, effective) in rows {
+        assert_eq!(
+            effective, balance,
+            "ADR-022 değişmezi kırıldı (öğrenci {student_id}): \
+             v_ledger_effective toplamı {effective}, bakiye {balance}"
+        );
+    }
+}
+
 /// Deftere borç/alacak satırı. `amount` işaretli: (−) borç, (+) alacak.
 pub fn ledger(conn: &Connection, student_id: i64, day: &str, kind: &str, amount: i64) -> i64 {
     repo::finance::insert_ledger_entry(

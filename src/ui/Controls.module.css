@@ -1,0 +1,151 @@
+/* Arama kutusu, klavye rozeti, segment, adımlayıcı, filtre çipi. */
+
+.searchWrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.search {
+  width: var(--measure-search);
+  padding: var(--space-2-25) var(--measure-search-hint-space) var(--space-2-25) var(--space-3);
+  font-size: var(--font-size-body);
+  color: var(--color-text-primary);
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-7);
+  outline: none;
+}
+
+.search:focus {
+  border-color: var(--color-border-focus);
+}
+
+.searchHint {
+  position: absolute;
+  top: 50%;
+  right: var(--space-2-25);
+  transform: translateY(-50%);
+}
+
+/* Klavye tuşu rozeti — `Ctrl K`, `Esc`, `←`, `→` (TASARIM-SISTEMI §6/13). */
+.kbd {
+  padding: var(--space-0-5) var(--space-1-5);
+  font-size: var(--font-size-caption);
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+  background: var(--color-surface-sidebar);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-4);
+}
+
+/* Segment: Hafta | Gün. Aktif koyu, pasif beyaz. */
+.segment {
+  display: inline-flex;
+  overflow: hidden;
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-8);
+}
+
+.segmentItem {
+  padding: var(--space-1-75) var(--space-3);
+  font-size: var(--font-size-control);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  background: transparent;
+  border: none;
+}
+
+.segmentItem:hover:not(:disabled):not(.segmentActive) {
+  background: var(--color-surface-sidebar);
+}
+
+.segmentItem:disabled {
+  color: var(--color-text-disabled);
+  cursor: not-allowed;
+}
+
+.segmentActive {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-action-primary-text);
+  background: var(--color-action-primary);
+}
+
+/* Adımlayıcı: ‹ Bugün › — tek kapsayıcıda üç düğme. */
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-8);
+}
+
+.stepperArrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--measure-icon-button);
+  height: var(--measure-icon-button);
+  font-size: var(--font-size-title);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  background: none;
+  border: none;
+}
+
+.stepperArrow:hover:not(:disabled) {
+  background: var(--color-surface-sidebar);
+}
+
+.stepperCenter {
+  height: var(--measure-icon-button);
+  padding: 0 var(--space-3-25);
+  font-size: var(--font-size-control);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  background: none;
+  border-right: 1px solid var(--color-border-subtle);
+  border-left: 1px solid var(--color-border-subtle);
+}
+
+.stepperCenter:hover:not(:disabled) {
+  background: var(--color-surface-sidebar);
+}
+
+/* Filtre çipi — yarıçap 16, sağda opsiyonel sayı. */
+.chip {
+  display: inline-flex;
+  gap: var(--space-1-5);
+  align-items: center;
+  padding: var(--space-1-5) var(--space-3);
+  font-size: var(--font-size-control);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  cursor: pointer;
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-16);
+}
+
+.chip:hover:not(:disabled):not(.chipActive) {
+  background: var(--color-surface-bar);
+}
+
+.chipActive {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  background: var(--color-surface-selected);
+  border-color: var(--color-border-chip-active);
+}
+
+.chipCount {
+  color: var(--color-text-muted);
+}
+
+.chipRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1-75);
+  align-items: center;
+}

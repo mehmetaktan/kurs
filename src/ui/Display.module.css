@@ -1,0 +1,211 @@
+/* Kart, özet kartı, bölüm başlığı, rozet, durum noktası, avatar, sekme, sayfalama. */
+
+.card {
+  padding: var(--space-3);
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-8);
+}
+
+/* Kartlarda gölge YOK, kenarlık var (TASARIM-SISTEMI §4). */
+.statCard {
+  padding: var(--space-3-5);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-10);
+}
+
+.statHead {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.statLabel {
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+  letter-spacing: var(--letter-spacing-caps);
+  text-transform: uppercase;
+}
+
+.statValue {
+  margin-top: var(--space-1);
+  font-size: var(--font-size-display);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+  color: var(--color-text-primary);
+  letter-spacing: var(--letter-spacing-display);
+}
+
+.statValueDanger {
+  color: var(--color-danger);
+}
+
+.statValueWarn {
+  color: var(--color-warn);
+}
+
+.statValueEmpty {
+  color: var(--color-text-empty);
+  letter-spacing: normal;
+}
+
+.statCaption {
+  margin-top: var(--space-1-5);
+  font-size: var(--font-size-meta);
+  color: var(--color-text-muted);
+}
+
+.statCaptionWarn {
+  color: var(--color-warn);
+}
+
+/* Özet şerit kolon oranları BAĞLAYICI: Öğrenci detayı ve Grup detayı aynı olacak
+   (TASARIM-SISTEMI §8, tasarım dosyasındaki HTML yorumu bunu şart koşuyor). */
+.statStrip {
+  display: grid;
+  grid-template-columns: var(--stat-strip-columns);
+  gap: var(--space-3-5);
+}
+
+.sectionHeader {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+  justify-content: space-between;
+  padding-bottom: var(--space-2-25);
+  border-bottom: 1px solid var(--color-border-strong);
+}
+
+.sectionTitle {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.sectionMeta {
+  font-size: var(--font-size-meta);
+  color: var(--color-text-muted);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--space-1-75);
+  font-size: var(--font-size-meta);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--measure-badge-line);
+  border-radius: var(--radius-9);
+}
+
+.badgeDanger {
+  color: var(--color-danger);
+  background: var(--color-danger-bg);
+}
+
+.badgeWarn {
+  color: var(--color-warn-text);
+  background: var(--color-warn-bg-strong);
+}
+
+.badgeNeutral {
+  color: var(--color-text-tertiary);
+  background: var(--color-neutral-bg);
+}
+
+.badgeSuccess {
+  color: var(--color-success);
+  background: var(--color-warn-bg);
+}
+
+.statusDot {
+  display: inline-flex;
+  gap: var(--space-1-5);
+  align-items: center;
+  font-size: var(--font-size-meta);
+  color: var(--color-text-secondary);
+}
+
+.statusDotMuted {
+  color: var(--color-text-muted);
+}
+
+.dot {
+  box-sizing: border-box;
+  flex-shrink: 0;
+  width: var(--measure-status-dot);
+  height: var(--measure-status-dot);
+  border-radius: var(--radius-full);
+}
+
+.dotSuccess {
+  background: var(--color-success);
+}
+
+.dotWarn {
+  background: var(--color-warn);
+}
+
+.dotDanger {
+  background: var(--color-danger);
+}
+
+.dotNeutral {
+  background: var(--color-neutral);
+}
+
+/* İçi boş halka → pasif / iptal. */
+.dotHollow {
+  background: transparent;
+  border: 1.5px solid currentcolor;
+}
+
+.avatar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+  background: var(--color-surface-selected);
+  border-radius: var(--radius-full);
+}
+
+.tabs {
+  display: flex;
+  gap: var(--space-6-5);
+  border-bottom: 1px solid var(--color-border-strong);
+}
+
+.tab {
+  display: inline-flex;
+  gap: var(--space-1-5);
+  align-items: center;
+  padding: var(--space-2) 0 var(--space-2-5);
+  font-size: var(--font-size-body);
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  background: none;
+  border: none;
+}
+
+.tabActive {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  box-shadow: var(--inset-tab-active);
+}
+
+.tabCount {
+  font-size: var(--font-size-meta);
+  color: var(--color-text-muted);
+}
+
+.pagination {
+  display: flex;
+  gap: var(--space-2-5);
+  align-items: center;
+  justify-content: flex-end;
+  font-size: var(--font-size-meta);
+  color: var(--color-text-tertiary);
+}

@@ -1,0 +1,261 @@
+/* Modal, ConfirmDialog, Drawer, Toast, boş/yükleniyor/hata durumları. */
+
+.scrimCenter {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--scrim-modal);
+}
+
+.modal {
+  width: var(--measure-modal);
+  padding: var(--space-5-5) var(--space-6);
+  background: var(--color-surface-canvas);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-12);
+  box-shadow: var(--shadow-modal);
+}
+
+.modalTitle {
+  font-size: var(--font-size-subtitle);
+  font-weight: var(--font-weight-semibold);
+}
+
+.modalBody {
+  margin-top: var(--space-2-25);
+}
+
+.modalActions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2-25);
+  margin-top: var(--space-3-5);
+}
+
+.modalDismiss {
+  margin-top: var(--space-3-25);
+  text-align: center;
+}
+
+/* "Vazgeç" bir düğme değil, bağlantı görünümünde — tasarımda böyle. */
+.linkButton {
+  font-size: var(--font-size-meta);
+  color: var(--color-text-tertiary);
+  text-decoration: none;
+  cursor: pointer;
+  background: none;
+  border: none;
+}
+
+.linkButton:hover {
+  color: var(--color-text-primary);
+  text-decoration: underline;
+}
+
+/* Onay diyaloğundaki dikey seçenek düğmeleri: başlık + alt açıklama. */
+.optionButton {
+  padding: var(--space-2-75) var(--space-3-5);
+  text-align: left;
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-radius: var(--radius-8);
+}
+
+.optionPrimary {
+  background: var(--color-action-primary);
+}
+
+.optionPrimary:hover {
+  background: var(--color-action-primary-hover);
+}
+
+.optionSecondary {
+  background: var(--color-surface-muted);
+  border-color: var(--color-border-default);
+}
+
+.optionSecondary:hover {
+  background: var(--color-surface-selected);
+}
+
+/* Yıkıcı onay: koyu birincil DEĞİL — kullanıcı refleksle basmasın. Ama ne olduğu
+   belli olsun diye kırmızı zeminde duruyor. */
+.optionDanger {
+  background: var(--color-danger-bg);
+  border-color: transparent;
+}
+
+.optionDanger:hover {
+  filter: brightness(0.97);
+}
+
+.optionTitleDanger {
+  color: var(--color-danger);
+}
+
+.optionHintDanger {
+  color: var(--color-text-tertiary);
+}
+
+/* `display: block` şart: başlık ve ipucu <span>, satır içi kalırsa yan yana akar ve
+   `margin-top` hiç uygulanmaz — tasarımdaki iki satırlı düğme tek satıra düşer. */
+.optionTitle {
+  display: block;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+}
+
+.optionTitlePrimary {
+  color: var(--color-action-primary-text);
+}
+
+.optionTitleSecondary {
+  color: var(--color-text-secondary);
+}
+
+.optionHint {
+  display: block;
+  margin-top: var(--space-0-5);
+  font-size: var(--font-size-caption);
+}
+
+.optionHintPrimary {
+  color: var(--color-text-on-dark-muted);
+}
+
+.optionHintSecondary {
+  color: var(--color-text-muted);
+}
+
+.description {
+  margin-top: var(--space-3);
+  font-size: var(--font-size-meta);
+  line-height: var(--line-height-prose);
+  color: var(--color-text-muted);
+  text-wrap: pretty;
+}
+
+/* ── Çekmece ─────────────────────────────────────────────────────────────── */
+
+.scrimRight {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-drawer);
+  display: flex;
+  justify-content: flex-end;
+  background: var(--scrim-drawer);
+}
+
+.drawer {
+  display: flex;
+  flex-direction: column;
+  width: var(--measure-drawer);
+  height: 100%;
+  background: var(--color-surface-canvas);
+  border-left: 1px solid var(--color-border-default);
+  box-shadow: var(--shadow-drawer);
+}
+
+.drawerHead {
+  display: flex;
+  gap: var(--space-3-5);
+  align-items: flex-start;
+  padding: var(--space-5-5) var(--space-6) var(--space-4-5);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.drawerTitle {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--font-size-title-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.drawerBody {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-5) var(--space-6);
+}
+
+.drawerFoot {
+  display: flex;
+  gap: var(--space-2-5);
+  padding: var(--space-4) var(--space-6);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+/* ── Toast ───────────────────────────────────────────────────────────────── */
+
+.toast {
+  position: fixed;
+  bottom: var(--space-6-5);
+  left: 50%;
+  z-index: var(--z-toast);
+  padding: var(--space-2-5) var(--space-4-25);
+  font-size: var(--font-size-body);
+  color: var(--color-text-on-dark);
+  background: var(--color-action-primary);
+  border-radius: var(--radius-8);
+  box-shadow: var(--shadow-toast);
+  transform: translateX(-50%);
+}
+
+/* ── Boş / yükleniyor / hata ──────────────────────────────────────────────── */
+
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--space-10) var(--space-5);
+  text-align: center;
+}
+
+.stateIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--measure-state-icon);
+  height: var(--measure-state-icon);
+  font-size: var(--space-5-5);
+  color: var(--color-text-disabled);
+  background: var(--color-surface-sidebar);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-full);
+}
+
+.stateTitle {
+  margin-top: var(--space-4);
+  font-size: var(--font-size-subtitle);
+  font-weight: var(--font-weight-semibold);
+}
+
+.stateBody {
+  max-width: var(--measure-empty-card);
+  margin-top: var(--space-1-5);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-prose);
+  color: var(--color-text-muted);
+  text-wrap: pretty;
+}
+
+.stateActions {
+  display: flex;
+  gap: var(--space-2-5);
+  margin-top: var(--space-4-5);
+}
+
+/* Satır içi durumlar: bir bölümün içinde, sayfanın tamamında değil. */
+.stateInline {
+  padding: var(--space-6) var(--space-1);
+  font-size: var(--font-size-body);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.stateInlineError {
+  color: var(--color-danger);
+}

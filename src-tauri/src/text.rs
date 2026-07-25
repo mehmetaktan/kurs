@@ -40,6 +40,10 @@ pub fn phone_digits(input: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    //! Bu dosyadaki vektörlerin ikizi `src/lib/format.test.ts` içindedir
+    //! (`normalizeTr` ↔ `search_name`, `phoneDigits` ↔ `phone_digits`). Biri değişirse
+    //! ikisi birlikte değişir — Faz 2 denetimi `parseKurus` ayrışmasını böyle yakaladı.
+
     use super::*;
 
     #[test]
@@ -73,10 +77,16 @@ mod tests {
         assert_eq!(search_name("Matematik"), search_name("MATEMATİK"));
     }
 
+    /// Vektörlerin ikizi `src/lib/format.test.ts` içinde (`phoneDigits`). Arama kutusu
+    /// TS tarafından, `phone_digits` sütunu buradan geçiyor; ikisi ayrışırsa kullanıcı
+    /// kendi kaydettiği numarayı bulamaz.
     #[test]
     fn telefon_rakamlari() {
         assert_eq!(phone_digits("0532 111 22 33"), "05321112233");
         assert_eq!(phone_digits("+90 (532) 111-22-33"), "905321112233");
         assert_eq!(phone_digits(""), "");
+        assert_eq!(phone_digits("tel: 0532"), "0532");
+        // ASCII olmayan rakamlar düşer (`is_ascii_digit`) — TS `\D` ile aynı sonuç.
+        assert_eq!(phone_digits("٥٣٢"), "");
     }
 }

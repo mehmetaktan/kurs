@@ -8,7 +8,7 @@
 | 1 | Plan — tasarım okuma, PRD, veri modeli, ekran envanteri | `/faz-01` | ✅ Tamamlandı |
 | 1.5 | **Faz 1 denetimi** — şema, ADR ve faz komutlarının düzeltilmesi | `/yonetici` | ✅ Tamamlandı |
 | 2 | İskelet & CI — Tauri projesi, şema, migration, seed, Windows build | `/faz-02` | ✅ Tamamlandı — CI doğrulaması GitHub'a push'a bağlı |
-| 3 | Tasarım sistemi — token'lar, komponentler, uygulama kabuğu | `/faz-03` | ⬜ **Devir borcu:** ADR-022 migration'ı (`faz-03.md §0`) |
+| 3 | Tasarım sistemi — token'lar, komponentler, uygulama kabuğu | `/faz-03` | ✅ Tamamlandı — ADR-022 migration'ı da bu fazda kapandı |
 | 4 | Öğrenci & Veli — CRUD, arama, detay sayfası | `/faz-04` | ⬜ |
 | 5 | Ders & Takvim — branş, grup, seans, seri ders | `/faz-05` | ⬜ |
 | 6 | Yoklama & Telafi | `/faz-06` | ⬜ |
@@ -33,7 +33,7 @@
 
 | Ne zaman | Ne |
 |---|---|
-| Faz 2 sonu | GitHub Actions'tan indirilebilir bir Windows `.msi` **ve** `windows-latest` üzerinde yeşil Rust testleri. Testler gerçek migration'ları uyguladığı için bu, şemanın Windows'ta kurulduğunun kanıtıdır — Faz 5'i beklemeden. → Kod ve CI tanımı hazır; **yeşil çalışma depo GitHub'a gidince doğrulanır.** Faz 3'ün ilk işi bu doğrulamayı teyit etmek. |
+| Faz 2 sonu | GitHub Actions'tan indirilebilir bir Windows `.msi` **ve** `windows-latest` üzerinde yeşil Rust testleri. Testler gerçek migration'ları uyguladığı için bu, şemanın Windows'ta kurulduğunun kanıtıdır — Faz 5'i beklemeden. → Kod ve CI tanımı hazır; **yeşil çalışma depo GitHub'a gidince doğrulanır.** Faz 3'te de yapılmadı: depo hâlâ yerel. **Faz 4'ten önce halledilmeli** — biriken doğrulanmamış kod her fazda büyüyor. |
 | Faz 5 sonu | **İlk gerçek Windows testi.** Kurs sahibine build gönderilir. Faz 10'a bırakılmaz. |
 | Faz 7 sonu | Para mantığının testleri yeşil. Buradan sonra şema değişikliği pahalı. |
 | Faz 10 sonu | Kurulum dosyası + kullanım kılavuzu + otomatik yedekleme |

@@ -1,0 +1,191 @@
+/* Uygulama kabuğu: 216px kenar çubuğu + esnek ana alan. Responsive yok, masaüstü. */
+
+.shell {
+  display: flex;
+  min-width: var(--measure-app-min-width);
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Klavye kullanıcısı için ilk durak: odaklanınca görünür olur. */
+.skip {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: var(--z-toast);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-meta);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-6);
+  transform: translateY(-200%);
+}
+
+.skip:focus-visible {
+  transform: none;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  width: var(--measure-sidebar);
+  background: var(--color-surface-sidebar);
+  border-right: 1px solid var(--color-border-default);
+}
+
+.brand {
+  padding: var(--space-4-5) var(--space-4-5) var(--space-3-5);
+  border-bottom: 1px solid var(--color-border-faint);
+}
+
+.brandName {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.01em;
+}
+
+.brandInstitution {
+  margin-top: var(--space-0-5);
+  font-size: var(--font-size-meta);
+  color: var(--color-text-muted);
+}
+
+.nav {
+  flex: 1;
+  padding: var(--space-2-5) 0;
+  overflow-y: auto;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  margin: 1px var(--space-2);
+  font-size: var(--font-size-body);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  border-radius: var(--radius-6);
+}
+
+.navItem:hover {
+  background: var(--color-surface-hover);
+}
+
+.navItemActive {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  background: var(--color-surface-selected);
+}
+
+.footer {
+  padding: var(--space-3) var(--space-4-5);
+  font-size: var(--font-size-meta);
+  color: var(--color-text-muted);
+  border-top: 1px solid var(--color-border-faint);
+}
+
+.main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--color-surface-canvas);
+}
+
+.main:focus {
+  outline: none;
+}
+
+.pageHeader {
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--space-3);
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: var(--space-5) var(--space-7) var(--space-4);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.pageTitle {
+  font-size: var(--font-size-title);
+  font-weight: var(--font-weight-semibold);
+}
+
+.pageSubtitle {
+  margin-top: var(--space-0-75);
+  font-size: var(--font-size-body);
+  color: var(--color-text-tertiary);
+}
+
+.pageHeaderRight {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-5-5) var(--space-7) var(--space-8-5);
+}
+
+.contentInner {
+  max-width: var(--measure-content-max);
+}
+
+.statusBar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-7);
+  font-size: var(--font-size-meta);
+  color: var(--color-text-tertiary);
+  background: var(--color-surface-bar);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+/* Global arama sonuç listesi (Ctrl K). */
+.searchGroups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.searchHelp {
+  font-size: var(--font-size-meta);
+  line-height: var(--line-height-prose);
+  color: var(--color-text-muted);
+  text-wrap: pretty;
+}
+
+/* Placeholder sayfası — hangi fazda dolacağını söyleyen kart. */
+.placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  max-width: var(--measure-empty-card);
+  padding: var(--space-5);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-12);
+}
+
+.placeholderTitle {
+  font-size: var(--font-size-subtitle);
+  font-weight: var(--font-weight-semibold);
+}
+
+.placeholderBody {
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-prose);
+  color: var(--color-text-muted);
+  text-wrap: pretty;
+}
