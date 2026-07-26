@@ -9,10 +9,12 @@
 //! - `payment` tutar/tarih/öğrenci bakımından mühürlü. Yalnızca `receipt_no`, `method`
 //!   ve `note` düzeltilebilir — `update_payment_details` bunu yansıtır.
 
+use chrono::{Duration, NaiveDate};
 use rusqlite::{params, Connection, Row};
+use serde::Deserialize;
 
 use crate::clock;
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use crate::model::{
     Installment, LedgerEntry, Package, PackageUsage, Payment, PaymentAllocation, PriceRule,
 };
@@ -21,6 +23,23 @@ use crate::repo::{last_id, Record};
 // ---------------------------------------------------------------------------
 // price_rule (§1.10)
 // ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PriceRuleInput {
+    /// Fiyatı değiştirilen tarife. Eski satır kapanır, yeni satır eklenir (ADR-006).
+    pub replaces_id: Option<i64>,
+    pub name: String,
+    pub pricing_model: String,
+    pub subject_id: Option<i64>,
+    pub is_group: Option<bool>,
+    pub unit_price: i64,
+    pub lesson_count: Option<i64>,
+    pub total_price: Option<i64>,
+    pub period_months: Option<i64>,
+    pub default_installments: i64,
+    pub valid_from: String,
+}
 
 impl Record for PriceRule {
     const TABLE: &'static str = "price_rule";
@@ -102,6 +121,159 @@ pub fn update_price_rule(conn: &Connection, id: i64, p: &PriceRule) -> AppResult
         ],
     )?;
     Ok(())
+}
+
+/// Tarifeler geçmiş satırları değiştirmez: fiyat değişikliği eski satırı kapatıp yeni
+/// bir sürüm ekler. İki yazma tek transaction'dır; yeni satır yazılamazsa eskisi açık kalır.
+pub fn save_price_rule(conn: &Connection, input: &PriceRuleInput) -> AppResult<i64> {
+    validate_price_rule(input)?;
+
+    crate::repo::in_transaction(conn, |conn| {
+        if let Some(replaces_id) = input.replaces_id {
+            let previous: PriceRule = crate::repo::require(conn, replaces_id)?;
+            if previous.deleted_at.is_some() {
+                return Err(AppError::new(
+                    "price_rule_archived",
+                    "Arşivlenmiş tarife değiştirilemez. Yeni bir tarife ekleyin.",
+                ));
+            }
+            let previous_from = parse_day(&previous.valid_from, "priceRule.validFrom")?;
+            let next_from = parse_day(&input.valid_from, "priceRule.validFrom")?;
+            if next_from <= previous_from {
+                return Err(AppError::new(
+                    "price_rule_date_order",
+                    "Yeni tarifenin başlangıcı eski tarifenin başlangıcından sonra olmalı. Tarihi düzeltin.",
+                ));
+            }
+            conn.execute(
+                "UPDATE price_rule SET valid_to = ?2, updated_at = ?3 WHERE id = ?1",
+                params![
+                    replaces_id,
+                    (next_from - Duration::days(1))
+                        .format("%Y-%m-%d")
+                        .to_string(),
+                    clock::now_local()
+                ],
+            )?;
+        }
+
+        insert_price_rule(
+            conn,
+            &PriceRule {
+                id: None,
+                name: input.name.trim().to_string(),
+                pricing_model: input.pricing_model.clone(),
+                subject_id: input.subject_id,
+                study_group_id: None,
+                is_group: input.is_group,
+                unit_price: input.unit_price,
+                lesson_count: input.lesson_count,
+                total_price: input.total_price,
+                period_months: input.period_months,
+                default_installments: input.default_installments,
+                valid_from: input.valid_from.clone(),
+                valid_to: None,
+                created_at: None,
+                updated_at: None,
+                deleted_at: None,
+            },
+        )
+    })
+}
+
+/// Tanımlar ekranı geçmişi de gösterir; bu yüzden arşivlenmiş satırlar dahil döner.
+pub fn price_rules(conn: &Connection) -> AppResult<Vec<PriceRule>> {
+    crate::repo::list_all::<PriceRule>(conn)
+}
+
+/// Ders tarihindeki geçerli birim ücreti çözer. Bulunamaması "ücretsiz" değildir:
+/// çağıran sessizce sıfır yazamaz (K-23).
+pub fn resolve_unit_price(
+    conn: &Connection,
+    subject_id: i64,
+    is_group: bool,
+    on_day: &str,
+) -> AppResult<i64> {
+    parse_day(on_day, "priceRule.onDay")?;
+    conn.query_row(
+        "SELECT unit_price FROM price_rule \
+         WHERE deleted_at IS NULL AND pricing_model = 'per_session' \
+           AND (subject_id = ?1 OR subject_id IS NULL) \
+           AND (is_group = ?2 OR is_group IS NULL) \
+           AND valid_from <= ?3 AND (valid_to IS NULL OR ?3 <= valid_to) \
+         ORDER BY (subject_id IS NOT NULL) DESC, (is_group IS NOT NULL) DESC, \
+                  valid_from DESC, id DESC LIMIT 1",
+        params![subject_id, is_group, on_day],
+        |row| row.get(0),
+    )
+    .map_err(|err| match err {
+        rusqlite::Error::QueryReturnedNoRows => AppError::new(
+            "price_rule_not_found",
+            "Bu ders için geçerli bir tarife bulunamadı. Önce Tanımlar → Tarifeler bölümünden fiyat ekleyin.",
+        ),
+        other => other.into(),
+    })
+}
+
+fn validate_price_rule(input: &PriceRuleInput) -> AppResult<()> {
+    if input.name.trim().is_empty() {
+        return Err(AppError::new(
+            "priceRule.name",
+            "Tarife adını yazın; örneğin Matematik birebir.",
+        ));
+    }
+    if !matches!(
+        input.pricing_model.as_str(),
+        "per_session" | "package" | "period"
+    ) {
+        return Err(AppError::new(
+            "priceRule.pricingModel",
+            "Tarife tipini Ders başı, Paket veya Dönemlik olarak seçin.",
+        ));
+    }
+    if input.unit_price < 0 {
+        return Err(AppError::new(
+            "priceRule.unitPrice",
+            "Birim ücret negatif olamaz. Tutarı kontrol edin.",
+        ));
+    }
+    if input.default_installments < 1 {
+        return Err(AppError::new(
+            "priceRule.defaultInstallments",
+            "Taksit sayısı en az 1 olmalı.",
+        ));
+    }
+    if input.pricing_model == "package"
+        && (input.lesson_count.is_none() || input.total_price.is_none())
+    {
+        return Err(AppError::new(
+            "priceRule.package",
+            "Paket tarifesinde ders sayısını ve toplam tutarı yazın.",
+        ));
+    }
+    if input.lesson_count.is_some_and(|value| value < 1) {
+        return Err(AppError::new(
+            "priceRule.lessonCount",
+            "Ders sayısı en az 1 olmalı.",
+        ));
+    }
+    if input.total_price.is_some_and(|value| value < 0) {
+        return Err(AppError::new(
+            "priceRule.totalPrice",
+            "Toplam tutar negatif olamaz. Tutarı kontrol edin.",
+        ));
+    }
+    parse_day(&input.valid_from, "priceRule.validFrom")?;
+    Ok(())
+}
+
+fn parse_day(value: &str, code: &str) -> AppResult<NaiveDate> {
+    NaiveDate::parse_from_str(value, "%Y-%m-%d").map_err(|_| {
+        AppError::new(
+            code,
+            "Tarihi gün.ay.yıl biçiminde geçerli bir gün olarak yazın.",
+        )
+    })
 }
 
 // ---------------------------------------------------------------------------

@@ -71,6 +71,54 @@ export function fetchStudentDebts(): Promise<StudentDebt[]> {
   return call<StudentDebt[]>('student_debts')
 }
 
+// ─── Para fazı §1 — fiyat tarifesi ───────────────────────────────────────────
+
+export type PricingModel = 'per_session' | 'package' | 'period'
+
+export interface PriceRule {
+  id: number
+  name: string
+  pricingModel: PricingModel
+  subjectId: number | null
+  studyGroupId: number | null
+  isGroup: boolean | null
+  /** Kuruş, tam sayı (ADR-003). */
+  unitPrice: number
+  lessonCount: number | null
+  totalPrice: number | null
+  periodMonths: number | null
+  defaultInstallments: number
+  validFrom: string
+  validTo: string | null
+  deletedAt: string | null
+}
+
+export interface PriceRuleInput {
+  replacesId: number | null
+  name: string
+  pricingModel: PricingModel
+  subjectId: number | null
+  isGroup: boolean | null
+  unitPrice: number
+  lessonCount: number | null
+  totalPrice: number | null
+  periodMonths: number | null
+  defaultInstallments: number
+  validFrom: string
+}
+
+export function fetchPriceRules(): Promise<PriceRule[]> {
+  return call<PriceRule[]>('price_rules')
+}
+
+export function savePriceRule(input: PriceRuleInput): Promise<number> {
+  return call<number>('save_price_rule', { input })
+}
+
+export function archivePriceRule(priceRuleId: number): Promise<boolean> {
+  return call<boolean>('archive_price_rule', { priceRuleId })
+}
+
 // ─── Faz 4 — öğrenci ve veli ──────────────────────────────────────────────────
 //
 // Tipler `src-tauri/src/repo/roster.rs` ile birebir (`rename_all = "camelCase"`).

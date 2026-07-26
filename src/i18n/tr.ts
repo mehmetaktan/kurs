@@ -51,6 +51,8 @@ export const tr = {
     next: 'Sonraki',
     openCalendar: 'Takvimi aç',
     openClock: 'Saat listesini aç',
+    archive: 'Arşivle',
+    saving: 'Kaydediliyor…',
   },
 
   states: {
@@ -344,9 +346,72 @@ export const tr = {
   definitions: {
     tabs: {
       subjects: 'Branşlar',
+      prices: 'Tarifeler',
       teachers: 'Öğretmenler',
       closedDays: 'Tatil günleri',
       general: 'Genel',
+    },
+    priceRules: {
+      heading: 'Fiyat tarifeleri',
+      lead: 'Yeni fiyatlar başlangıç tarihinden itibaren geçerli olur. Geçmiş derslerin ve paketlerin ücreti değişmez.',
+      newRule: 'Yeni tarife',
+      saved: 'Tarife kaydedildi.',
+      change: 'Yeni fiyat',
+      allSubjects: 'Tüm branşlar',
+      empty: 'Henüz tarife tanımlanmadı',
+      emptyBody: 'Ders ve paket ücretlerini kullanabilmek için ilk tarifeyi ekleyin.',
+      table: {
+        label: 'Fiyat tarifeleri',
+        name: 'Ad',
+        scope: 'Branş ve ders türü',
+        model: 'Tip',
+        price: 'Birim ücret',
+        validity: 'Geçerlilik',
+        action: '',
+      },
+      models: {
+        perSession: 'Ders başı',
+        package: 'Paket',
+        period: 'Dönemlik',
+      },
+      lessonKinds: {
+        any: 'Birebir ve grup',
+        solo: 'Birebir',
+        group: 'Grup',
+      },
+      validity: {
+        since: ' tarihinden beri',
+        starts: ' tarihinde başlayacak',
+        archived: 'Arşivlenmiş',
+      },
+      form: {
+        newTitle: 'Yeni tarife',
+        changeTitle: 'Yeni fiyatı tanımla',
+        historyHint: 'Fiyat değişikliği eski satırı değiştirmez; seçilen tarihten başlayan yeni bir satır açar.',
+        name: 'Tarife adı',
+        model: 'Tarife tipi',
+        subject: 'Branş',
+        lessonKind: 'Ders türü',
+        unitPrice: 'Birim ücret (TL)',
+        lessonCount: 'Ders sayısı',
+        totalPrice: 'Toplam tutar (TL)',
+        periodMonths: 'Dönem süresi (ay)',
+        installments: 'Varsayılan taksit sayısı',
+        validFrom: 'Şu tarihten itibaren geçerli',
+      },
+      errors: {
+        required: 'Bu alanı doldurun.',
+        money: 'Geçerli bir tutar yazın; örnek: 1.250,00',
+        integer: 'Sıfırdan büyük bir tam sayı yazın.',
+        package: 'Paket için ders sayısını ve toplam tutarı yazın.',
+        installments: 'Taksit sayısı en az 1 olmalı.',
+        date: 'Geçerlilik başlangıcını seçin.',
+      },
+      archive: {
+        title: 'Tarife arşivlensin mi?',
+        body: 'yeni kayıtlarda seçilemeyecek. Geçmiş ders ve paket tutarları değişmeyecek.',
+        done: 'Tarife arşivlendi.',
+      },
     },
     // Para fazı §0a — ADR-037. Kurs çok öğretmenli; adı 'Öğretmen' olan migration
     // satırı bu ekranın ilk kaydıdır ve kurs sahibi onu düzeltir.

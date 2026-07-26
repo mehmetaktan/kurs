@@ -6,11 +6,12 @@ import { Tabs } from '../../ui'
 import type { TabItem } from '../../ui'
 import { ClosedDaysTab } from './ClosedDaysTab'
 import { GeneralTab } from './GeneralTab'
+import { PriceRulesTab } from './PriceRulesTab'
 import { SubjectsTab } from './SubjectsTab'
 import { TeachersTab } from './TeachersTab'
 import styles from './Definitions.module.css'
 
-type DefinitionsTab = 'subjects' | 'teachers' | 'closedDays' | 'general'
+type DefinitionsTab = 'subjects' | 'prices' | 'teachers' | 'closedDays' | 'general'
 
 /**
  * Tanımlar — E7 (branşlar), **öğretmenler (ADR-037)**, E8 (tatil / kapalı günler)
@@ -28,6 +29,7 @@ export function DefinitionsPage() {
 
   const items: TabItem<DefinitionsTab>[] = [
     { value: 'subjects', label: tr.definitions.tabs.subjects },
+    { value: 'prices', label: tr.definitions.tabs.prices },
     { value: 'teachers', label: tr.definitions.tabs.teachers },
     { value: 'closedDays', label: tr.definitions.tabs.closedDays },
     { value: 'general', label: tr.definitions.tabs.general },
@@ -41,6 +43,7 @@ export function DefinitionsPage() {
           <Tabs items={items} value={tab} onChange={setTab} label={tr.pages.definitions.title} />
         </div>
         {tab === 'subjects' && <SubjectsTab />}
+        {tab === 'prices' && <PriceRulesTab />}
         {tab === 'teachers' && <TeachersTab />}
         {tab === 'closedDays' && <ClosedDaysTab />}
         {tab === 'general' && <GeneralTab />}

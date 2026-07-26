@@ -13,9 +13,10 @@ use tauri::State;
 use crate::clock;
 use crate::error::AppResult;
 use crate::model::{
-    ClosedDay, Guardian, Setting, Student, StudentBalance, StudentDebt, StudyGroup, Subject,
-    Teacher,
+    ClosedDay, Guardian, PriceRule, Setting, Student, StudentBalance, StudentDebt, StudyGroup,
+    Subject, Teacher,
 };
+use crate::repo::finance::PriceRuleInput;
 use crate::repo::people::TeacherInput;
 use crate::repo::roster::{StudentDetail, StudentInput, StudentQuery, StudentRow};
 use crate::repo::schedule::{
@@ -93,6 +94,27 @@ pub fn student_balance(
 #[tauri::command]
 pub fn student_debts(state: State<'_, AppState>) -> AppResult<Vec<StudentDebt>> {
     state.with_conn(repo::views::student_debts)
+}
+
+// ---------------------------------------------------------------------------
+// Para fazı §1 — fiyat tarifesi
+// ---------------------------------------------------------------------------
+
+/// Canlı ve arşivlenmiş tarifeler birlikte döner: geçmiş fiyatlar ekranda kaybolmaz.
+#[tauri::command]
+pub fn price_rules(state: State<'_, AppState>) -> AppResult<Vec<PriceRule>> {
+    state.with_conn(repo::finance::price_rules)
+}
+
+/// Fiyat değişikliği eski satırı değiştirmez; yeni geçerlilik satırı açar (ADR-006).
+#[tauri::command]
+pub fn save_price_rule(state: State<'_, AppState>, input: PriceRuleInput) -> AppResult<i64> {
+    state.with_conn(|conn| repo::finance::save_price_rule(conn, &input))
+}
+
+#[tauri::command]
+pub fn archive_price_rule(state: State<'_, AppState>, price_rule_id: i64) -> AppResult<bool> {
+    state.with_conn(|conn| repo::archive::<PriceRule>(conn, price_rule_id))
 }
 
 // ---------------------------------------------------------------------------
