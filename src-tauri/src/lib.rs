@@ -90,7 +90,7 @@ impl AppState {
     }
 }
 
-/// Açılış bakımı: eksik seansların üretimi (§1.14), ileride vade tahakkuku.
+/// Açılış bakımı: eksik seansların üretimi (§1.14) ve vade tahakkuku (ADR-015).
 ///
 /// **Hata uygulamayı açmayı engellemez.** Bakım işi düşerse kullanıcının yapabileceği
 /// tek şey programı kullanmaya devam etmek; açılışı kesmek onu veriye erişemez hâle
@@ -100,6 +100,12 @@ impl AppState {
 fn run_startup_jobs(conn: &Connection) {
     match repo::ops::on_startup(conn, clock::today_local()) {
         Ok(report) => {
+            if report.installments_accrued > 0 {
+                println!(
+                    "[kurs] taksit tahakkuku: {} vadesi gelen taksit",
+                    report.installments_accrued
+                );
+            }
             let s = report.sessions;
             if s.created > 0 {
                 println!(

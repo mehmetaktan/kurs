@@ -537,21 +537,30 @@ fn archive_unprocessed(conn: &Connection, series_id: i64, from: Option<&str>) ->
 /// İptal — kayıt **silinmez**, durumu değişir (`VERI-MODELI §4`).
 /// `deleted_at` dolmaz: iptal edilen ders takvimde ve ders geçmişinde görünmeye devam eder.
 ///
-/// Defter ve paket tarafındaki karşılığı (ters kayıt / hak iadesi) **Faz 6'da** yazılır;
-/// burada yalnızca programın durumu değişiyor.
+/// Defterdeki ders ücretinin ters kaydı ve kullanılmış paket hakkının iadesi durum
+/// değişikliğiyle aynı transaction'da yapılır (`VERI-MODELI §4`).
 pub fn cancel_session(conn: &Connection, session_id: i64, reason: Option<&str>) -> AppResult<()> {
-    let changed = conn.execute(
-        "UPDATE session SET status = 'cancelled', cancel_reason = ?2, updated_at = ?3 \
-         WHERE id = ?1 AND deleted_at IS NULL",
-        params![session_id, reason, clock::now_local()],
-    )?;
-    if changed == 0 {
-        return Err(AppError::new(
-            "session_not_found",
-            "Ders bulunamadı. Listeyi yenileyip tekrar deneyin.",
-        ));
-    }
-    Ok(())
+    repo::in_transaction(conn, |conn| {
+        let cancelled_on = clock::date_string(clock::today_local());
+        repo::finance::cancel_session_financials(conn, session_id, &cancelled_on)?;
+        conn.execute(
+            "UPDATE attendance SET status = 'cancelled', marked_at = ?2, updated_at = ?2 \
+             WHERE session_id = ?1 AND deleted_at IS NULL",
+            params![session_id, clock::now_local()],
+        )?;
+        let changed = conn.execute(
+            "UPDATE session SET status = 'cancelled', cancel_reason = ?2, updated_at = ?3 \
+             WHERE id = ?1 AND deleted_at IS NULL",
+            params![session_id, reason, clock::now_local()],
+        )?;
+        if changed == 0 {
+            return Err(AppError::new(
+                "session_not_found",
+                "Ders bulunamadı. Listeyi yenileyip tekrar deneyin.",
+            ));
+        }
+        Ok(())
+    })
 }
 
 /// Erteleme — tarih/saat değişir, şablon bağı (`series_id`) korunur.

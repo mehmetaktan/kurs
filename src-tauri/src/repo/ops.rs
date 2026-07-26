@@ -19,22 +19,26 @@ use crate::repo::{self, last_id, Record};
 /// Uygulama her açılışta çağırır: zamanın geçmesiyle **kendiliğinden** doğması gereken
 /// kayıtları yazar.
 ///
-/// Bugün tek iş var — eksik seansların üretimi (§1.14). Ufuk olmasaydı takvim birkaç ay
-/// sonra sessizce boşalır ve Bugün ekranı yanlış boş-durum metnini gösterirdi.
+/// Eksik seanslar üretilir (§1.14), vadesi gelen taksitler deftere yansıtılır
+/// (ADR-015). İki iş de idempotenttir.
 ///
 /// **`today` parametredir** (§0 `'now'` kuralı): SQLite saati UTC döner ve gece
 /// 00:00–03:00 arasında bir önceki günü verirdi. Çağıran `chrono::Local`'dan üretir.
 ///
-/// Faz 7/8'in `accrue_due_installments(today)`'ı da buraya girecek — vade tahakkuku aynı
-/// sınıftan bir iş: idempotent, açılışta, `today` bağlı.
 pub fn on_startup(conn: &Connection, today: NaiveDate) -> AppResult<StartupReport> {
     let sessions = repo::schedule::generate_sessions(conn, today)?;
-    Ok(StartupReport { sessions })
+    let installments_accrued =
+        repo::finance::accrue_due_installments(conn, &clock::date_string(today))?;
+    Ok(StartupReport {
+        sessions,
+        installments_accrued,
+    })
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct StartupReport {
     pub sessions: repo::schedule::GenerateReport,
+    pub installments_accrued: i64,
 }
 
 impl Record for BackupLog {

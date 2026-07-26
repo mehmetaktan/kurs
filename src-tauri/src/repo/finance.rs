@@ -10,7 +10,7 @@
 //!   ve `note` düzeltilebilir — `update_payment_details` bunu yansıtır.
 
 use chrono::{Duration, NaiveDate};
-use rusqlite::{params, Connection, Row};
+use rusqlite::{params, Connection, OptionalExtension, Row};
 use serde::{Deserialize, Serialize};
 
 use crate::clock;
@@ -188,7 +188,7 @@ pub fn price_rules(conn: &Connection) -> AppResult<Vec<PriceRule>> {
 
 /// Ders tarihindeki geçerli birim ücreti çözer. Bulunamaması "ücretsiz" değildir:
 /// çağıran sessizce sıfır yazamaz (K-23).
-pub fn resolve_unit_price(
+pub fn resolve_tariff_unit_price(
     conn: &Connection,
     subject_id: i64,
     is_group: bool,
@@ -213,6 +213,66 @@ pub fn resolve_unit_price(
         ),
         other => other.into(),
     })
+}
+
+/// Yoklama için ücret snapshot'ını açıkça çözer (`VERI-MODELI §5`). Önce o dersteki
+/// canlı ders başı kaydı, yoksa seans snapshot'ı; ikisi de yoksa hata. İki kayıt varsa
+/// sessizce ilkini seçmez.
+pub fn resolve_unit_price(conn: &Connection, attendance_id: i64) -> AppResult<i64> {
+    let (student_id, subject_id, group_id, session_day, session_price): (
+        i64,
+        i64,
+        Option<i64>,
+        String,
+        Option<i64>,
+    ) = conn
+        .query_row(
+            "SELECT a.student_id, s.subject_id, s.study_group_id, s.session_date, s.unit_price \
+             FROM attendance a JOIN session s ON s.id = a.session_id \
+             WHERE a.id = ?1 AND a.deleted_at IS NULL AND s.deleted_at IS NULL",
+            [attendance_id],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                ))
+            },
+        )
+        .map_err(|_| {
+            AppError::new(
+                "attendance_not_found",
+                "Bu yoklama kaydı bulunamadı. Listeyi yenileyip yeniden deneyin.",
+            )
+        })?;
+
+    let mut stmt = conn.prepare(
+        "SELECT unit_price FROM enrollment \
+         WHERE student_id = ?1 AND subject_id = ?2 AND pricing_model = 'per_session' \
+           AND deleted_at IS NULL AND start_on <= ?3 AND (end_on IS NULL OR ?3 <= end_on) \
+           AND ((?4 IS NULL AND study_group_id IS NULL) OR study_group_id = ?4)",
+    )?;
+    let prices = stmt
+        .query_map(
+            params![student_id, subject_id, session_day, group_id],
+            |row| row.get::<_, i64>(0),
+        )?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    match prices.as_slice() {
+        [price] => Ok(*price),
+        [] => session_price.ok_or_else(|| {
+            AppError::new(
+                "price_not_found",
+                "Bu ders için tarife bulunamadı. Ders başı ücret yazmak için öğrencinin kaydını veya seans ücretini düzeltin.",
+            )
+        }),
+        _ => Err(AppError::new(
+            "ambiguous_enrollment",
+            format!("Bu ders için birden fazla geçerli kayıt bulundu. Öğrencinin {session_day} tarihindeki kayıt aralıklarını düzeltin."),
+        )),
+    }
 }
 
 fn validate_price_rule(input: &PriceRuleInput) -> AppResult<()> {
@@ -953,6 +1013,49 @@ pub fn due_unaccrued_installments(conn: &Connection, today: &str) -> AppResult<V
     Ok(out)
 }
 
+/// Vadesi gelen taksitleri deftere yazar ve taksite bağlar. İki adım tek transaction;
+/// ikinci çağrıda `accrued_entry_id` dolu olduğu için satır bulunmaz (ADR-015).
+pub fn accrue_due_installments(conn: &Connection, today: &str) -> AppResult<i64> {
+    parse_day(today, "installment.today")?;
+    crate::repo::in_transaction(conn, |conn| {
+        let due = due_unaccrued_installments(conn, today)?;
+        for installment in &due {
+            let installment_id = installment.id.expect("okunan taksidin id'si olur");
+            let entry_id = insert_ledger_entry(
+                conn,
+                &LedgerEntry {
+                    id: None,
+                    student_id: installment.student_id,
+                    // Geç açılan program borcu bugüne taşımaz; gerçek vadesinde gösterir.
+                    entry_date: installment.due_on.clone(),
+                    kind: "installment_charge".into(),
+                    amount: installment.amount.checked_neg().ok_or_else(|| {
+                        AppError::new(
+                            "installment.amount",
+                            "Taksit tutarı işlenemedi. Taksit planını kontrol edin.",
+                        )
+                    })?,
+                    attendance_id: None,
+                    installment_id: Some(installment_id),
+                    payment_id: None,
+                    reverses_id: None,
+                    memo: installment.label.clone(),
+                    created_at: None,
+                    updated_at: None,
+                    deleted_at: None,
+                },
+            )?;
+            mark_installment_accrued(conn, installment_id, entry_id)?;
+        }
+        i64::try_from(due.len()).map_err(|_| {
+            AppError::new(
+                "installment.count",
+                "İşlenecek taksit sayısı çok büyük. Taksit planlarını kontrol edin.",
+            )
+        })
+    })
+}
+
 // ---------------------------------------------------------------------------
 // payment (§1.17)
 // ---------------------------------------------------------------------------
@@ -1174,4 +1277,151 @@ pub fn ledger_of(conn: &Connection, student_id: i64) -> AppResult<Vec<LedgerEntr
         out.push(row?);
     }
     Ok(out)
+}
+
+/// Paketsiz öğrencinin işlenen dersini borçlandırır. Mazeret politikası ayardan okunur;
+/// telafi dersi ikinci kez ücretlenmez. Daha önce ters kaydedilmiş bir ücret varsa yeni
+/// başlık açmak yerine ters kaydın tersini yazar (`VERI-MODELI §4`).
+pub fn charge_session(conn: &Connection, attendance_id: i64) -> AppResult<Option<i64>> {
+    let (student_id, session_date, status, is_makeup, subject_name): (
+        i64,
+        String,
+        String,
+        bool,
+        String,
+    ) = conn
+        .query_row(
+            "SELECT a.student_id, s.session_date, a.status, s.is_makeup, sub.name \
+             FROM attendance a \
+             JOIN session s ON s.id = a.session_id \
+             JOIN subject sub ON sub.id = s.subject_id \
+             WHERE a.id = ?1 AND a.deleted_at IS NULL AND s.deleted_at IS NULL",
+            [attendance_id],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                ))
+            },
+        )
+        .map_err(|_| {
+            AppError::new(
+                "attendance_not_found",
+                "Bu yoklama kaydı bulunamadı. Listeyi yenileyip yeniden deneyin.",
+            )
+        })?;
+    if is_makeup || !attendance_consumes_lesson(conn, &status)? {
+        return Ok(None);
+    }
+    if let Some((tail_id, tail_amount)) = session_charge_tail(conn, attendance_id)? {
+        return if tail_amount < 0 {
+            // Çift tık / aynı yoklamanın yeniden kaydı ikinci borç doğurmaz.
+            Ok(Some(tail_id))
+        } else {
+            Ok(Some(insert_reversal(
+                conn,
+                tail_id,
+                &session_date,
+                Some("Yoklama düzeltmesi"),
+            )?))
+        };
+    }
+    let unit_price = resolve_unit_price(conn, attendance_id)?;
+    let entry_id = insert_ledger_entry(
+        conn,
+        &LedgerEntry {
+            id: None,
+            student_id,
+            entry_date: session_date,
+            kind: "session_charge".into(),
+            amount: unit_price.checked_neg().ok_or_else(|| {
+                AppError::new(
+                    "session.amount",
+                    "Ders ücreti işlenemedi. Tarifedeki birim ücreti kontrol edin.",
+                )
+            })?,
+            attendance_id: Some(attendance_id),
+            installment_id: None,
+            payment_id: None,
+            reverses_id: None,
+            memo: Some(subject_name),
+            created_at: None,
+            updated_at: None,
+            deleted_at: None,
+        },
+    )?;
+    Ok(Some(entry_id))
+}
+
+/// İşlenmiş ders iptalinde etkin `session_charge` ucunu bir kez ters kaydeder.
+pub fn reverse_session_charge(
+    conn: &Connection,
+    attendance_id: i64,
+    reversed_on: &str,
+) -> AppResult<Option<i64>> {
+    parse_day(reversed_on, "session.reversedOn")?;
+    let tail = session_charge_tail(conn, attendance_id)?;
+    match tail {
+        Some((id, amount)) if amount < 0 => Ok(Some(insert_reversal(
+            conn,
+            id,
+            reversed_on,
+            Some("Ders iptali"),
+        )?)),
+        _ => Ok(None),
+    }
+}
+
+/// Bir yoklamanın `session_charge` başlığından başlayan doğrusal zincirinin canlı ucu.
+fn session_charge_tail(conn: &Connection, attendance_id: i64) -> AppResult<Option<(i64, i64)>> {
+    Ok(conn
+        .query_row(
+            "WITH RECURSIVE chain(id, amount) AS ( \
+               SELECT id, amount FROM ledger_entry \
+               WHERE attendance_id = ?1 AND kind = 'session_charge' AND deleted_at IS NULL \
+               UNION ALL \
+               SELECT r.id, r.amount FROM ledger_entry r \
+               JOIN chain c ON r.reverses_id = c.id \
+               WHERE r.deleted_at IS NULL \
+             ) \
+             SELECT c.id, c.amount FROM chain c \
+             WHERE NOT EXISTS ( \
+               SELECT 1 FROM ledger_entry r WHERE r.reverses_id = c.id AND r.deleted_at IS NULL \
+             ) LIMIT 1",
+            [attendance_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()?)
+}
+
+/// Seans iptalinin para ve hak tarafı; `schedule::cancel_session` aynı transaction'da
+/// çağırır. Her öğrenci ayrı işlenir, ikinci iptal yeni ters kayıt/hak iadesi yazmaz.
+pub fn cancel_session_financials(
+    conn: &Connection,
+    session_id: i64,
+    cancelled_on: &str,
+) -> AppResult<()> {
+    let attendances = crate::repo::academic::attendance_of_session(conn, session_id)?;
+    for attendance in attendances {
+        let attendance_id = attendance.id.expect("okunan yoklamanın id'si olur");
+        reverse_session_charge(conn, attendance_id, cancelled_on)?;
+        restore_package_credit(conn, attendance_id)?;
+    }
+    Ok(())
+}
+
+fn attendance_consumes_lesson(conn: &Connection, status: &str) -> AppResult<bool> {
+    match status {
+        "present" => Ok(true),
+        "unexcused" => {
+            crate::repo::setting::value_bool(conn, "absence_unexcused_consumes_lesson", true)
+        }
+        "excused" => {
+            crate::repo::setting::value_bool(conn, "absence_excused_consumes_lesson", false)
+        }
+        _ => Ok(false),
+    }
 }
