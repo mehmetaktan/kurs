@@ -1,15 +1,37 @@
 # Durum
 
 **Son güncelleme:** 2026-07-26 · Faz 5C (takvim ekranı)
-**Mevcut faz:** Faz 5C ✅ kod tamam, `npm run check` yeşil → sırada **push + CI + ilk
-Windows testi**
-**Sonraki oturumda ilk iş:** CI'ın `Test · windows-latest` işi yeşil mi ve artefakt
-kutusunda **sıfır olmayan boyutta** bir `.msi` var mı. Üç fazın kodu (5B + 5C-K + 5C) ilk
-kez Windows'ta derleniyor; kırılırsa hangi fazdan geldiği aramayla bulunacak.
+**Mevcut faz:** Faz 5C ✅ tamamlandı — push edildi, **CI ilk denemede tümüyle yeşil**,
+`.msi` üretildi. Kilometre taşı kapandı; sırada **`/faz-06`** (yoklama).
+**Sonraki oturumda ilk iş:** `/faz-06` — ama önce **sürükleme jestini gerçek uygulamada
+sür** (5C'de ortam engelledi, aşağıda). Kurs sahibinden Windows testi cevabı geldiyse
+bulguları da oraya girer.
 
 > **Faz 5 bitti.** Takvim elde yazıldı (ADR-031), sürükleme Pointer Events üzerinde
 > kuruldu (ADR-030), taşımanın kapsamı **ADR-032** ile netleşti. `npm run check` yeşil:
 > **481 test** (293 TypeScript + 188 Rust). Faz 5C-K'de 411'di; **+70 test.**
+
+---
+
+## Push + CI — üç fazın kodu ilk kez Windows'ta, ilk denemede yeşil
+
+`origin/main` Faz 5A'da (`b8648f1`) kalmıştı; 5B, 5C-K ve 5C **tek seferde** gitti
+(3 commit, 39 dosya, ~4.5k satır). Bedeli kabul edilmişti — "kırılırsa hangi fazdan
+geldiği aramayla bulunacak" — ama kırılmadı.
+
+| İş | Sonuç |
+|---|---|
+| `Test · windows-latest` | ✅ — gerçek migration'lar Windows'ta uygulandı, 188 Rust testi geçti |
+| `Test · macos-latest` | ✅ |
+| `Paket · windows-latest` | ✅ — `kurs-takip-windows-msi`, **2.603.710 bayt** |
+| `Paket · macos-latest` | ✅ — `kurs-takip-macos`, 2.563.378 bayt |
+
+Kanıt tanımı `ADR-008`'in koyduğu gibi: `.msi` indirilmiyor, **sıfır olmayan boyutta
+üretilmesi** ve Windows testlerinin yeşil olması yeterli. Bu, ekranın Windows'ta **nasıl
+göründüğünü** söylemiyor — o yüzden paket kurs sahibine gönderiliyor (Kalan riskler §1).
+
+Tek uyarı: `actions/checkout@v4` ve `setup-node@v4` Node 20 hedefliyor, GitHub onları
+Node 24'e zorluyor. Şimdilik zararsız; Faz 10'da eylem sürümleri yükseltilir.
 
 ---
 
