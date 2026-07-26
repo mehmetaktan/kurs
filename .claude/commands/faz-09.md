@@ -1,60 +1,27 @@
 ---
-description: Faz 9 — Dashboard ve raporlar
+description: (Kırpıldı) Faz 9 artık /faz-10'un içinde — orayı çalıştır
 ---
 
-# Faz 9 — Dashboard & Raporlar
+# Faz 9 kırpıldı — `/faz-10`'u çalıştır
 
-Önce oku: `CLAUDE.md`, `docs/DURUM.md`, `docs/EKRANLAR.md`,
-`docs/KARARLAR.md` (**ADR-018**, **ADR-025**).
+2026-07-26'da ürün sahibinin kararıyla **Faz 9 ayrı bir faz olmaktan çıktı**. Sebep: proje
+bitmesi gerekiyor ve dashboard/rapor katmanı, çalışan bir programın üstüne sonradan
+eklenebilecek tek parça.
 
-Grafik yazmadan önce **`dataviz` skill'ini yükle.**
+**Kalan (`/faz-10 §0`):** iki şey.
 
-> **ADR-025 bu fazda bağlayıcı.** Rapor tabloları da liste ekranı: arama/filtre Rust'ta,
-> Türkçe sıralama ve sayfalama arayüzde. Özet rakamların (toplam tahsilat, toplam alacak)
-> hangi kümeyi topladığı **etikette yazılı olmak zorunda** — ADR-025 §"Özet rakamlar".
+1. Bugün ekranının özet şeridi — bu ay tahsil edilen, toplam alacak ve borçlu sayısı,
+   bekleyen telafi, bitmek üzere olan paket. Kaynağı hazır (`views::total_receivable`,
+   `v_student_debt`, `v_package_remaining`); yeni sorgu değil, mevcut komutların ekrana
+   bağlanması.
+2. **E17 Raporlar sayfası** (`EKRANLAR.md > E17`) — Faz 3'ten beri placeholder duran 7.
+   menü öğesi. `StatCard` şeridi + üç basit tablo. Menü öğesi **kaldırılmıyor**: E17'nin
+   istediği kapsam zaten mütevazı.
 
----
+**Kapsam dışına çıkan:** aylık gelir **grafiği**, branş bazlı dağılım grafiği, doluluk ısı
+haritası, grafik kütüphanesi seçimi. `EKRANLAR.md > E17` grafiği zaten istemiyordu ("sayı ve
+tablo dili hâkim") — bu komut onunla çelişiyordu, çelişki bu kırpmayla kapandı. Grafik
+gerektiği gün ayrı bir iş olarak konuşulur; `dataviz` skill'i o zaman devreye girer.
 
-## 1. Dashboard
-
-Tasarımdaki `Bugün` ekranını tam haline getir. Kurs sahibi programı açtığında
-bunu görecek — üç saniyede günü anlamalı:
-
-- **Bugünün dersleri**, saat sırasıyla, yoklama girilmiş mi işaretiyle
-- Bu ay tahsil edilen / beklenen tutar
-- Toplam alacak ve borçlu öğrenci sayısı
-- Bu hafta devamsızlık yapanlar
-- Bitmek üzere olan ders paketleri
-- Bekleyen telafiler
-
-Her kart tıklanınca ilgili ekrana gitsin.
-
-## 2. Raporlar
-
-- Aylık gelir grafiği (son 12 ay)
-- Branş bazlı gelir dağılımı
-- **Doluluk:** hangi saatler dolu, hangi saatler boş — kurs sahibi yeni öğrenciyi
-  nereye yerleştireceğini buradan görecek
-- Öğrenci bazlı özet tablo: ders sayısı, devam yüzdesi, tahsil edilen, bakiye
-- Tarih aralığı filtresi tüm raporlarda ortak
-
-## 3. Dışa aktarma
-
-Excel / CSV. **UTF-8 BOM ekle** — yoksa Windows Excel'de Türkçe karakterler bozulur
-(`CLAUDE.md` > Windows). Bir dosyayı gerçekten Excel'de açıp doğrula ya da
-BOM'un yazıldığını testle kanıtla.
-
-## 4. Grafikler
-
-- Hafif bir kütüphane seç, gerekçesini yaz
-- Renkler `docs/TASARIM-SISTEMI.md`'deki paletten
-- Boş veri durumu her grafikte ele alınmış olsun (yeni kurulan programda hiç veri yok)
-
-## 5. Testler
-
-Rapor sorgularının doğruluğu: seed verisiyle beklenen toplamlar. Özellikle
-aylık gelir toplamının `ledger_entry` ile tutarlılığı.
-
----
-
-Bitince dashboard ekran görüntüsünü göster, sonra `/kapat`.
+**Kalan tek zorunluluk kapsamda:** dışa aktarmada **UTF-8 BOM** (`CLAUDE.md > Windows`).
+O, ekstrenin dışa aktarmasıyla birlikte `/faz-07 §7`'de karşılanıyor.

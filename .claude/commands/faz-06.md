@@ -4,7 +4,22 @@ description: Faz 6 — Yoklama, devamsızlık ve telafi dersi
 
 # Faz 6 — Yoklama & Telafi
 
-Önce oku: `CLAUDE.md`, `docs/DURUM.md`, `docs/VERI-MODELI.md`.
+> **Sıra değişti (2026-07-26).** Bu faz artık **para fazından sonra** geliyor
+> (`/faz-07` → `/faz-06` → `/faz-10`). Sebebi `YOL-HARITASI.md`'de: tahsilat hiç yoktu ve
+> yoklamanın paraya değdiği tek yer paket tüketimiydi, o da ayrıldı. **Takvim
+> dondurulduğu için** (ADR-034) bu fazın açılışında takvim işi yok — 5C'den devreden
+> "sürükleme jestini ekranda sür" maddesi **kapsam dışı.**
+
+Önce oku: `CLAUDE.md`, `docs/DURUM.md`, `docs/VERI-MODELI.md`,
+`docs/KULLANILABILIRLIK.md` (§0'ın kaynağı), `docs/KARARLAR.md` (**ADR-015**, **ADR-016**,
+**ADR-022**, **ADR-036**).
+
+---
+
+## 0. Kullanılabilirlik
+
+`docs/KULLANILABILIRLIK.md`'nin en üstündeki açık maddelerle başla. Ürün sahibi oraya
+madde eklediyse onlar önce yapılır; liste boşsa bu bölüm atlanır.
 
 ---
 
@@ -27,11 +42,15 @@ Seans detayında:
 
 Bu ekran hızlı olmalı: kurs sahibi ders bitiminde 10 saniyede kapatabilmeli.
 
-## 2. Seans durumu
+## 2. Seans durumu ve paket tüketiminin bağlanması
 
 `planlandı → yapıldı / iptal`. Yoklama girilince otomatik "yapıldı".
-Yapıldı olan seans Faz 7'de paketten düşecek — o bağlantı noktasını hazırla ama
-paket mantığını burada kurma.
+
+**Paket mantığı burada kurulmaz — kurulmuş hâlde geliyor.** Para fazı (`/faz-07 §4`)
+`consume_package_credit` fonksiyonunu ve düzeltmenin tersini yazan eşini yazdı ve testledi.
+Bu fazın işi onları **çağırmak**: yoklama kaydedilirken tüketim, yoklama düzeltilirken
+zincirin bir sonraki halkası. Yeni bir tüketim yolu yazma; ikinci bir yol iki sayaç
+üretir.
 
 ## 3. Telafi dersi
 
@@ -43,27 +62,26 @@ paket mantığını burada kurma.
 - Öğrenci detayında **"bekleyen telafi"** rozeti
 - Telafi listesi: kime kaç telafi borçlu
 
-## 3b. Yoklama düzeltme — denetimden gelen açık nokta
+## 3b. Yoklama düzeltme — karar verildi, uygula
 
 `VERI-MODELI.md §4` "Yoklama düzeltilirse ne yazılır" bölümünü oku, orada tanımlı zinciri uygula:
 düzeltme **ikinci bir `session_charge` yazmaz**, ters kaydın tersini yazar
 (`ux_ledger_attendance` ikinciyi zaten reddeder).
 
-> **Karar senden bekleniyor.** Defter tarafı **tümüyle kapandı** — yazma tarafı Faz 1'de,
-> okuma tarafı **ADR-022** ile (zincir paritesi, `002_ledger_effective_parity.sql`).
-> Ama `package_usage` tarafında `ux_pkgusage_att` `(attendance_id, delta)` üzerinde tekil
-> olduğu için düzeltme zinciri **iki adımda tıkanıyor**: Geldi → Mazeretli → Geldi dizisinde
-> ikinci `delta=−1` yazılamıyor.
+> **Bu bölümün açık kararı kapandı — `ADR-036`.** `package_usage` da ADR-022'nin ters kayıt
+> zinciri modeline geçti: eski `ux_pkgusage_att` `(attendance_id, delta)` indeksi kalktı,
+> yerine `reverses_id` zinciri + iki kısmi UNIQUE indeks + üç tetikleyici geldi.
+> Migration (`003_package_usage_reversal_chain.sql`) ve kanıt testleri **para fazında
+> yazıldı** (`/faz-07 §4`) — bu fazda **şemaya dokunulmaz.**
 >
-> İki seçenek: (a) indekse `cycle` sütunu eklemek, (b) `package_usage`'ı da ters-kayıt zinciri
-> modeline geçirmek. **(b) lehine yeni bir gerekçe var:** ADR-022 defter tarafında tam olarak
-> bu modeli seçti; ders hakkını da aynı modele geçirmek iki sayacı tek bir zihinsel modelde
-> birleştirir ve `v_package_remaining` için ADR-022'nin değişmezinin eşi yazılabilir hâle gelir
-> (`SUM(delta)` ile kalan hak asla ayrışmaz). (a) daha ucuz ama iki farklı düzeltme dili bırakır.
+> Bu fazın işi: düzeltme akışının her adımında zincirin **bir sonraki halkasını** yazmak.
+> `Geldi → Mazeretli → Geldi` dizisi artık şema seviyesinde mümkün; senin işin ekranın da
+> aynı diziyi doğru üretmesi ve kullanıcıya ne olduğunu söylemesi (R2.3'ün etki özeti
+> düzeltmede de çıkar: *"1 ders hakkı geri verilecek, 250 TL borç silinecek."*).
 >
-> Kararı ver, **ADR yaz**, migration'ı bu fazda aç. Para/defter kararı olduğu için doğrulamayı
-> en güçlü modelle yap (CLAUDE.md ajan kuralı). Bu tek satır bu fazın en riskli parçası —
-> önce onu çöz, sonra ekrana geç.
+> Defter tarafı için ADR-022'nin değişmezi, ders hakkı tarafı için ADR-036'nın değişmezi
+> **bu fazın testlerinde de kontrol edilir** — ekran yolundan geçen bir düzeltme
+> zincirinden sonra ikisi de tutmalı.
 
 ## 4. Öğrenci detayı > Dersler sekmesi
 

@@ -1,58 +1,88 @@
 # Yol Haritası
 
-**Bir oturum = bir faz.** Her faz kendi slash komutuyla çalıştırılır: `/faz-01` … `/faz-10`.
+**Bir oturum = bir faz.** Her faz kendi slash komutuyla çalışır.
 
-| # | Faz | Komut | Durum |
+Plan 2026-07-26'da ürün sahibinin kararıyla **kısaltıldı**: para fazı yoklamanın önüne
+geçti, Faz 7+8 birleşti, Faz 9 kırpılıp Faz 10'a katıldı, takvim donduruldu (ADR-034).
+Denetim oturumu artık yalnızca para fazından sonra yapılıyor, ölçüm/araştırma oturumu
+açılmıyor (ADR-033).
+
+---
+
+## Kalan plan — üç faz
+
+| Sıra | Faz | Komut | Ne çıkar |
 |---|---|---|---|
-| 0 | Kuruluş iskeleti — git, CLAUDE.md, kararlar, komutlar | — | ✅ Tamamlandı |
-| 1 | Plan — tasarım okuma, PRD, veri modeli, ekran envanteri | `/faz-01` | ✅ Tamamlandı |
-| 1.5 | **Faz 1 denetimi** — şema, ADR ve faz komutlarının düzeltilmesi | `/yonetici` | ✅ Tamamlandı |
-| 2 | İskelet & CI — Tauri projesi, şema, migration, seed, Windows build | `/faz-02` | ✅ Tamamlandı — CI doğrulaması GitHub'a push'a bağlı |
-| 3 | Tasarım sistemi — token'lar, komponentler, uygulama kabuğu | `/faz-03` | ✅ Tamamlandı — ADR-022 migration'ı da bu fazda kapandı |
-| 3.5 | **Faz 3 denetimi** — ADR uyumu, marka kararı (ADR-024) | `/yonetici` | ✅ Tamamlandı |
-| 4 | Öğrenci & Veli — CRUD, arama, detay sayfası | `/faz-04` | ✅ Tamamlandı — §0 marka geçişi (ADR-024) uygulandı, ADR-025 eklendi |
-| 4.4 | **Faz 4 denetimi** — 6 boyut, karşıt doğrulamalı; ADR-026 (özet rakamlar) | `/yonetici` | ✅ Tamamlandı |
-| 4.5 | **Faz 4 artıkları** — veli araması · bakiye altyazısı · toplam alacak · telefon maskesi · K-14 | `/faz-04b` | ✅ Tamamlandı (beşi de; 288 test) |
-| 5A | Ders & Takvim — branş, tatil, grup, **seans üretim motoru** | `/faz-05` | ✅ Tamamlandı (342 test); CI ilk kez yeşil |
-| 5B | Ders ekle/düzenle, seans işlemleri, **Bugün ekranı** | `/faz-05b` | ✅ Tamamlandı (388 test); ADR-028 + ADR-029 eklendi |
-| 5B.5 | **Faz 5B denetimi** — 7/7 kilitli kontrol temiz, 3 bulgu; **ADR-030** (Pointer Events) ve 5C'nin ikiye bölünmesi | `/yonetici` | ✅ Tamamlandı |
-| 5C-K | **Takvim kütüphanesi kararı** — ölçüm, deneme, ADR-031 + para biçimleme düzeltmesi | `/faz-05c-karar` | ✅ Tamamlandı (411 test); **ADR-031: elde yazılır** — üç adayın üçü de ölçüt 6'da (5px sürükleme eşiği) düştü |
-| 5C-K.5 | **Karar denetimi** — 7/7 kilitli kontrol temiz; üç bulgu `/faz-05c`'ye (aralık dışı ders görünmezliği · `toMinutes` ikizi · paket kapısının dev sayfasını görmemesi) | `/yonetici` | ✅ Tamamlandı |
-| 5C | **Takvim ekranı** — ADR-031'i uygular, Pointer Events sürükleme, ay/hafta/gün | `/faz-05c` | ✅ Tamamlandı (481 test); **ADR-032** (taşıma kapsamı). Gerçek veriyle iki hata yakalandı: şerit hesabı gün başına değildi, `/dev/durum` metinleri üretim paketine sızıyordu |
-| 6 | Yoklama & Telafi | `/faz-06` | ⬜ |
-| 7 | Fiyatlandırma & Ders Paketi | `/faz-07` | ⬜ |
-| 8 | Tahsilat & Makbuz | `/faz-08` | ⬜ |
-| 9 | Dashboard & Raporlar | `/faz-09` | ⬜ |
-| 10 | Yedekleme & Teslim | `/faz-10` | ⬜ |
+| **1** | **Para** — fiyat tarifesi, paket/taksit, tahsilat, borçlu listesi, ekstre, makbuz PDF (eski 7 + 8) | `/faz-07` | Program ilk kez **para takip ediyor**. §0'da aranabilir seçim listesi |
+| **2** | **Yoklama & Telafi** — yoklama girişi, devamsızlık, telafi dersi, **paket tüketiminin bağlanması** | `/faz-06` | Ders sonrası rutini kapanır; ADR-015'in ders hakkı sayacı ekrana bağlanır |
+| **3** | **Teslim** — özet ekranı (kırpılmış Faz 9), yedekleme, hata dayanıklılığı, kurulum, kılavuz | `/faz-10` | Kurs sahibinin kullandığı hâl |
+
+**Sıra 1 sığmazsa** ikiye bölünür ama **yeni komut açılmaz**: dikiş yeri `/faz-07 §5`
+(tahsilat) — öncesi tarife + paket + tahakkuk, sonrası tahsilat + ekstre + makbuz. Aynı
+komutla ikinci oturumda devam edilir, arada denetim veya karar oturumu **yok**.
+
+**Denetim** yalnızca Sıra 1'den sonra (para mantığı — `CLAUDE.md`'nin kendi istisnası).
+Sıra 2 ve 3 kendi kapanışlarındaki kontrol listesiyle yeter.
+
+### Neden para yoklamadan önce
+
+Uygulamanın adı "ders ve **tahsilat** takip" ve tahsilat hiç yok. Yoklamanın paraya
+değdiği tek yer paket tüketimi (ADR-015): o fonksiyon `/faz-07`'de **yazılır ve Rust'ta
+testlenir**, ekran bağlantısı `/faz-06`'da yapılır. Bu ayrım rework üretmiyor — tüketim
+fonksiyonunu yoklama kaydı çağıracak, imzası şimdi sabitleniyor.
+
+---
+
+## Tamamlananlar
+
+| # | Faz | Ne kaldı geriye |
+|---|---|---|
+| 0–1 | Kuruluş + plan (`/faz-01`, denetim) | PRD, veri modeli, ekran envanteri, tasarım sistemi |
+| 2 | İskelet & CI (`/faz-02`) | Tauri + SQLite + migration + seed + Windows CI tanımı |
+| 3 | Tasarım sistemi (`/faz-03`, denetim) | Token'lar, komponent kütüphanesi, uygulama kabuğu; ADR-024 marka |
+| 4 · 4.5 | Öğrenci & Veli (`/faz-04`, `/faz-04b`, denetim) | `repo/roster.rs`, liste/detay/form; ADR-025/026/027 |
+| 5A | Seans üretim motoru, branş, tatil, grup (`/faz-05`) | `repo/schedule.rs`; **CI ilk kez tümüyle yeşil** |
+| 5B | Ders ekle/düzenle, seans işlemleri, Bugün ekranı (`/faz-05b`, denetim) | ADR-028, ADR-029 |
+| 5C-K | Takvim kütüphanesi ölçümü + para biçimleme (`/faz-05c-karar`, denetim) | ADR-031; ICU bağımsızlığı (`format.ts`) |
+| 5C | Takvim ekranı (`/faz-05c`) | ADR-032; **donduruldu — ADR-034** |
+
+481 test (293 TypeScript + 188 Rust), `npm run check` yeşil, Windows `.msi` üretiliyor.
+
+Ayrıntı git geçmişinde (`git log --oneline`) ve ADR'lerde; `docs/DURUM.md` yalnızca
+**son durumu** tutar, oturum arşivi değildir.
+
+---
 
 ## Bağımlılıklar
 
 ```
-1 ──> 2 ──> 3 ──> 4 ──> 5A ──> 5B ──> 5C-K ──> 5C ──> 6
-                         │
-                         └───────────────────────────> 7 ──> 8 ──> 9 ──> 10
+… 4 ──> 5A ──> 5B ──> 5C (donduruldu)
+         │
+         └──> 7+8 (para) ──> 6 (yoklama) ──> 10 (teslim)
 ```
 
-- **Faz 3, Faz 2'ye bağlı**: komponentler gerçek veriyle bağlanabilmeli.
-- **Faz 7, Faz 5A'ya bağlı**: paket mantığı seans olmadan test edilemez — ama seansları
-  **motor** üretiyor, takvim değil. 5A bittiğine göre Faz 7 teknik olarak 5B/5C'yi
-  beklemiyor; sıra yine de bozulmuyor çünkü yoklama (Faz 6) Bugün ekranından giriliyor.
-- **Faz 9, Faz 6 + 8'e bağlı**: dashboard hem yoklama hem tahsilat verisini gösterir.
+- **Para fazı 5A'ya bağlı**, 5B/5C'ye değil: seansları motor üretiyor, takvim değil.
+- **Yoklama para fazına bağlı**: paket tüketimi fonksiyonu orada yazılıyor.
+- **Teslim her şeye bağlı**; özet ekranı yoklama + tahsilat verisini gösterir.
+
+---
 
 ## Kritik kilometre taşları
 
 | Ne zaman | Ne |
 |---|---|
-| Faz 2 sonu | GitHub Actions'tan indirilebilir bir Windows `.msi` **ve** `windows-latest` üzerinde yeşil Rust testleri. Testler gerçek migration'ları uyguladığı için bu, şemanın Windows'ta kurulduğunun kanıtıdır — Faz 5'i beklemeden. → Kod ve CI tanımı hazır; **yeşil çalışma depo GitHub'a gidince doğrulanır.** Faz 3'te de yapılmadı: depo hâlâ yerel. **Faz 4'ten önce halledilmeli** — biriken doğrulanmamış kod her fazda büyüyor. |
-| **Faz 5A sonu** | **CI ilk kez tümüyle yeşil** (2026-07-26): `Test · windows-latest` geçti, `.msi` ve `.dmg` üretildi. Şemanın Windows'ta kurulduğu artık kanıtlı — Faz 2'nin kilometre taşı üç faz gecikmeyle kapandı. Nedeni `npm ci`'nin makine ayarına bağlı kilit dosyasıydı; ayrıntı `docs/DURUM.md`. |
-| Faz 5C sonu | **İlk gerçek Windows testi.** Kurs sahibine build gönderilir. Faz 10'a bırakılmaz. (Faz 5 üçe bölününce bu taş 5C'ye kaydı.) CI ızgarayı **çalıştırmıyor** — jsdom testleri ile paket derlemesi bu boşluğu kapatmıyor. Boşluk motor semantiğinde değil (macOS'ta WKWebView, Windows'ta WebView2/Chromium — geliştirme daha katı motorda yapılıyor); **Segoe UI metrikleri, DPI ölçekleme, kaydırma çubuğu genişliği ve ICU verisi**nde. Ayrıntı `/faz-05c §0`. **Push da buraya bağlandı:** 5B, 5C-K ve 5C tek seferde CI'a gider. |
-| Faz 7 sonu | Para mantığının testleri yeşil. Buradan sonra şema değişikliği pahalı. |
+| Faz 5A sonu ✅ | **CI ilk kez tümüyle yeşil** (2026-07-26). Şemanın Windows'ta kurulduğu kanıtlı — testler gerçek migration'ları uyguluyor |
+| Faz 5C sonu ✅ | **İlk gerçek Windows testi.** `.msi` kurs sahibine gönderiliyor; 5 maddelik test listesi Segoe UI metrikleri, DPI ölçekleme, kaydırma çubuğu ve ICU verisini yokluyor |
+| **Para fazı sonu** | **Para mantığının testleri yeşil.** Buradan sonra şema değişikliği pahalı. Denetim burada yapılır |
 | Faz 10 sonu | Kurulum dosyası + kullanım kılavuzu + otomatik yedekleme |
+
+---
 
 ## Kapsam dışı (v2)
 
-- WhatsApp / SMS hatırlatma (bkz. ADR-009)
+- WhatsApp / SMS hatırlatma (ADR-009)
 - Çoklu kullanıcı, giriş ekranı, yetkilendirme
-- Bulut senkronizasyonu
-- Mobil arayüz
-- Muhasebe/e-fatura entegrasyonu
+- Bulut senkronizasyonu · Mobil arayüz · Muhasebe/e-fatura entegrasyonu
+- **Takvim ekranının geliştirilmesi** (ADR-034): sürükleme jestinin ekranda doğrulanması,
+  kenarda kendiliğinden kaydırma, şeritlerin boşluğa genişlemesi
+- Dönem sonu hesap özeti PDF'i — cari ekstrenin dışa aktarması aynı işi görüyor

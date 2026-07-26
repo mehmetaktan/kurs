@@ -329,11 +329,11 @@ Cevaplanmadan ilgili faz **tamamlanamaz**.
 |---|---|---|---|
 | ~~**S1**~~ | ~~Şu an Excel/defter kullanıyor musun?~~ → **CEVAPLANDI (2026-07-25): hayır, sıfırdan başlıyor.** İçe aktarma yazılmaz, Faz 4 planlandığı gibi kalır. Bkz. **ADR-021**. | ~~Faz 4~~ | — |
 | ~~**S2**~~ | ~~Grup kapasitesi aşımı engellensin mi, uyarı mı yeter?~~ → **CEVAPLANDI (2026-07-25): onay istenir, engellenmez.** Varsayımın onayı; `R5.6`, `K-8` ve `EKRANLAR.md §309` zaten bunu yazıyordu, üçü de değişmiyor. Kapasite `group.capacity`'de duruyor ve **şema seviyesinde zorlanmaz** — üyelik sayısında CHECK/trigger yok, kural arayüzün onay diyaloğudur. | ~~Faz 5~~ | — |
-| **S3** | Paketlerin son kullanma tarihi var mı? (örn. "3 ay içinde kullanılmalı") | Faz 7 | Süresiz |
+| ~~**S3**~~ | ~~Paketlerin son kullanma tarihi var mı?~~ → **CEVAPLANDI (2026-07-26): süresiz.** Varsayımın onayı. 8 ders alındıysa 8 ders hakkı bitene kadar geçerli; `package.valid_until` sütunu şemada **duruyor ama yazılmıyor** (`NULL`), "süresi geçmiş paket" durumu, uyarısı ve rapor satırı hiç doğmuyor. Aktif paket sorgusundaki `valid_until` koşulu (`/faz-07`) yerinde kalır — ileride tarih girilirse tek yerden açılır. | ~~Faz 7~~ | — |
 | ~~**S4**~~ | ~~Standart ders süresi kaç dakika? Tasarımda 60 ve 90 var.~~ → **CEVAPLANDI (2026-07-25): varsayılan 60 dk, değiştirilebilir.** Varsayımın onayı, migration'da hazır: `setting.default_session_minutes = '60'`, branşa özel değer `subject.default_min` (NULL = genel varsayılan). **Şema değişmiyor, migration eklenmiyor.** Takvim ızgarası 60 dakikalık dilime oturur; 90 dakikalık ders serbest, tek tek girilir. | ~~Faz 5~~ | — |
-| **S5** | Makbuz numarası otomatik mi artsın, elle mi girilsin? | Faz 8 | Otomatik, elle düzeltilebilir |
-| **S6** | Öğrenci dönem ortasında ayrılırsa kalan paket parası iade mi edilir, alacak mı kalır? | Faz 7 | Alacak (avans) olarak kalır |
-| **S7** | "Devam oranı" hangi pencerede hesaplansın? Tasarım "son 8 hafta" trendi gösteriyor. | Faz 9 | Tüm zaman + son 8 hafta trendi |
+| ~~**S5**~~ | ~~Makbuz numarası otomatik mi artsın, elle mi girilsin?~~ → **CEVAPLANDI (2026-07-26): otomatik artar, elle düzeltilebilir.** Varsayımın onayı. Numara modal **açılırken** rezerve edilir (K-19 çift tık koruması), alan düzenlenebilir, **aynı numara iki kez yazılamaz** — tekillik şemada zorlanır. Matbu koçana geçildiğinde elle uyumlanabilir. | ~~Faz 8~~ | — |
+| ~~**S6**~~ | ~~Öğrenci dönem ortasında ayrılırsa kalan paket parası iade mi edilir, alacak mı kalır?~~ → **CEVAPLANDI (2026-07-26): ikisi de, kullanıcı seçer.** Varsayımdan **sapıyor** — paketi kapatma akışı "Avans bırak / İade et" seçimi sunar, ikisi de deftere append-only satır yazar. Gerekçesi ve kalan tutarın snapshot'tan hesabı **ADR-035**'te. | ~~Faz 7~~ | — |
+| **S7** | "Devam oranı" hangi pencerede hesaplansın? Tasarım "son 8 hafta" trendi gösteriyor. → **Kapsam kırpıldı (2026-07-26): Faz 9 ayrı faz olmaktan çıktı**, trend grafiği kapsam dışı. Faz 4'ün varsayımı **kalıcı**: devam oranı tüm işlenen dersler üzerinden, kartın altında "Tüm işlenen dersler" yazılı. Soru sorulmuş kalıyor ama artık kimseyi bekletmiyor. | ~~Faz 9~~ → Faz 10 §0 | Tüm işlenen dersler |
 | ~~**S8**~~ | ~~Raporlar 7. menü öğesi mi olsun, Bugün ekranının altında mı?~~ → **CEVAPLANDI (2026-07-25): 7. menü öğesi.** `EKRANLAR.md`'nin (a) seçeneği; menüde yer vardı, görsel dil değişmedi. Faz 3'te kenar çubuğuna eklendi, içeriği Faz 9'da gelecek. | ~~Faz 9~~ | — |
 | **S9** | Bilgisayarındaki Windows sürümü ne? (SmartScreen ve WebView2 için) | Faz 10 | Windows 10/11, WebView2 kurulu değil varsayılır |
 | **S10** | Kod imzalama sertifikası alınacak mı? | Faz 10 | Alınmaz; kullanıcıya yönerge verilir |
@@ -347,11 +347,14 @@ Cevaplanmadan ilgili faz **tamamlanamaz**.
 | 2–3 | (altyapı — kullanıcıya görünmez) |
 | **4** | Yeni öğrenci kaydı (§3a) |
 | **5** | Program kurulumu → **Bugün ekranı ilk kez dolar** (§1) |
-| **6** | Ders sonrası yoklama ve telafi (§2) |
-| **7** | Dönem başı tarife ve paket (§5) |
-| **8** | Ay sonu tahsilat ve makbuz (§4) |
-| **9** | Raporlar |
-| **10** | Yedekleme ve teslim |
+| **7 (+8)** | Dönem başı tarife ve paket (§5) **ve** ay sonu tahsilat/makbuz (§4) — 2026-07-26'da birleştirildi |
+| **6** | Ders sonrası yoklama ve telafi (§2) — paket tüketimini bağlar |
+| **10 (+9)** | Özet ekranı, yedekleme ve teslim — Faz 9 kırpılıp buraya katıldı |
+
+> **Sıra 2026-07-26'da değişti** (ürün sahibinin kararı): para fazı yoklamanın **önüne**
+> geçti. Gerekçe — uygulamanın adı "ders ve **tahsilat** takip" ve tahsilat hiç yok;
+> yoklama ise bir tek yerde paraya değiyor (paket tüketimi, ADR-015) ve o bağ Faz 6'da
+> kurulacak şekilde ayrıldı. Ayrıntı `docs/YOL-HARITASI.md`.
 
 **Faz 5 sonunda uygulama ilk kez "gerçek" olur** — Bugün ekranı doluyor. Bu yüzden ADR-008
 ilk gerçek Windows testini oraya koydu.

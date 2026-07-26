@@ -4,6 +4,12 @@ description: Faz 5C — Takvim ekranı ve ilk Windows testi
 
 # Faz 5C — Takvim
 
+> **BİTTİ VE DONDURULDU — bu komutu yeniden çalıştırma.** Faz 5C 2026-07-26'da tamamlandı
+> (commit `655bae2`, `519f1f7`); takvim ekranı aynı gün **ADR-034** ile donduruldu: kod
+> yerinde kalıyor, üstüne iş yazılmıyor. Aşağıdaki maddelerin **tamamı kapanmış veya kapsam
+> dışı** — özellikle "sürükleme jestini gerçek ekranda sür". Ürün sahibi kendi takvim
+> kütüphanesini getirmek isterse iş bu komuttan değil, ADR-034'ten başlar.
+
 Önce oku: `CLAUDE.md`, `docs/DURUM.md`, `docs/EKRANLAR.md` (**§2 Takvim**),
 `docs/TASARIM-SISTEMI.md`, `docs/KARARLAR.md` (**ADR-001**, **ADR-011**, **ADR-017**,
 **ADR-020**, **ADR-024**, **ADR-030**, **ADR-031**).

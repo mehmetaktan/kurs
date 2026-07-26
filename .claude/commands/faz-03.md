@@ -52,7 +52,8 @@ Testler:
 4. Zincir uzunluğu 4'te bakiye ve borç yeniden sıfıra dönmeli.
 
 `package_usage` tarafındaki düzeltme zinciri **bu fazın işi değil** — ADR-022 kapsam dışı
-bıraktı, kararı `faz-06.md §3b` verecek.
+bıraktı; kararı 2026-07-26'da **ADR-036** verdi (aynı modelin ikizi), uygulaması
+`/faz-07 §4`.
 
 ---
 

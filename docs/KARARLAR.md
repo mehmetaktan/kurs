@@ -291,7 +291,7 @@ Elenen iki seçenek: (a) düzeltmenin üçüncü adımında yeni bir `session_ch
 
 **Sonuç.** View içinde bir `WITH RECURSIVE` bulunur. Zincirler doğrusaldır: `ux_ledger_reverses` bir satırın en fazla bir kez ters kaydedilmesini garanti eder, dallanma imkânsızdır. Döngü de imkânsızdır — `reverses_id` var olan bir satırı işaret etmek zorundadır (yabancı anahtar) ve `trg_ledger_immutable` her `UPDATE`'i reddeder (K5), dolayısıyla zincir daima geriye doğru gider. `~100` öğrenci ölçeğinde maliyet ölçülemez.
 
-Ters kayıt satırları hâlâ `v_ledger_effective`'te görünmez (geçerli olan daima başlık satırıdır), dolayısıyla `v_open_charge`'ın vade mantığı — taksitte `installment.due_on`, ders başında ders günü — olduğu gibi korunur. `package_usage` tarafındaki düzeltme zinciri bu ADR'nin **kapsamı dışındadır**; ders hakkı ayrı bir sayaçtır (ADR-015) ve kararı Faz 6'ya aittir (`faz-06.md §3b`).
+Ters kayıt satırları hâlâ `v_ledger_effective`'te görünmez (geçerli olan daima başlık satırıdır), dolayısıyla `v_open_charge`'ın vade mantığı — taksitte `installment.due_on`, ders başında ders günü — olduğu gibi korunur. `package_usage` tarafındaki düzeltme zinciri bu ADR'nin **kapsamı dışındaydı**; ders hakkı ayrı bir sayaçtır (ADR-015). → **Kararı verildi: `ADR-036`** (2026-07-26) — `package_usage` da bu modelin aynısına geçiyor, migration para fazında.
 
 **Durum.** Kabul edildi.
 
@@ -886,7 +886,14 @@ Bu ADR yeniden tartışılır, eğer:
 Yeniden açılırsa **eşikler önce yazılır** kuralı aynen geçerlidir, ve ölçüt 1'in
 genişletilmiş taşıyıcı listesi (yukarıdaki kutu) kullanılır.
 
-**Durum.** Kabul edildi.
+> **Kapsam daraltıldı — `ADR-034`.** Takvim ekranı 2026-07-26'da **donduruldu**: kod
+> yerinde kalıyor, üstüne iş yazılmıyor. Bu ADR'nin sonucu (elde yazılır) geçerli;
+> **yöntemi** ise `ADR-033`'ün doğduğu yer — ölçüm ürün sahibine sorulmadan yapıldı ve
+> sahibinde ölçülemeyen tek şey (Bryntum lisanslı paketi) zaten vardı. Yukarıdaki 5
+> maddelik "yeniden açılır" listesine altıncı madde: **ürün sahibi kendi kütüphanesini
+> getirirse** — o durumda ölçüm değil, doğrudan ekran katmanı değişimi konuşulur.
+
+**Durum.** Kabul edildi; **kapsamı ADR-034 ile donduruldu.**
 
 ---
 
@@ -971,3 +978,165 @@ güne sürükleyerek taşınabiliyordu.** Takvim hedef göstergesini de çıkarm
 arayüz tarafı), ama son söz Rust'ta.
 
 **Durum.** Kabul edildi.
+
+---
+
+## ADR-033 — Bir karar ölçülmeden önce ürün sahibine sorulur
+
+**Karar.** Araştırma veya ölçüm gerektiren bir karar için **ayrı bir oturum açılmaz.**
+Sıra şu: (1) ürün sahibine tek soruyla sorulur, (2) cevabı varsa karar odur, (3) cevabı
+yoksa **en ucuz varsayımla** devam edilir ve varsayım faz komutuna yazılır, (4) ölçüm
+ancak sahibi "ölç" derse yapılır.
+
+**Denetim oturumu da aynı kısıtla:** bundan sonra yalnızca **para fazlarından sonra**
+yapılır (`CLAUDE.md > Ajan çalıştırma`'nın "para mantığı istisnadır" satırıyla aynı
+gerekçe). Diğer fazlarda denetim, o fazın kendi kapanışında yapılan kontrol listesine iner.
+
+**Gerekçe — ADR-031 bu kuralın yokluğunda doğdu.** Faz 5C-K bir oturumu üç takvim
+kütüphanesini ölçmeye harcadı ve ürün sahibine *"elinde hazır bir şey var mı"* diye hiç
+sormadı. Sahibinde **Bryntum deneme paketi ve DevExtreme yapıları vardı, üstelik başka bir
+React projesinde çalışan bir örnek** — ve Bryntum'u eleyen tek gerekçe *"lisanslı tarball'a
+403, elde edilebilen tek şey deneme"*ydi. Yani ölçümün elenme sebebi, tek soruyla ortadan
+kalkacak bir şeydi.
+
+Bedeli sayıyla: yol haritasındaki 15 adımın **6'sı kod yazmayan oturum** (5 denetim + plan)
+ve bunların en az ikisi sorulmamış bir soru yüzünden vardı. Ürün sahibinin şikâyeti
+"sürekli tara, incele, karar ver" — ve haklı: bu proje tek kişilik bir kurs programı,
+mimari araştırma bütçesi yok.
+
+**Bedeli.** Ölçülmemiş bir varsayımla ilerlemek bazen yanlış çıkacak. Kabul ediliyor:
+yanlış çıkan varsayımın maliyeti, her karar için bir oturum harcamanın maliyetinden düşük.
+Sahibinin cevap vermediği yerde varsayım **komutta yazılı** olur, böylece yanlışlığı
+ortaya çıktığında nerede duracağı bilinir.
+
+**Durum.** Kabul edildi (2026-07-26, ürün sahibinin talimatı).
+
+---
+
+## ADR-034 — Takvim ekranı dondurulur; değişim noktası yalnızca ekran katmanı
+
+**Karar.** `src/pages/takvim/` **olduğu gibi kalır ve üstüne iş yazılmaz.** Takvim
+kaynaklı hiçbir madde — sürükleme jestinin gerçek ekranda doğrulanması, kenarda
+kendiliğinden kaydırma, şeritlerin boşluğa genişlemesi — plana girmez. Ürün sahibi kendi
+kütüphanesini (Bryntum / DevExtreme / kendi React örneği) getirmek isterse, iş **yalnızca
+ekran katmanını** değiştirmektir.
+
+**Gerekçe.** Takvim ürün sahibinin istediği sırada değildi; sahibi onu **sona** bırakmak
+ve muhtemelen kendi hazır çözümünü vermek istiyordu (bkz. ADR-033). Kod yazıldı, testli ve
+CI'da yeşil — silmek de bir oturum eder ve hiçbir şey kazandırmaz. Dolayısıyla ne silinir
+ne geliştirilir: **dondurulur.**
+
+**Değişimin neden ucuz olduğu.** Takvimin verisi arayüzde üretilmiyor: `session_rows_between`,
+`closed_days_in_range` ve `reschedule_sessions` Rust'ta ve **başka ekranlar da onları
+kullanıyor** (Bugün ekranı, seans işlemleri). Bir kütüphaneye geçiş `pages/takvim/` içindeki
+çizim ve sürükleme dosyalarını değiştirir; `repo/schedule.rs`, komut yüzeyi ve ADR-032'nin
+kapsam mantığı **yerinde kalır.**
+
+**ADR-031 iptal edilmiyor.** Kararı "elde yazılır" olarak veren gerekçe (5px eşiği
+kütüphanelerde ayarlanamıyor) hâlâ doğru ve ölçülmüş. ADR-031'in ölçüm **yönteminin**
+yanlışı ADR-033'te; sonucunun yanlışı yok. Bu yüzden ADR-031 `Kabul edildi` kalıyor,
+kapsamı bu ADR ile daralıyor.
+
+**Durum.** Kabul edildi (2026-07-26, ürün sahibinin kararı: "dondur, yerinde kalsın").
+
+---
+
+## ADR-035 — Paket kapatılırken kullanılmayan tutar: avans veya iade, kullanıcı seçer
+
+**Karar.** Öğrenci dönem ortasında ayrıldığında kalan paket hakkının parası için tek bir
+yol dayatılmaz. Paketi kapatma akışı **iki seçenek** sunar ve seçim kullanıcının:
+
+| Seçim | Defterde ne olur |
+|---|---|
+| **Avans bırak** | Kullanılmamış hakların tutarı öğrencinin hesabında **alacak** olarak durur; bakiye pozitif kalır, ekstrede `Kullanılmayan paket hakkı` satırı görünür |
+| **İade et** | Aynı tutar için bir **iade** hareketi yazılır ve bakiye kapanır; ekstrede `İade` olarak görünür |
+
+İkisi de `ledger_entry`'ye satır yazar, ikisi de **append-only** (K5): hiçbir satır
+güncellenmez veya silinmez, paket satırının `status`'u `'cancelled'` olur.
+
+**Gerekçe.** PRD §9'un varsayımı "alacak olarak kalır"dı; ürün sahibi ikisini de istedi
+(S6). Gerçek hayatta ikisi de oluyor: kardeşi devam eden öğrencinin parası avans kalır,
+kursu tamamen bırakan veli parasını ister. Program tek yolu dayatırsa kullanıcı diğerini
+**defter dışında** yapar — elden verilen paranın kaydı hiç olmaz, bakiye kalıcı olarak
+yanlış kalır. İki yolu yazmanın maliyeti bir ekran seçimi ve iki test dalı; kaydı hiç
+tutulmayan iadenin maliyeti bakiyenin güvenilirliği.
+
+**Kalan hakkın tutarı nasıl bulunur.** Paketin `unit_price` snapshot'ı (ADR-006) ×
+kullanılmayan hak sayısı. İndirimli paketlerde birim ücret satıştaki **indirimli** birim
+ücrettir — indirim tekrar hesaplanmaz, satıştaki snapshot okunur.
+
+**Bunun ders hakkı sayacıyla ilişkisi.** Para tarafı buradadır; **ders hakkı sayacı ayrı**
+(ADR-015'in iki sayacı). Paket kapandığında kalan hak sıfırlanır ve bu bir `package_usage`
+satırıyla yazılır — sayaç geriye dönük silinmez.
+
+**Durum.** Kabul edildi (2026-07-26, S6 cevaplandı).
+
+---
+
+## ADR-036 — Ders hakkı sayacı da ters kayıt zincirine geçer (ADR-022'nin ikizi)
+
+**Karar.** `faz-06.md §3b`'nin iki seçeneğinden **(b)** seçildi: `package_usage` düzeltmesi
+indekse `cycle` sütunu eklemekle çözülmez, **ADR-022'nin ters kayıt zinciri modelinin
+aynısına** geçirilir. Migration para fazında (`/faz-07`) açılır — tüketim fonksiyonu orada
+yazıldığı için şeklin önceden kesin olması gerekiyor, yoksa Faz 6 aynı fonksiyonu yeniden
+yazar.
+
+`package_usage` üzerinde yapılacak dört değişiklik, `ledger_entry`'nin dört mührünün
+**birebir ikizi** (satır numaraları `001_initial.sql`):
+
+| Yeni | `ledger_entry`'deki karşılığı |
+|---|---|
+| `reverses_id INTEGER REFERENCES package_usage(id)` sütunu | `reverses_id` (:410 civarı) |
+| `ux_pkgusage_head` — UNIQUE(`attendance_id`) WHERE `attendance_id IS NOT NULL AND reverses_id IS NULL AND deleted_at IS NULL` | `ux_ledger_attendance` (:421) |
+| `ux_pkgusage_reverses` — UNIQUE(`reverses_id`) WHERE `reverses_id IS NOT NULL AND deleted_at IS NULL` | `ux_ledger_reverses` (:428) |
+| `trg_pkgusage_immutable` + `trg_pkgusage_no_delete` (UPDATE ve DELETE'in **tamamı** kapalı, sütun listesi yazılmaz) | `trg_ledger_immutable` / `_no_delete` (:587) |
+| `trg_pkgusage_reversal_valid` — ters kaydın `delta`'sı hedefin tam tersi, `package_id` aynı | `trg_ledger_reversal_valid` (:597) |
+
+**Kaldırılan:** `ux_pkgusage_att` — UNIQUE(`attendance_id`, `delta`). Tıkanmanın kaynağı bu:
+`Geldi → Mazeretli → Geldi` dizisinde üçüncü adımın `delta = −1`'i birincisiyle çakışıyor
+ve **yazılamıyor** (`faz-06.md §3b`).
+
+**Neden (a) değil.** `cycle` sütunu tıkanmayı açar ama projede **iki farklı düzeltme dili**
+bırakır: defter "ters kaydın tersi", ders hakkı "üçüncü tur". Aynı kullanıcı eylemi
+(yoklamayı iki kez değiştirmek) iki tabloda iki ayrı zihinsel modelle kaydedilir; her
+gelecek hata ayıklaması ikisini birden kurmak zorunda kalır. ADR-022 zaten bu ailenin
+kararını verdi ve **canlı `sqlite3` ile sekiz senaryoda doğrulandı**; ikizini yazmak yeni
+bir risk değil, mevcut riskin tekilleşmesi.
+
+**Parite view'ı gerekmiyor — ve bu bir tesadüf değil.** Defterde parite view'ı şart, çünkü
+`v_open_charge`/`v_student_debt` hangi **başlık** satırının canlı olduğunu bilmek zorunda
+(vade, tür). Ders hakkında ise yalnızca **toplam** anlam taşıyor ve `delta` işareti kendi
+içinde: zincir `−1, +1, −1, …` diye alternatiflendiği için canlı satırların toplamı her
+uzunlukta doğru sonucu veriyor (`−1+1−1 = −1`). Dolayısıyla **`v_package_remaining`
+yeniden yazılmaz** (`001_initial.sql:538` — `lesson_count + SUM(delta)`), tanımı olduğu
+gibi kalır. Doğruluğu `trg_pkgusage_reversal_valid`'in taşıdığı değişmeze dayanıyor:
+*ters kaydın `delta`'sı hedefin tam tersidir.* O tetikleyici yoksa toplam anlamsızlaşır —
+bu yüzden tabloya ondan **önce** hiçbir satır yazılmaz.
+
+**Idempotency eskisinden zayıf değil, güçlü.** Kaldırılan indeks "aynı yoklamadan iki kez
+hak düşülmesini" engelliyordu (`repo/finance.rs:205`'in yorumu). Yerine gelen iki indeks
+aynı garantiyi **her zincir derinliğinde** veriyor: bir yoklamanın en fazla **bir başlık**
+satırı olur (çift tık ikinci kez düşemez) ve bir satır en fazla **bir kez** ters kaydedilir
+(düzeltme de iki kez yazılamaz). Eski indeks yalnızca derinlik 1'de koruyordu.
+
+**Append-only bedeli açıkça yazılsın.** Tetikleyiciler `deleted_at`'i de kapatıyor, yani
+`package_usage` satırı **arşivlenemez** — `ledger_entry`'de olduğu gibi (K5). Yanlış yazılan
+bir satırın tek çıkışı tersini yazmak. Sütun tabloda duruyor (proje kuralı: her tabloda
+`deleted_at`) ama hiç yazılmıyor; `v_package_remaining`'in `deleted_at IS NULL` koşulu bu
+yüzden daima doğru — kaldırılmıyor, çünkü koşulu kaldırmak tetikleyiciye bağımlılığı
+görünmez kılar.
+
+**Kanıt şartı — ADR-022'nin değişmezinin eşi.** Migration'ın testi şu cümleyi çivilemek
+zorunda:
+
+> Her paket için `v_package_remaining.remaining` = `lesson_count` + canlı `package_usage`
+> satırlarının `delta` toplamı, **düzeltme zincirinin uzunluğundan bağımsız olarak.**
+
+En az şu diziler testlenir: `Geldi` · `Geldi → Mazeretli` · `Geldi → Mazeretli → Geldi` ·
+`Geldi → Mazeretli → Geldi → Mazeretli` · çift tıkla iki kez `Geldi` (ikincisi reddedilir) ·
+aynı satırı iki kez ters kaydetme (ikincisi reddedilir) · `UPDATE` denemesi (reddedilir).
+**Bu diziler yeşil olmadan tüketim fonksiyonu yazılmaz.** Değişmez kurulamazsa karar
+(a)'ya döner ve bu ADR `Değiştirildi` olur — tartışmayla değil, testle.
+
+**Durum.** Kabul edildi (2026-07-26). Uygulama `/faz-07`'de,
+`003_package_usage_reversal_chain.sql`.

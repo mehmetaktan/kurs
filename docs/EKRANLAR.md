@@ -29,7 +29,9 @@ Alt bilgi: kurum adı ve `Sürüm X.Y · Yerel`.
 > **Karar verildi (2026-07-25, PRD S8): (a) — 7. menü öğesi.** Yol haritasında Faz 9
 > "Dashboard ve raporlar" var, tasarımın menüsünde Raporlar yoktu. Menüde yer vardı ve
 > görsel dil değişmedi. Faz 3'te kenar çubuğuna eklendi (`src/shell/routes.ts`),
-> sayfa placeholder olarak duruyor; içeriği Faz 9'da gelecek.
+> sayfa placeholder olarak duruyor; **içeriği artık `/faz-10 §0`'da geliyor** — Faz 9 ayrı
+> faz olmaktan çıkarıldı (2026-07-26). Menü öğesi kalıyor: E17'nin istediği şey grafik
+> değil, `StatCard` şeridi ve üç basit tablo — teslim edilebilir bir kapsam.
 
 ---
 
@@ -364,7 +366,10 @@ Dışa aktarım: CSV (**BOM'lu UTF-8**) ve PDF.
 Ekran değil, çıktı. Kurum adı · makbuz no · tarih · öğrenci/veli · tutar (rakam ve yazı) ·
 ödeme yöntemi. **Gömülü font zorunlu** — ğ/ş/İ/ı için.
 
-## Faz 9 — Raporlar
+## ~~Faz 9~~ → Faz 10 §0 — Raporlar
+
+> Faz 9 ayrı faz olmaktan çıkarıldı (2026-07-26); E17 olduğu gibi `/faz-10 §0`'a taşındı.
+> Aşağıdaki kapsam **değişmedi** — zaten grafik istemiyordu.
 
 ### E17. Raporlar
 Yeni 7. menü öğesi. `StatCard` şeridi (aylık tahsilat, işlenen ders, devam oranı, aktif

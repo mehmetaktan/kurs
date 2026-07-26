@@ -4,6 +4,12 @@ description: Faz 5C-K — Takvim kütüphanesi kararı (ADR-031) ve para biçiml
 
 # Faz 5C-K — Karar oturumu
 
+> **BİTTİ — VE BU KALIP BİR DAHA KULLANILMAYACAK.** Bu oturum ADR-031'i üretti, ama
+> **ADR-033**'ün doğduğu yer de burasıdır: bir oturum üç takvim kütüphanesini ölçmeye
+> harcandı ve ürün sahibine *"elinde hazır bir şey var mı"* hiç sorulmadı — varmış.
+> Bundan sonra ayrı karar/ölçüm oturumu **açılmaz**; karar sahibine tek soruyla gider,
+> cevap yoksa en ucuz varsayımla devam edilir. Bu dosya **örnek değil, uyarıdır.**
+
 Önce oku: `CLAUDE.md`, `docs/DURUM.md`, `docs/EKRANLAR.md` (**§2 Takvim**),
 `docs/TASARIM-SISTEMI.md`, `docs/KARARLAR.md` (**ADR-001**, **ADR-003**, **ADR-011**,
 **ADR-014**, **ADR-020**, **ADR-024**, **ADR-030**).

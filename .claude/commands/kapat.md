@@ -16,6 +16,11 @@ Oturumu kapat. Sırayla:
    - Açık sorular — özellikle benden cevap bekleyenler
    - Bir sonraki oturumun en büyük riski
 
+   > **Kısa tut — dosya 150 satırı geçmesin.** DURUM.md **son durumdur**, oturum arşivi
+   > değil: kapanmış bir fazın ayrıntısı bir sonraki oturumun işine yaramıyorsa çıkar.
+   > Geçmiş `git log`'da, gerekçeler ADR'lerde duruyor. Bir oturum eklerken bir öncekinin
+   > detayını sil; büyüyen DURUM.md okunmayan DURUM.md'dir.
+
 4. Bu oturumda mimari bir karar aldıysan `docs/KARARLAR.md`'ye ADR ekle.
    Numarayı sıradan devam ettir. Mevcut bir kararı değiştirdiysen eskisini
    `Durum: Değiştirildi` yap, silme.

@@ -2,14 +2,40 @@
 description: Faz 10 — Yedekleme, hata dayanıklılığı, kurulum paketi ve teslim
 ---
 
-# Faz 10 — Yedekleme & Teslim
+# Faz 10 — Özet Ekranı, Yedekleme & Teslim
 
-Önce oku: `CLAUDE.md`, `docs/DURUM.md`, `docs/KARARLAR.md`.
+Önce oku: `CLAUDE.md`, `docs/DURUM.md`, `docs/KARARLAR.md`,
+`docs/KULLANILABILIRLIK.md`.
 
 Bu faz "bitirme" değil **"güvene alma"** fazı. Kullanıcı teknik değil, tek başına ve
 verisini kaybederse geri getirecek kimse yok. Ciddiye al.
 
+> **Faz 9 buraya katıldı** (2026-07-26). Dashboard'un kırpılmış hâli §0'da; grafikler ve
+> rapor ekranları kapsam dışı (`faz-09.md` neyin çıktığını yazıyor). **Bu son faz** —
+> planda ondan sonrası yok.
+
 ---
+
+## 0. Bugün ekranının özet şeridi (kırpılmış Faz 9)
+
+Yeni sorgu yazma; hepsinin kaynağı hazır. Mevcut komutları ekrana bağla:
+
+- Bu ay tahsil edilen tutar · **toplam alacak** (`views::total_receivable`) · borçlu öğrenci
+  sayısı (`v_student_debt`)
+- Bekleyen telafi sayısı (Faz 6) · bitmek üzere olan paketler (`v_package_remaining`)
+- Her kart tıklanınca ilgili ekrana gitsin
+- **Özet rakamın etiketi hangi kümeyi topladığını yazar** (ADR-026/ADR-025): "toplam
+  alacak" ile "görünen listenin alacağı" aynı şey değil
+- Boş durum: yeni kurulan programda hiç veri yok — her kart bunu ayrıca ele alır
+- Kullanılabilirlik listesinde açık madde varsa (`docs/KULLANILABILIRLIK.md`) burada kapat
+
+**E17 Raporlar sayfası da burada doluyor** (`EKRANLAR.md > E17`) — Faz 3'ten beri
+placeholder duran 7. menü öğesi. Kapsam EKRANLAR'ın yazdığı kadarı: `StatCard` şeridi
+(aylık tahsilat, işlenen ders, devam oranı, aktif öğrenci) + üç basit tablo (aylık
+tahsilat, branş bazında ders, devamsızlık dökümü). **Grafik yok** — tasarımda hiç grafik
+yok, sayı ve tablo dili hâkim; `dataviz` skill'i bu fazda gerekmiyor. ADR-025 rapor
+tablolarında da bağlayıcı: arama/filtre Rust'ta, Türkçe sıralama ve sayfalama arayüzde,
+özet rakamın etiketi hangi kümeyi topladığını yazar.
 
 ## 1. Otomatik yedekleme
 
@@ -43,7 +69,13 @@ verisini kaybederse geri getirecek kimse yok. Ciddiye al.
 
 ## 3. Ayarlar ekranı
 
-Kurs adı, logo, adres, telefon, makbuz başlığı, varsayılan tarife, yedek klasörü.
+Yedek klasörü, varsayılan tarife, varsayılan ders süresi, yoğunluk/tema tercihi.
+
+> ⚠️ **Kurum adı, adres, logo ve makbuz başlığı Ayarlar'a KONMAZ** — ADR-024: kurum kimliği
+> `config/kurum.json`'dan **derleme anında** gömülüyor ve `setting.institution_name` satırı
+> şemada durup **okunmuyor**. Bu komut eskiden "kurs adı, logo, adres Ayarlar'dan" diyordu;
+> ADR-024'ten önce yazılmıştı. Teslim öncesi müşteriye özel değerleri `kurum.json`'da
+> düzenlemek `docs/KURULUM.md`'nin değil **senin** işin (§7'nin kontrol listesine yaz).
 
 ## 4. Hata dayanıklılığı
 

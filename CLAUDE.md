@@ -18,11 +18,20 @@ Kurs sahibi tek başına, tek bilgisayarda kullanıyor. Hem birebir hem grup der
 
 **Bir oturum = bir faz.** Faz bitmeden yeni faza geçme, faz ortasında oturum şişerse `/kapat` çalıştır ve yeni oturumda devam et.
 
-Bir faz oturuma sığmıyorsa **bölünür ve kendi komutunu alır** — bugüne kadar `/faz-04b`
-(denetim artıkları) ve `/faz-05c-karar` (araştırma + ADR, ekrandan ayrı) böyle doğdu.
-Bölme kuralı: **araştırma gerektiren bir karar, kod oturumunun başında durmaz.** Kod
-oturumu kararı uygular; kararı ölçüp veren oturum ayrıdır. Yol haritasındaki numaralama
-bölünmeyi izler (`5C-K` → `5C`).
+Bir faz oturuma sığmıyorsa **bölünür ama yeni komut açılmaz**: `/kapat` çalıştırılır, aynı
+komutla ikinci oturumda devam edilir. Dikiş yeri faz komutunda yazılıdır.
+
+> **Karar oturumu açılmaz — ADR-033.** Bu kural eskiden tersiydi (*"araştırma gerektiren bir
+> karar, kod oturumunun başında durmaz; kararı ölçüp veren oturum ayrıdır"*) ve `/faz-05c-karar`
+> öyle doğdu: bir oturum üç takvim kütüphanesini ölçmeye harcandı, **ürün sahibine elinde
+> hazır bir şey olup olmadığı hiç sorulmadı** — varmış, ve ölçümün elenme sebebi tam olarak
+> o eksikti. Yeni sıra: (1) **ürün sahibine tek soruyla sor**, (2) cevabı varsa karar odur,
+> (3) yoksa **en ucuz varsayımla** devam et ve varsayımı faz komutuna yaz, (4) ölçüm ancak
+> sahibi "ölç" derse yapılır. Teknik kararlar sahibine sorulmaz — ADR'ye yazılır, kod oturumu
+> uygular.
+>
+> **Denetim oturumu** da yalnızca **para fazından sonra** açılır; diğer fazlar kendi
+> kapanışlarındaki kontrol listesiyle yeter.
 
 ### İki mod
 
@@ -38,9 +47,10 @@ bölünmeyi izler (`5C-K` → `5C`).
 
 | Dosya | İçerik |
 |---|---|
-| `docs/DURUM.md` | Nerede kaldık — her oturum sonunda güncellenir |
+| `docs/DURUM.md` | Nerede kaldık — **son durum**, oturum arşivi değil. Her oturum sonunda güncellenir |
 | `docs/KARARLAR.md` | Kilitli kararlar + ADR'ler. **Buradaki kararlar yeniden tartışılmaz.** |
-| `docs/YOL-HARITASI.md` | 10 fazlık plan ve bağımlılıklar |
+| `docs/YOL-HARITASI.md` | Plan ve bağımlılıklar — **kalan üç faz**: `/faz-07` (para) → `/faz-06` (yoklama) → `/faz-10` (teslim) |
+| `docs/KULLANILABILIRLIK.md` | Ürün sahibinin kullanım şikâyetleri; **her kod oturumu buradan §0 ile başlar** |
 | `docs/TASARIM-KAYNAGI.md` | Claude Design projesi nasıl okunur |
 | `docs/PRD.md` | Ürün gereksinimleri (Faz 1) |
 | `docs/VERI-MODELI.md` | SQLite şeması ve gerekçeleri (Faz 1) |
@@ -87,6 +97,8 @@ kurs/
 │   │   ├── gruplar/           Faz 5A: liste · detay · form · filters
 │   │   ├── takvim/            Faz 5C: CalendarPage · WeekGrid · MonthGrid · MoveDialog ·
 │   │   │                      calendarGrid.ts (geometri) · drag.ts (ADR-030) · filters.ts
+│   │   │                      DONDURULDU (ADR-034) — üstüne iş yazılmaz; değişim
+│   │   │                      gerekirse yalnızca bu klasör değişir, Rust yerinde kalır
 │   │   └── tanimlar/          Faz 5A: branşlar · tatil günleri · renk paleti
 │   ├── dev/                   /dev/komponentler · /dev/durum — ÜRETİME GİRMEZ.
 │   │                          Metinleri KENDİ sözlüğünde (showcase.tr.ts · status.tr.ts):
