@@ -15,6 +15,7 @@ import {
   type GroupRow,
   type StudentRow,
   type Subject,
+  type Teacher,
 } from '../../lib/api'
 import { formatTime } from '../../lib/format'
 import { sortTrBy } from '../../lib/sortTr'
@@ -25,6 +26,7 @@ import {
   LoadingState,
   Modal,
   ModalOption,
+  SearchSelect,
   SegmentedControl,
   Select,
   TimePicker,
@@ -93,6 +95,7 @@ export function SessionForm({
   const [subjects, setSubjects] = useState<Subject[]>([])
   const [groups, setGroups] = useState<GroupRow[]>([])
   const [students, setStudents] = useState<StudentRow[]>([])
+  const [teachers, setTeachers] = useState<Teacher[]>([])
   const [teacherId, setTeacherId] = useState<number | null>(null)
 
   const [loading, setLoading] = useState(false)
@@ -111,7 +114,7 @@ export function SessionForm({
     setConflicts(null)
     setDurationTouched(editing)
     try {
-      const [nextSubjects, nextGroups, nextStudents, teachers] = await Promise.all([
+      const [nextSubjects, nextGroups, nextStudents, nextTeachers] = await Promise.all([
         fetchSubjects(),
         fetchGroupList(),
         fetchStudentList(),
@@ -122,9 +125,11 @@ export function SessionForm({
       // ilgilenir (§1.23). Liste ikisini de getiriyor, süzme ekranın işi.
       setGroups(nextGroups.filter((row) => !row.archived))
       setStudents(nextStudents.filter((row) => !row.archived))
-      // ADR-011: tek öğretmen. Alan gizli ama YAZILIYOR — yazılmazsa `teacher_id`
-      // NULL kalır ve ikinci öğretmen eklendiği gün K-1 uyarısı ölü doğar.
-      setTeacherId(teachers[0]?.id ?? null)
+      // ADR-037: kurs çok öğretmenli, alan **gerçek bir seçim**. Otomatik doldurma yok —
+      // tek adayı seçen satır, ikinci öğretmen eklenince bütün dersleri sessizce
+      // birincisine yazardı ve K-1 uyarısı yanlış öğretmene bakardı.
+      setTeachers(nextTeachers)
+      setTeacherId(session?.teacherId ?? null)
 
       if (session) {
         setDraft({
@@ -203,6 +208,20 @@ export function SessionForm({
     [subjects],
   )
 
+  /**
+   * Öğretmen listesi kısa — yerel `<select>` doğru olan (K1 aranabilir seçimi uzun
+   * listeler için). Pasif öğretmenler yeni derse atanmaz; düzenlenen dersin
+   * öğretmeni pasife alınmışsa listede **kalır**, yoksa kaydetmek onu değiştirirdi.
+   */
+  const teacherOptions = useMemo(
+    () =>
+      sortTrBy(
+        teachers.filter((item) => item.isActive || item.id === teacherId),
+        (item) => item.fullName,
+      ).map((item) => ({ value: String(item.id), label: item.fullName })),
+    [teachers, teacherId],
+  )
+
   const targetOptions = useMemo(() => {
     if (draft.kind === 'group') {
       return sortTrBy(groups, (item) => item.name).map((item) => ({
@@ -260,7 +279,12 @@ export function SessionForm({
     const bounds = slotBounds(draft.day!, draft.startTime!, Number(draft.durationMin))
     if (bounds) {
       try {
-        const clashes = await fetchSessionConflicts(bounds.startsAt, bounds.endsAt, draft.id)
+        const clashes = await fetchSessionConflicts(
+          bounds.startsAt,
+          bounds.endsAt,
+          draft.id,
+          teacherId,
+        )
         if (clashes.length > 0) {
           setConflicts(clashes)
           return
@@ -354,8 +378,10 @@ export function SessionForm({
             />
           )}
 
+          {/* K1 — öğrenci ve grup listeleri UZUN olabilir; burada aranabilir seçim
+              kullanılıyor. Branş ve öğretmen kısa listeler, onlar `Select` kalıyor. */}
           {!editing && (
-            <Select
+            <SearchSelect
               label={draft.kind === 'group' ? tr.sessions.form.group : tr.sessions.form.student}
               placeholder={
                 draft.kind === 'group'
@@ -363,12 +389,14 @@ export function SessionForm({
                   : tr.sessions.form.studentPlaceholder
               }
               error={errors['session.target']}
-              value={draft.kind === 'group' ? draft.studyGroupId : draft.studentId}
+              value={
+                (draft.kind === 'group' ? draft.studyGroupId : draft.studentId) || null
+              }
               options={targetOptions}
-              onChange={(event) =>
+              onChange={(value) =>
                 draft.kind === 'group'
-                  ? pickGroup(event.target.value)
-                  : patch({ studentId: event.target.value })
+                  ? pickGroup(value ?? '')
+                  : patch({ studentId: value ?? '' })
               }
             />
           )}
@@ -382,6 +410,20 @@ export function SessionForm({
             onChange={(event) => {
               patch({ subjectId: event.target.value })
               setDurationTouched(false)
+            }}
+          />
+
+          {/* ADR-037 — öğretmen artık gerçek bir alan. K-1 çakışma uyarısı buna
+              bakıyor: boş bırakılan ders hiçbir uyarı üretmez. */}
+          <Select
+            label={tr.sessions.form.teacher}
+            placeholder={tr.sessions.form.teacherPlaceholder}
+            hint={tr.sessions.form.teacherHint}
+            value={teacherId === null ? '' : String(teacherId)}
+            options={teacherOptions}
+            onChange={(event) => {
+              setTeacherId(event.target.value === '' ? null : Number(event.target.value))
+              setConflicts(null)
             }}
           />
 

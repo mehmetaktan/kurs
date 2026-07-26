@@ -49,7 +49,8 @@ pub struct Setting {
 }
 
 row!(
-    /// §1.3 — MVP'de tek satır (ADR-011); tablo ikinci öğretmen için hazır duruyor.
+    /// §1.3 — kurs çok öğretmenli (ADR-037). `is_active = 0` "artık ders vermiyor",
+    /// `deleted_at` "arşivlendi" demek; ikisi farklı şey.
     Teacher {
         pub full_name: String,
         pub color: String,
@@ -208,6 +209,11 @@ row!(
         pub delta: i64,
         /// 'attendance' | 'cancellation_restore' | 'manual'
         pub reason: String,
+        /// Bu satır hangi satırı ters kaydediyor (ADR-036). Başlık satırında `None`.
+        /// Ters kaydın `delta`'sı hedefin tam tersi olmak zorunda —
+        /// `trg_pkgusage_reversal_valid` bunu şemada zorluyor ve
+        /// `v_package_remaining`'in toplamı bu değişmeze dayanıyor.
+        pub reverses_id: Option<i64>,
         pub memo: Option<String>,
     }
 );

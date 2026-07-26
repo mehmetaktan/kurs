@@ -30,6 +30,11 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "002_ledger_effective_parity",
         sql: include_str!("../../migrations/002_ledger_effective_parity.sql"),
     },
+    Migration {
+        version: 3,
+        name: "003_package_usage_reversal_chain",
+        sql: include_str!("../../migrations/003_package_usage_reversal_chain.sql"),
+    },
 ];
 
 /// `schema_migration` tablosu ilk migration'dan ÖNCE var olmak zorunda — hangi
@@ -154,9 +159,10 @@ mod tests {
 
     #[test]
     fn migration_dosyalari_gomulu_ve_bos_degil() {
-        assert_eq!(MIGRATIONS.len(), 2);
+        assert_eq!(MIGRATIONS.len(), 3);
         assert!(MIGRATIONS[0].sql.contains("CREATE TABLE ledger_entry"));
         assert!(MIGRATIONS[1].sql.contains("CREATE VIEW v_ledger_effective"));
+        assert!(MIGRATIONS[2].sql.contains("ux_pkgusage_head"));
 
         // Sürüm numaraları 1'den başlayarak boşluksuz artar: `run` sırayla uyguluyor,
         // atlanan bir numara sessizce uygulanmamış bir migration demek olurdu.
@@ -183,14 +189,14 @@ mod tests {
         let conn = db::open_in_memory().unwrap();
 
         let first = run(&conn).unwrap();
-        assert_eq!(first.applied_now, vec![1, 2]);
+        assert_eq!(first.applied_now, vec![1, 2, 3]);
 
         let second = run(&conn).unwrap();
         assert!(
             second.applied_now.is_empty(),
             "ikinci çalıştırma yeniden uygulamamalı"
         );
-        assert_eq!(second.all_applied, vec![1, 2]);
+        assert_eq!(second.all_applied, vec![1, 2, 3]);
     }
 
     #[test]
@@ -221,7 +227,9 @@ mod tests {
             .unwrap();
         assert_eq!(settings, 15);
 
-        // §1.3 tek öğretmen satırı (ADR-011). Seed'e konsaydı üretimde boş kalırdı.
+        // §1.3 başlangıç öğretmen satırı. Seed'e konsaydı üretimde boş kalırdı; kurs
+        // sahibi adını `Tanımlar → Öğretmenler`de düzeltip yanına diğerlerini ekler
+        // (ADR-037).
         let teacher: String = conn
             .query_row("SELECT full_name FROM teacher WHERE id = 1", [], |r| {
                 r.get(0)
@@ -246,6 +254,7 @@ mod tests {
         // 21 alan tablosu + schema_migration
         assert_eq!(count("table"), 22, "tablo sayısı");
         assert_eq!(count("view"), 6, "view sayısı");
-        assert_eq!(count("trigger"), 6, "trigger sayısı");
+        // 6 defter/yoklama mührü + 003'ün üç `package_usage` mührü (ADR-036).
+        assert_eq!(count("trigger"), 9, "trigger sayısı");
     }
 }

@@ -5,24 +5,32 @@ import { PageHeader } from '../../shell/PageHeader'
 import { Tabs } from '../../ui'
 import type { TabItem } from '../../ui'
 import { ClosedDaysTab } from './ClosedDaysTab'
+import { GeneralTab } from './GeneralTab'
 import { SubjectsTab } from './SubjectsTab'
+import { TeachersTab } from './TeachersTab'
 import styles from './Definitions.module.css'
 
-type DefinitionsTab = 'subjects' | 'closedDays'
+type DefinitionsTab = 'subjects' | 'teachers' | 'closedDays' | 'general'
 
 /**
- * Tanımlar — EKRANLAR.md E7 (branşlar) ve E8 (tatil / kapalı günler).
+ * Tanımlar — E7 (branşlar), **öğretmenler (ADR-037)**, E8 (tatil / kapalı günler)
+ * ve **E18 genel ayarlar**.
  *
- * **İki sekme var, dört değil.** Tarifeler Faz 7'nin, Genel ayarlar ve Yedekleme
- * Faz 10'un konusu; boş sekme koymak kullanıcıya çalışmayan bir düğme göstermek olurdu.
- * Sekmeler kendi fazlarında eklenir.
+ * Son ikisi para fazının §0'ında geldi: `Öğretmenler` yoktu ve `teacher` tablosunun
+ * tek satırı üç faz boyunca `'Öğretmen'` kaldı; `Genel` Faz 10'a bırakılmıştı ama
+ * içindeki devamsızlık politikası defterin girdisi (ADR-016).
+ *
+ * `Tarifeler` hâlâ yok — para fazının §1'inde geliyor. Boş sekme koymak kullanıcıya
+ * çalışmayan bir düğme göstermek olurdu.
  */
 export function DefinitionsPage() {
   const [tab, setTab] = useState<DefinitionsTab>('subjects')
 
   const items: TabItem<DefinitionsTab>[] = [
     { value: 'subjects', label: tr.definitions.tabs.subjects },
+    { value: 'teachers', label: tr.definitions.tabs.teachers },
     { value: 'closedDays', label: tr.definitions.tabs.closedDays },
+    { value: 'general', label: tr.definitions.tabs.general },
   ]
 
   return (
@@ -32,7 +40,10 @@ export function DefinitionsPage() {
         <div className={styles.tabBar}>
           <Tabs items={items} value={tab} onChange={setTab} label={tr.pages.definitions.title} />
         </div>
-        {tab === 'subjects' ? <SubjectsTab /> : <ClosedDaysTab />}
+        {tab === 'subjects' && <SubjectsTab />}
+        {tab === 'teachers' && <TeachersTab />}
+        {tab === 'closedDays' && <ClosedDaysTab />}
+        {tab === 'general' && <GeneralTab />}
       </PageContent>
     </>
   )

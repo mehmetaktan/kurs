@@ -64,6 +64,18 @@ fn series(
 
 /// Belirli saatte tek seferlik grup seansı — çakışma testlerinin kurulumu.
 fn session_at(conn: &Connection, group_id: i64, subject_id: i64, from: &str, to: &str) -> i64 {
+    session_at_teacher(conn, group_id, subject_id, from, to, Some(1))
+}
+
+/// Çakışma testleri için: seansın öğretmeni değişken (ADR-037 — K-1 aynı öğretmeni sorar).
+fn session_at_teacher(
+    conn: &Connection,
+    group_id: i64,
+    subject_id: i64,
+    from: &str,
+    to: &str,
+    teacher_id: Option<i64>,
+) -> i64 {
     repo::academic::insert_session(
         conn,
         &Session {
@@ -72,7 +84,7 @@ fn session_at(conn: &Connection, group_id: i64, subject_id: i64, from: &str, to:
             study_group_id: Some(group_id),
             student_id: None,
             subject_id,
-            teacher_id: Some(1),
+            teacher_id,
             starts_at: from.into(),
             ends_at: to.into(),
             session_date: None,
@@ -385,8 +397,9 @@ fn ayni_saatteki_ders_cakisma_verir_ve_adini_soyler() {
         "2026-04-01 17:00",
     );
 
-    let hits = schedule::detect_conflicts(&conn, "2026-04-01 16:30", "2026-04-01 17:30", None)
-        .expect("çakışma sorgusu çalışmalı");
+    let hits =
+        schedule::detect_conflicts(&conn, "2026-04-01 16:30", "2026-04-01 17:30", None, Some(1))
+            .expect("çakışma sorgusu çalışmalı");
 
     assert_eq!(hits.len(), 1, "kısmi örtüşme de çakışmadır");
     assert_eq!(hits[0].label, "Matematik · Grup A");
@@ -405,8 +418,9 @@ fn bitisik_ders_cakisma_saymaz() {
         "2026-04-01 17:00",
     );
 
-    let hits = schedule::detect_conflicts(&conn, "2026-04-01 17:00", "2026-04-01 18:00", None)
-        .expect("çakışma sorgusu çalışmalı");
+    let hits =
+        schedule::detect_conflicts(&conn, "2026-04-01 17:00", "2026-04-01 18:00", None, Some(1))
+            .expect("çakışma sorgusu çalışmalı");
 
     assert!(
         hits.is_empty(),
@@ -428,8 +442,9 @@ fn iptal_edilmis_ders_cakisma_saymaz() {
     );
     schedule::cancel_session(&conn, id, None).expect("iptal çalışmalı");
 
-    let hits = schedule::detect_conflicts(&conn, "2026-04-01 16:00", "2026-04-01 17:00", None)
-        .expect("çakışma sorgusu çalışmalı");
+    let hits =
+        schedule::detect_conflicts(&conn, "2026-04-01 16:00", "2026-04-01 17:00", None, Some(1))
+            .expect("çakışma sorgusu çalışmalı");
 
     assert!(hits.is_empty(), "o saatte artık ders yok");
 }
@@ -447,8 +462,14 @@ fn tasinan_dersin_kendisi_cakisma_sayilmaz() {
         "2026-04-01 17:00",
     );
 
-    let hits = schedule::detect_conflicts(&conn, "2026-04-01 16:00", "2026-04-01 17:00", Some(id))
-        .expect("çakışma sorgusu çalışmalı");
+    let hits = schedule::detect_conflicts(
+        &conn,
+        "2026-04-01 16:00",
+        "2026-04-01 17:00",
+        Some(id),
+        Some(1),
+    )
+    .expect("çakışma sorgusu çalışmalı");
 
     assert!(hits.is_empty(), "ders kendisiyle çakışmaz");
 }
@@ -485,10 +506,129 @@ fn birebir_derste_cakisma_ogrencinin_adini_soyler() {
     )
     .expect("seans eklenmeli");
 
-    let hits = schedule::detect_conflicts(&conn, "2026-04-01 16:00", "2026-04-01 17:00", None)
-        .expect("çakışma sorgusu çalışmalı");
+    let hits =
+        schedule::detect_conflicts(&conn, "2026-04-01 16:00", "2026-04-01 17:00", None, Some(1))
+            .expect("çakışma sorgusu çalışmalı");
 
     assert_eq!(hits[0].label, "Fizik · Mehmet Aslan");
+}
+
+// --- ADR-037 / DENETIM-FAZ1 > C5: uyarı AYNI ÖĞRETMENİ sorar -----------------
+
+#[test]
+fn ayni_ogretmen_ayni_saatte_cakisir() {
+    let conn = common::conn();
+    let subject_id = common::subject(&conn, "Matematik");
+    let group_id = common::group(&conn, "Grup A", subject_id);
+    let teacher_id = common::teacher(&conn, "Ayşe Demir");
+    session_at_teacher(
+        &conn,
+        group_id,
+        subject_id,
+        "2026-04-01 16:00",
+        "2026-04-01 17:00",
+        Some(teacher_id),
+    );
+
+    let hits = schedule::detect_conflicts(
+        &conn,
+        "2026-04-01 16:00",
+        "2026-04-01 17:00",
+        None,
+        Some(teacher_id),
+    )
+    .expect("çakışma sorgusu çalışmalı");
+
+    assert_eq!(
+        hits.len(),
+        1,
+        "PRD K-1: aynı öğretmen aynı saatte iki derste"
+    );
+}
+
+#[test]
+fn farkli_ogretmen_ayni_saatte_cakismaz() {
+    let conn = common::conn();
+    let subject_id = common::subject(&conn, "Matematik");
+    let group_id = common::group(&conn, "Grup A", subject_id);
+    let ayse = common::teacher(&conn, "Ayşe Demir");
+    let veli = common::teacher(&conn, "Veli Kaya");
+    session_at_teacher(
+        &conn,
+        group_id,
+        subject_id,
+        "2026-04-01 16:00",
+        "2026-04-01 17:00",
+        Some(ayse),
+    );
+
+    let hits = schedule::detect_conflicts(
+        &conn,
+        "2026-04-01 16:00",
+        "2026-04-01 17:00",
+        None,
+        Some(veli),
+    )
+    .expect("çakışma sorgusu çalışmalı");
+
+    assert!(
+        hits.is_empty(),
+        "iki öğretmen aynı saatte ayrı ders yapabilir: {hits:?}"
+    );
+}
+
+#[test]
+fn ogretmensiz_seans_uyari_uretmez() {
+    let conn = common::conn();
+    let subject_id = common::subject(&conn, "Matematik");
+    let group_id = common::group(&conn, "Grup A", subject_id);
+    // Aynı saatte dolu bir ders VAR; eksik olan tek şey sorulan seansın öğretmeni.
+    session_at(
+        &conn,
+        group_id,
+        subject_id,
+        "2026-04-01 16:00",
+        "2026-04-01 17:00",
+    );
+
+    let hits =
+        schedule::detect_conflicts(&conn, "2026-04-01 16:00", "2026-04-01 17:00", None, None)
+            .expect("çakışma sorgusu çalışmalı");
+
+    assert!(
+        hits.is_empty(),
+        "kimin çakıştığını söyleyemeyen uyarı gösterilmez: {hits:?}"
+    );
+}
+
+#[test]
+fn ogretmeni_atanmamis_ders_baskasinin_uyarisina_girmez() {
+    let conn = common::conn();
+    let subject_id = common::subject(&conn, "Matematik");
+    let group_id = common::group(&conn, "Grup A", subject_id);
+    let ayse = common::teacher(&conn, "Ayşe Demir");
+    session_at_teacher(
+        &conn,
+        group_id,
+        subject_id,
+        "2026-04-01 16:00",
+        "2026-04-01 17:00",
+        None,
+    );
+
+    let hits = schedule::detect_conflicts(
+        &conn,
+        "2026-04-01 16:00",
+        "2026-04-01 17:00",
+        None,
+        Some(ayse),
+    )
+    .expect("çakışma sorgusu çalışmalı");
+
+    assert!(
+        hits.is_empty(),
+        "`teacher_id IS NULL` satırı hiçbir öğretmenin çakışması değildir: {hits:?}"
+    );
 }
 
 // ===========================================================================

@@ -706,6 +706,8 @@ fn attendance_and_charges(conn: &Connection, today: NaiveDate) -> AppResult<i64>
                             used_on: session_date.clone(),
                             delta: -1,
                             reason: "attendance".into(),
+                            // Zincirin başlık satırı (ADR-036) — düzeltme yok.
+                            reverses_id: None,
                             memo: None,
                             created_at: None,
                             updated_at: None,

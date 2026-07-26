@@ -860,6 +860,7 @@ fn satir_bakiye_kalan_ders_ve_islenen_dersi_tasir() {
                 used_on: "2026-03-10".into(),
                 delta: -1,
                 reason: "attendance".into(),
+                reverses_id: None,
                 memo: None,
                 created_at: None,
                 updated_at: None,

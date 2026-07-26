@@ -534,6 +534,7 @@ fn ayni_yoklamadan_iki_kez_paket_hakki_dusulemez() {
         used_on: "2026-03-02".into(),
         delta: -1,
         reason: "attendance".into(),
+        reverses_id: None,
         memo: None,
         created_at: None,
         updated_at: None,
@@ -542,7 +543,9 @@ fn ayni_yoklamadan_iki_kez_paket_hakki_dusulemez() {
 
     repo::finance::insert_package_usage(&conn, &usage()).expect("ilk düşüm geçmeli");
 
-    // ux_pkgusage_att: sessizce iki ders düşmez.
+    // `ux_pkgusage_head` (ADR-036, eskiden `ux_pkgusage_att`): sessizce iki ders
+    // düşmez. Yeni indeks eskisinden GENİŞ koruyor — düzeltme zincirinin her
+    // derinliğinde, yalnızca derinlik 1'de değil (`tests/package_usage_chain.rs`).
     let err = repo::finance::insert_package_usage(&conn, &usage()).unwrap_err();
     assert_eq!(err.code, "lesson_already_consumed");
 

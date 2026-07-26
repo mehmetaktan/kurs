@@ -182,8 +182,8 @@ pub fn packages_of(conn: &Connection, student_id: i64) -> AppResult<Vec<Package>
 
 impl Record for PackageUsage {
     const TABLE: &'static str = "package_usage";
-    const COLUMNS: &'static str = "id, package_id, attendance_id, used_on, delta, reason, memo, \
-                                   created_at, updated_at, deleted_at";
+    const COLUMNS: &'static str = "id, package_id, attendance_id, used_on, delta, reason, \
+                                   reverses_id, memo, created_at, updated_at, deleted_at";
 
     fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
         Ok(PackageUsage {
@@ -193,20 +193,28 @@ impl Record for PackageUsage {
             used_on: row.get(3)?,
             delta: row.get(4)?,
             reason: row.get(5)?,
-            memo: row.get(6)?,
-            created_at: row.get(7)?,
-            updated_at: row.get(8)?,
-            deleted_at: row.get(9)?,
+            reverses_id: row.get(6)?,
+            memo: row.get(7)?,
+            created_at: row.get(8)?,
+            updated_at: row.get(9)?,
+            deleted_at: row.get(10)?,
         })
     }
 }
 
-/// Paket hakkı hareketi. Satır **silinmez**; iade `delta = +1` ile yazılır (§1.12).
-/// `ux_pkgusage_att` aynı yoklamadan iki kez hak düşülmesini engeller.
+/// Paket hakkı hareketi — **append-only** (ADR-036, `ledger_entry`'nin ikizi).
+///
+/// `update_*` ve `archive` fonksiyonu **yoktur** ve yazılmayacak: `003` migration'ı
+/// `UPDATE`'in ve `DELETE`'in tamamını tetikleyiciyle kapattı. Yanlış yazılmış bir
+/// satırın tek çıkışı `insert_package_usage_reversal` ile tersini yazmak.
+///
+/// `ux_pkgusage_head` aynı yoklamadan **iki kez** hak düşülmesini engeller — çift tık
+/// dahil, zincirin her derinliğinde.
 pub fn insert_package_usage(conn: &Connection, u: &PackageUsage) -> AppResult<i64> {
     conn.execute(
-        "INSERT INTO package_usage (id, package_id, attendance_id, used_on, delta, reason, memo) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        "INSERT INTO package_usage \
+           (id, package_id, attendance_id, used_on, delta, reason, reverses_id, memo) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         params![
             u.id,
             u.package_id,
@@ -214,10 +222,191 @@ pub fn insert_package_usage(conn: &Connection, u: &PackageUsage) -> AppResult<i6
             u.used_on,
             u.delta,
             u.reason,
+            u.reverses_id,
             u.memo
         ],
     )?;
     Ok(last_id(conn))
+}
+
+/// Bir hareketi ters kaydeder (ADR-036). Tutar ve paket **hedeften okunur**, çağırandan
+/// alınmaz: `delta`'yı çağırana bıraksaydık `trg_pkgusage_reversal_valid` yalnızca hata
+/// mesajı üreten bir kapı olurdu; burada zaten doğrusu yazılıyor.
+///
+/// `attendance_id` de hedeften geliyor — zincirin tamamı aynı yoklamaya bağlı kalmalı,
+/// yoksa "bu ders hakkı hangi yoklamadan düştü" sorusu zincirin ortasında cevapsız kalır.
+/// Başlık indeksi (`ux_pkgusage_head`) yalnızca `reverses_id IS NULL` satırlarını
+/// süzdüğü için bu tekrar çakışma üretmiyor.
+pub fn insert_package_usage_reversal(
+    conn: &Connection,
+    target_id: i64,
+    used_on: &str,
+    reason: &str,
+    memo: Option<&str>,
+) -> AppResult<i64> {
+    let target: PackageUsage = crate::repo::require(conn, target_id)?;
+    insert_package_usage(
+        conn,
+        &PackageUsage {
+            id: None,
+            package_id: target.package_id,
+            attendance_id: target.attendance_id,
+            used_on: used_on.to_string(),
+            delta: -target.delta,
+            reason: reason.to_string(),
+            reverses_id: Some(target_id),
+            memo: memo.map(str::to_string),
+            created_at: None,
+            updated_at: None,
+            deleted_at: None,
+        },
+    )
+}
+
+/// Bir yoklamanın ders hakkı zincirinin **canlı ucu** (ADR-036).
+///
+/// Zincir doğrusaldır (`ux_pkgusage_reverses` dallanmayı engelliyor), dolayısıyla
+/// "ucu" tanımlamak tek sorgu: kendisini ters kaydeden bir satırı olmayan satır.
+/// Zincirin tamamı aynı `attendance_id`'yi taşıyor, o yüzden filtre bu kadar basit.
+fn usage_tail(conn: &Connection, attendance_id: i64) -> AppResult<Option<PackageUsage>> {
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {cols} FROM package_usage u \
+         WHERE u.attendance_id = ?1 AND u.deleted_at IS NULL \
+           AND NOT EXISTS (SELECT 1 FROM package_usage r \
+                           WHERE r.reverses_id = u.id AND r.deleted_at IS NULL)",
+        cols = PackageUsage::COLUMNS
+    ))?;
+    let mut rows = stmt.query_map([attendance_id], PackageUsage::from_row)?;
+    match rows.next() {
+        Some(row) => Ok(Some(row?)),
+        None => Ok(None),
+    }
+}
+
+/// **Ders hakkını düşer** — ADR-015'in iki sayacından ders hakkı tarafı.
+///
+/// Deftere hiçbir satır yazmaz: paketli öğrencide ders işlemek borç doğurmaz
+/// (`VERI-MODELI.md §3`). Para tarafı satışta ve taksit vadesinde yazıldı.
+///
+/// **İdempotent ve yön belirtir.** Fonksiyon "bir satır ekle" demiyor, *"bu yoklamanın
+/// hakkı DÜŞMÜŞ olsun"* diyor. Üç durum var ve üçü de doğru sonucu veriyor:
+///
+/// | Zincirin ucu | Yapılan |
+/// |---|---|
+/// | yok | başlık satırı (`delta = −1`) |
+/// | `+1` (daha önce iade edilmiş) | ucun ters kaydı (`delta = −1`) — `Mazeretli → Geldi` |
+/// | `−1` (zaten düşmüş) | **hiçbir şey** — çift tık ikinci kez düşüremez |
+///
+/// Bu sözleşme Faz 6'nın yoklama ekranı için sabitlendi: ekran yalnızca **çağırır**,
+/// hangi satırın yazılacağını hesaplamaz. Çağıran kendi transaction'ını açar.
+///
+/// `today` **parametredir** — aktif paket sorgusu onu bind ediyor, SQLite saati
+/// okunmuyor (`VERI-MODELI §0`). `used_on` ise **dersin günü**: hak o gün kullanıldı,
+/// kaydın yazıldığı gün değil. İkisi ayrı, çünkü geçmiş bir yoklama bugün işlenebilir.
+pub fn consume_package_credit(conn: &Connection, attendance_id: i64, today: &str) -> AppResult<()> {
+    let (student_id, session_date) = attendance_context(conn, attendance_id)?;
+
+    match usage_tail(conn, attendance_id)? {
+        // Zaten düşmüş — ikinci çağrı ikinci ders düşürmez (idempotency).
+        Some(tail) if tail.delta == -1 => Ok(()),
+        // İade edilmişti, yeniden düşüyor: `Geldi → Mazeretli → Geldi`'nin 3. adımı.
+        // Eski şemada bu satır YAZILAMIYORDU (`ux_pkgusage_att`) — ADR-036'nın sebebi.
+        Some(tail) => {
+            insert_package_usage_reversal(
+                conn,
+                tail.id.expect("okunan satırın id'si olur"),
+                &session_date,
+                "attendance",
+                None,
+            )?;
+            Ok(())
+        }
+        None => {
+            let package_id = oldest_active_package(conn, student_id, today)?;
+            insert_package_usage(
+                conn,
+                &PackageUsage {
+                    id: None,
+                    package_id,
+                    attendance_id: Some(attendance_id),
+                    used_on: session_date,
+                    delta: -1,
+                    reason: "attendance".into(),
+                    reverses_id: None,
+                    memo: None,
+                    created_at: None,
+                    updated_at: None,
+                    deleted_at: None,
+                },
+            )?;
+            Ok(())
+        }
+    }
+}
+
+/// **Ders hakkını geri verir** — `consume_package_credit`'in tam tersi ve aynı
+/// disiplinde: *"bu yoklamanın hakkı DÜŞMEMİŞ olsun."*
+///
+/// Seans iptali (`VERI-MODELI §4`) ve `Geldi → Mazeretli` düzeltmesi bunu çağırır.
+/// Hiç düşülmemişse (paketsiz öğrenci, mazeretli işaretlenmiş ders) sessizce geçer:
+/// "geri verilecek hak yok" bir hata değil, beklenen durum.
+pub fn restore_package_credit(conn: &Connection, attendance_id: i64) -> AppResult<()> {
+    let Some(tail) = usage_tail(conn, attendance_id)? else {
+        return Ok(());
+    };
+    // Zaten iade edilmiş — iki kez iptal iki iade yapmaz.
+    if tail.delta == 1 {
+        return Ok(());
+    }
+    let (_, session_date) = attendance_context(conn, attendance_id)?;
+    insert_package_usage_reversal(
+        conn,
+        tail.id.expect("okunan satırın id'si olur"),
+        &session_date,
+        "cancellation_restore",
+        None,
+    )?;
+    Ok(())
+}
+
+/// Yoklamanın öğrencisi ve **dersin günü**.
+fn attendance_context(conn: &Connection, attendance_id: i64) -> AppResult<(i64, String)> {
+    conn.query_row(
+        "SELECT a.student_id, s.session_date \
+         FROM attendance a JOIN session s ON s.id = a.session_id \
+         WHERE a.id = ?1 AND a.deleted_at IS NULL",
+        params![attendance_id],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )
+    .map_err(|_| {
+        crate::error::AppError::new(
+            "attendance_not_found",
+            "Bu yoklama kaydı bulunamadı. Listeyi yenileyip yeniden deneyin.",
+        )
+    })
+}
+
+/// **En eski aktif paket** (R5.12) — `active_packages` `sold_on, id` sırasında
+/// döndürüyor.
+///
+/// "Aktif paket" bir sorgudur, bir sütun değildir: `status`'a bakılmıyor. Bakılsaydı
+/// ve status güncellenmeseydi kalan hak eksiye düşer, yeni satılan paket hiç
+/// kullanılmaz ve o dersler için **borç da yazılmazdı** — öğrenci bedava ders alırdı
+/// (`VERI-MODELI §1.23`).
+///
+/// Paket yoksa **hata**: sessizce geçmek, paketi bitmiş öğrencinin dersini bedavaya
+/// getirirdi. Mesaj kullanıcıya ne yapacağını söylüyor (PRD §8).
+fn oldest_active_package(conn: &Connection, student_id: i64, today: &str) -> AppResult<i64> {
+    crate::repo::views::active_packages(conn, student_id, today)?
+        .first()
+        .map(|p| p.package_id)
+        .ok_or_else(|| {
+            crate::error::AppError::new(
+                "no_active_package",
+                "Bu öğrencinin kullanılabilir ders paketi yok. \
+                 Yeni paket satın veya dersi ders başı ücretle işleyin.",
+            )
+        })
 }
 
 // ---------------------------------------------------------------------------

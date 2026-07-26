@@ -80,6 +80,10 @@ export const tr = {
     timePlaceholder: 'SS:DD',
     dateInvalid: 'Tarihi GG.AA.YYYY biçiminde yazın, örnek: 25.07.2026',
     timeInvalid: 'Saati SS:DD biçiminde yazın, örnek: 14:30',
+    // Aranabilir seçim (K1) — uzun listelerde yerel <select>ün yerini alır.
+    searchSelect: {
+      noResults: 'Eşleşen kayıt yok',
+    },
   },
 
   pagination: {
@@ -340,7 +344,91 @@ export const tr = {
   definitions: {
     tabs: {
       subjects: 'Branşlar',
+      teachers: 'Öğretmenler',
       closedDays: 'Tatil günleri',
+      general: 'Genel',
+    },
+    // Para fazı §0a — ADR-037. Kurs çok öğretmenli; adı 'Öğretmen' olan migration
+    // satırı bu ekranın ilk kaydıdır ve kurs sahibi onu düzeltir.
+    teachers: {
+      heading: 'Öğretmenler',
+      lead: 'Ders veren kişiler burada tanımlanır. Renk takvimde ve ders bloğunda görünür.',
+      newTeacher: 'Yeni öğretmen',
+      table: {
+        label: 'Öğretmenler',
+        name: 'Ad',
+        color: 'Renk',
+        phone: 'Telefon',
+        email: 'E-posta',
+        status: 'Durum',
+        action: '',
+      },
+      form: {
+        name: 'Ad soyad',
+        namePlaceholder: 'Ayşe Demir',
+        color: 'Renk',
+        phone: 'Telefon',
+        email: 'E-posta',
+        emailPlaceholder: 'ayse@ornek.com',
+        active: 'Aktif',
+      },
+      active: 'Aktif',
+      inactive: 'Pasif',
+      // İki durum karışmasın diye söylenmesi gereken cümle: pasif öğretmen listede
+      // kalır, arşivlenen kalkar.
+      inactiveHint: 'Pasif öğretmen yeni derse atanamaz; geçmiş dersleri olduğu gibi kalır.',
+      saved: 'Öğretmen kaydedildi.',
+      empty: 'Henüz öğretmen yok',
+      emptyBody: 'Derslere öğretmen atayabilmek için önce bir öğretmen tanımlayın.',
+      archive: {
+        title: 'Öğretmen arşivlensin mi?',
+        body: 'listeden kalkacak. Bu öğretmenin geçmiş dersleri ve grupları olduğu gibi kalır.',
+        confirm: 'Arşivle',
+        done: 'Öğretmen arşivlendi.',
+      },
+    },
+    // Para fazı §0c — E18. Buradaki iki devamsızlık satırı PARA POLİTİKASIDIR
+    // (ADR-016) ve para fazının girdisi.
+    general: {
+      heading: 'İşletme ayarları',
+      lead: 'Kursun çalışma düzeni ve ders hakkı politikası. Değişiklik anında kaydedilir.',
+      saved: 'Ayar kaydedildi.',
+      groups: {
+        hours: 'Çalışma düzeni',
+        absence: 'Devamsızlık politikası',
+        money: 'Paket ve makbuz',
+        other: 'Diğer',
+      },
+      keys: {
+        dayStart: 'Gün başlangıcı',
+        dayEnd: 'Gün bitişi',
+        slotMinutes: 'Takvim aralığı (dk)',
+        defaultSessionMinutes: 'Varsayılan ders süresi (dk)',
+        sessionHorizonWeeks: 'Kaç hafta ileriye ders üretilsin',
+        rowDensity: 'Liste satır yüksekliği',
+        excusedConsumes: 'Mazeretli devamsızlıkta ders hakkı düşsün',
+        unexcusedConsumes: 'Mazeretsiz devamsızlıkta ders hakkı düşsün',
+        packageExpiryDays: 'Paket geçerlilik süresi (gün)',
+        receiptPrefix: 'Makbuz numarası öneki',
+        backupWarnDays: 'Yedekleme uyarısı eşiği (gün)',
+      },
+      hints: {
+        hours: 'Takvimin dikey aralığı bu iki saat arasıdır.',
+        slotMinutes: 'Takvimde sürükleme bu aralığa kilitlenir.',
+        sessionHorizonWeeks:
+          'Değişiklik ders üretimini etkiler; eksik dersler bir sonraki açılışta tamamlanır.',
+        excusedConsumes: 'Kapalıyken mazeretli devamsızlıkta ders hakkı düşmez.',
+        unexcusedConsumes: 'Açıkken mazeretsiz devamsızlık gelmiş ders sayılır.',
+        packageExpiryDays: 'Boş bırakılırsa paketler süresizdir.',
+        receiptPrefix: 'Makbuz numarasının başına eklenir, örnek: 2026-14.',
+        backupWarnDays: 'Bu kadar gün yedek alınmazsa Bugün ekranı uyarır.',
+      },
+      density: {
+        comfortable: 'Rahat',
+        compact: 'Sıkı',
+      },
+      on: 'Açık',
+      off: 'Kapalı',
     },
     subjects: {
       heading: 'Branşlar',
@@ -462,6 +550,7 @@ export const tr = {
       subject: 'Branş',
       subjectPlaceholder: 'Branş seçin',
       teacher: 'Öğretmen',
+      teacherPlaceholder: 'Öğretmen seçin',
       capacity: 'Kapasite',
       capacityHint: 'Hedef sayıdır; aşılabilir, aşınca onay istenir.',
       startsOn: 'Dönem başlangıcı',
@@ -649,6 +738,10 @@ export const tr = {
       groupPlaceholder: 'Grup seçin',
       student: 'Öğrenci',
       studentPlaceholder: 'Öğrenci seçin',
+      // ADR-037 — çakışma uyarısı bu alana bakıyor (PRD K-1).
+      teacher: 'Öğretmen',
+      teacherPlaceholder: 'Öğretmen seçin',
+      teacherHint: 'Boş bırakılırsa aynı saatteki dersler için uyarı verilmez.',
       date: 'Tarih',
       time: 'Saat',
       duration: 'Süre',

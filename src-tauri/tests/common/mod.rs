@@ -36,6 +36,24 @@ pub fn subject(conn: &Connection, name: &str) -> i64 {
     .expect("branş eklenmeli")
 }
 
+/// Ek öğretmen. Migration `id = 1`'i zaten yazıyor (§1.3); bu, ADR-037'nin ikinci
+/// ve sonraki satırları.
+pub fn teacher(conn: &Connection, name: &str) -> i64 {
+    repo::people::save_teacher(
+        conn,
+        &repo::people::TeacherInput {
+            id: None,
+            full_name: name.into(),
+            color: "#5f8f6b".into(),
+            phone: None,
+            email: None,
+            is_active: true,
+            sort_order: 0,
+        },
+    )
+    .expect("öğretmen eklenmeli")
+}
+
 pub fn student(conn: &Connection, name: &str) -> i64 {
     repo::people::insert_student(
         conn,
@@ -137,6 +155,62 @@ pub fn group_session(conn: &Connection, group_id: i64, subject_id: i64, day: &st
         },
     )
     .expect("seans eklenmeli")
+}
+
+/// 8 derslik, 2.000 ₺ paket — `VERI-MODELI.md §3`'ün senaryosu.
+pub fn package(conn: &Connection, student_id: i64) -> i64 {
+    repo::finance::insert_package(
+        conn,
+        &Package {
+            id: None,
+            student_id,
+            enrollment_id: None,
+            price_rule_id: None,
+            lesson_count: 8,
+            unit_price: 25000,
+            total_price: 200000,
+            sold_on: "2026-03-01".into(),
+            // S3 cevaplandı: paketler süresiz, `valid_until` yazılmıyor.
+            valid_until: None,
+            status: "active".into(),
+            created_at: None,
+            updated_at: None,
+            deleted_at: None,
+        },
+    )
+    .expect("paket eklenmeli")
+}
+
+/// Paket hakkının **başlık** satırı (ADR-036). Ters kayıtlar
+/// `repo::finance::insert_package_usage_reversal` ile yazılır — `delta`'yı çağıran
+/// belirlemez, hedeften okunur.
+pub fn consume(conn: &Connection, package_id: i64, attendance_id: Option<i64>, day: &str) -> i64 {
+    repo::finance::insert_package_usage(
+        conn,
+        &PackageUsage {
+            id: None,
+            package_id,
+            attendance_id,
+            used_on: day.into(),
+            delta: -1,
+            reason: "attendance".into(),
+            reverses_id: None,
+            memo: None,
+            created_at: None,
+            updated_at: None,
+            deleted_at: None,
+        },
+    )
+    .expect("hak düşümü yazılmalı")
+}
+
+/// Paketin kalan hakkı — `v_package_remaining` (ADR-036: parite view'ı YOK, toplam
+/// zincirin her uzunluğunda doğru).
+pub fn remaining(conn: &Connection, package_id: i64) -> i64 {
+    repo::views::package_remaining(conn, package_id)
+        .expect("kalan hak okunmalı")
+        .expect("paket bulunmalı")
+        .remaining
 }
 
 /// ADR-022'nin değişmezi (VERI-MODELI.md §6): **her** öğrenci için

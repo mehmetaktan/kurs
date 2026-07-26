@@ -28,6 +28,7 @@ import {
   ErrorState,
   LoadingState,
   Modal,
+  SearchSelect,
   Select,
   StatCard,
   StatStrip,
@@ -673,15 +674,17 @@ function AddMemberDialog({
         }
       >
         <div className={styles.formSection}>
-          <Select
+          {/* K1 — kursun BÜTÜN öğrencileri listeleniyor; yerel `<select>`te tek harf
+              atlamasından başka yol yoktu. Aranabilir seçim tam olarak bunun için. */}
+          <SearchSelect
             label={tr.groups.detail.members.picker.student}
-            value={studentId}
+            value={studentId === '' ? null : studentId}
             placeholder={tr.groups.detail.members.picker.studentPlaceholder}
             options={options.map((student) => ({
               value: String(student.id),
               label: student.fullName,
             }))}
-            onChange={(event) => setStudentId(event.target.value)}
+            onChange={(value) => setStudentId(value ?? '')}
           />
           <DatePicker
             label={tr.groups.detail.members.picker.startOn}

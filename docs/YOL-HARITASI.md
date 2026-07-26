@@ -13,7 +13,7 @@ açılmıyor (ADR-033).
 
 | Sıra | Faz | Komut | Ne çıkar |
 |---|---|---|---|
-| **1** | **Para** — fiyat tarifesi, paket/taksit, tahsilat, borçlu listesi, ekstre, makbuz PDF (eski 7 + 8) | `/faz-07` | Program ilk kez **para takip ediyor**. §0'da önce **öğretmen ve işletme ayarları** (ADR-037) |
+| **1** | **Para** — fiyat tarifesi, paket/taksit, tahsilat, borçlu listesi, ekstre, makbuz PDF (eski 7 + 8) · **sürüyor: §0 ✅ ve §4 ✅, sırada §1** | `/faz-07` | Program ilk kez **para takip ediyor**. §0'da önce **öğretmen ve işletme ayarları** (ADR-037) |
 | **2** | **Yoklama & Telafi** — yoklama girişi, devamsızlık, telafi dersi, **paket tüketiminin bağlanması** | `/faz-06` | Ders sonrası rutini kapanır; ADR-015'in ders hakkı sayacı ekrana bağlanır |
 | **3** | **Teslim** — özet ekranı (kırpılmış Faz 9), yedekleme, hata dayanıklılığı, kurulum, kılavuz | `/faz-10` | Kurs sahibinin kullandığı hâl |
 
@@ -21,6 +21,10 @@ açılmıyor (ADR-033).
 `/faz-07 §1` (öncesi §0 — öğretmenler, ayarlar, çakışma uyarısı, aranabilir seçim) ve
 `/faz-07 §5` (öncesi tarife + paket + tahakkuk, sonrası tahsilat + ekstre + makbuz).
 Aynı komutla devam edilir, arada denetim veya karar oturumu **yok**.
+
+> **Birinci oturum (2026-07-26) §0'ı bitirdi ve §4'ü öne aldı**: ADR-036'nın migration'ı,
+> yedi kanıt dizisi ve tüketim fonksiyonu (ADR-040) yazıldı. Sıradaki oturum §1'den
+> (fiyat tarifesi) devam eder; ikinci dikişe (§5) daha varılmadı.
 
 ### Sıra 1'in §0'ı neden var
 
@@ -54,8 +58,10 @@ fonksiyonunu yoklama kaydı çağıracak, imzası şimdi sabitleniyor.
 | 5B | Ders ekle/düzenle, seans işlemleri, Bugün ekranı (`/faz-05b`, denetim) | ADR-028, ADR-029 |
 | 5C-K | Takvim kütüphanesi ölçümü + para biçimleme (`/faz-05c-karar`, denetim) | ADR-031; ICU bağımsızlığı (`format.ts`) |
 | 5C | Takvim ekranı (`/faz-05c`) | ADR-032; **donduruldu — ADR-034** |
+| Para §0 | Öğretmenler, işletme ayarları, çakışma uyarısı, aranabilir seçim (`/faz-07`) | ADR-040, ADR-041; `DENETIM-FAZ1 > C5` kapandı |
+| Para §4 | `package_usage` ters kayıt zinciri + tüketim fonksiyonu (`/faz-07`) | `003_*.sql`; ADR-036'nın kanıt şartı yeşil |
 
-481 test (293 TypeScript + 188 Rust), `npm run check` yeşil, Windows `.msi` üretiliyor.
+536 test (320 TypeScript + 216 Rust), `npm run check` yeşil, Windows `.msi` üretiliyor.
 
 Ayrıntı git geçmişinde (`git log --oneline`) ve ADR'lerde; `docs/DURUM.md` yalnızca
 **son durumu** tutar, oturum arşivi değildir.

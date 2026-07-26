@@ -10,6 +10,27 @@ use crate::clock;
 use crate::error::{AppError, AppResult};
 use crate::model::Setting;
 
+/// `Tanımlar → Genel` ekranından yazılabilen anahtarlar (§1.2).
+///
+/// Tablodaki 14 satırın **üçü burada yok** ve bu bilinçli:
+/// - `institution_name` — okunmuyor, kurum adı `config/kurum.json`'dan geliyor (ADR-024).
+/// - `receipt_next_no` — makbuz sayacı; program artırır, kullanıcı değil.
+/// - `last_backup_at` — yedekleme kaydı; program yazar.
+pub const EDITABLE_KEYS: &[&str] = &[
+    "day_start",
+    "day_end",
+    "slot_minutes",
+    "default_session_minutes",
+    "session_horizon_weeks",
+    "weekly_closed_days",
+    "row_density",
+    "absence_excused_consumes_lesson",
+    "absence_unexcused_consumes_lesson",
+    "package_expiry_days",
+    "receipt_prefix",
+    "backup_warn_days",
+];
+
 pub fn get(conn: &Connection, key: &str) -> AppResult<Option<Setting>> {
     let mut stmt = conn.prepare(
         "SELECT key, value, created_at, updated_at, deleted_at \

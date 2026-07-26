@@ -16,6 +16,7 @@ use crate::model::{
     ClosedDay, Guardian, Setting, Student, StudentBalance, StudentDebt, StudyGroup, Subject,
     Teacher,
 };
+use crate::repo::people::TeacherInput;
 use crate::repo::roster::{StudentDetail, StudentInput, StudentQuery, StudentRow};
 use crate::repo::schedule::{
     ApplyTemplateReport, Capacity, ClosedDayInput, Conflict, DaySessionRow, DeleteReport,
@@ -252,11 +253,47 @@ pub fn default_session_minutes(
     state.with_conn(|conn| repo::schedule::default_minutes(conn, subject_id))
 }
 
-/// Öğretmen listesi. ADR-011 gereği tek satır olacak ama alan **gizlenmiyor**: yazan bir
-/// ekran olmazsa `teacher_id` 5 tabloda NULL kalır ve K-1 çakışma uyarısı ölü doğar.
+/// Öğretmen listesi — **pasifler dahil** (ADR-037). `is_active = 0` "artık ders
+/// vermiyor" demek; arşiv değil. Tanımlar ekranı hepsini gösterir, seçim kutuları
+/// pasifleri süzer. Sonuç **sırasızdır** (ADR-020).
 #[tauri::command]
 pub fn list_teachers(state: State<'_, AppState>) -> AppResult<Vec<Teacher>> {
     state.with_conn(repo::list_live::<Teacher>)
+}
+
+#[tauri::command]
+pub fn save_teacher(state: State<'_, AppState>, input: TeacherInput) -> AppResult<i64> {
+    state.with_conn(|conn| repo::people::save_teacher(conn, &input))
+}
+
+/// Soft delete — kullanıcıya "Arşivle" denir (ADR-005). Geçmiş dersler ve gruplar
+/// `teacher_id`'yi tutmaya devam eder; yalnızca listelerden kalkar.
+#[tauri::command]
+pub fn archive_teacher(state: State<'_, AppState>, teacher_id: i64) -> AppResult<bool> {
+    state.with_conn(|conn| repo::archive::<Teacher>(conn, teacher_id))
+}
+
+#[tauri::command]
+pub fn restore_teacher(state: State<'_, AppState>, teacher_id: i64) -> AppResult<bool> {
+    state.with_conn(|conn| repo::restore::<Teacher>(conn, teacher_id))
+}
+
+/// `Tanımlar → Genel` — işletme ayarlarını yazan tek kapı (ADR-037, E18).
+///
+/// **Anahtar beyaz listeden geçer.** `repo::setting::update_existing` zaten var olmayan
+/// anahtarı reddediyor, ama o kontrol tabloda ne varsa hepsine izin verir; oysa üç satır
+/// kullanıcının değil programın: `institution_name` okunmuyor (ADR-024),
+/// `receipt_next_no` makbuz sayacı, `last_backup_at` yedekleme kaydı. Ekrana çıkmayan
+/// bir anahtarı yazan komut bulunmasın diye liste burada.
+#[tauri::command]
+pub fn update_setting(state: State<'_, AppState>, key: String, value: String) -> AppResult<()> {
+    if !repo::setting::EDITABLE_KEYS.contains(&key.as_str()) {
+        return Err(crate::error::AppError::new(
+            "setting.key",
+            "Bu ayar bu ekrandan değiştirilemez.",
+        ));
+    }
+    state.with_conn(|conn| repo::setting::update_existing(conn, &key, &value))
 }
 
 // ---------------------------------------------------------------------------
@@ -342,17 +379,19 @@ pub fn end_group_membership(
 // Faz 5A — seans işlemleri
 // ---------------------------------------------------------------------------
 
-/// Çakışan derslerin listesi. **Uyarı içindir, engelleme değil** (K-1 / R3.11):
-/// kurs sahibi bilerek üst üste ders koyuyor olabilir. Boş liste "çakışma yok".
+/// **Aynı öğretmenin** çakışan dersleri. **Uyarı içindir, engelleme değil**
+/// (K-1 / R3.11): kurs sahibi bilerek üst üste ders koyuyor olabilir. Boş liste
+/// "çakışma yok"; `teacher_id` verilmezse de boş döner (ADR-037).
 #[tauri::command]
 pub fn session_conflicts(
     state: State<'_, AppState>,
     starts_at: String,
     ends_at: String,
     ignore_session_id: Option<i64>,
+    teacher_id: Option<i64>,
 ) -> AppResult<Vec<Conflict>> {
     state.with_conn(|conn| {
-        repo::schedule::detect_conflicts(conn, &starts_at, &ends_at, ignore_session_id)
+        repo::schedule::detect_conflicts(conn, &starts_at, &ends_at, ignore_session_id, teacher_id)
     })
 }
 

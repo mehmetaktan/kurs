@@ -1,0 +1,51 @@
+/*
+ * Aranabilir seçim (K1). Girdi stilini `Field.module.css`'ten alıyor — iki ayrı
+ * "girdi görünümü" doğmasın; buradaki sınıflar yalnızca açılır liste için.
+ */
+
+.wrap {
+  position: relative;
+}
+
+.list {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  z-index: var(--z-sticky);
+  width: 100%;
+  max-height: 280px;
+  padding: var(--space-1);
+  margin: 0;
+  overflow-y: auto;
+  list-style: none;
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-8);
+  box-shadow: var(--shadow-overlay);
+}
+
+.option {
+  padding: var(--space-2) var(--space-2-5);
+  overflow: hidden;
+  font-size: var(--font-size-body);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  border-radius: var(--radius-6);
+}
+
+/* Klavye imleci ve fare vurgusu AYNI sınıf: iki ayrı vurgu gösterilirse kullanıcı
+   `Enter`'ın hangisini seçeceğini bilemiyor. */
+.optionActive {
+  background: var(--color-surface-muted);
+}
+
+.optionSelected {
+  font-weight: var(--font-weight-semibold);
+}
+
+.empty {
+  padding: var(--space-2) var(--space-2-5);
+  font-size: var(--font-size-meta);
+  color: var(--color-text-muted);
+}

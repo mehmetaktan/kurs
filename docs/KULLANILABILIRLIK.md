@@ -11,12 +11,10 @@ tarifiyle değil. Yapılan madde silinmez, ✅ işaretlenir — hangi oturumda k
 > `docs/EKRANLAR.md` değil: envanterde her ekran bir satır, oysa burada satırlar
 > *"programı kullanamıyorum"* ile *"daha güzel görünürdü"* arasında ayrılır.
 
-## Sıradaki oturumda (`/faz-07 §0`)
+## Sıradaki oturumda
 
-| # | Madde | Kanıt / neden |
-|---|---|---|
-| K1 | **Seçim listelerinde arama.** `src/ui/Field.tsx:206 > Select` düpedüz yerel `<select>`; uzun listede tek harf atlamasından başka yolu yok. 6 ekranda kullanılıyor, en acısı öğrenci/grup seçimi | Ürün sahibi: *"ne selectbox'larda arama var ne kullanılabilirlik iyi"*. Para fazı zaten uzun öğrenci listesinden seçim yapacak (tahsilat), o yüzden §0. Komutta `§0e` |
-| K2 | **Kurs sahibi kendi öğretmenlerini ve çalışma düzenini programa giremiyor.** Öğretmenin adı migration'dan gelen `'Öğretmen'`; çalışma saatleri, ders süresi ve devamsızlık politikası sabit | Ürün sahibi: *"öğretmen tanımlamaları yok"*. **ADR-037**; komutta `§0a`–`§0d`. Kararı sahibi verdi: birden fazla öğretmen var |
+> Şu an açık madde yok. Ürün sahibinin yazacağı satırlar bir sonraki kod oturumunun
+> §0'ı olur.
 
 ## Ürün sahibinin ekleyeceği maddeler
 
@@ -27,6 +25,7 @@ tarifiyle değil. Yapılan madde silinmez, ✅ işaretlenir — hangi oturumda k
 
 ## Kapananlar
 
-| # | Madde | Nerede |
+| # | Madde | Nerede kapandı |
 |---|---|---|
-| — | (henüz yok) | |
+| K1 | **Seçim listelerinde arama.** `Select` düpedüz yerel `<select>`ti; uzun listede tek harf atlamasından başka yol yoktu | ✅ `/faz-07 §0e` (2026-07-26). `src/ui/SearchSelect.tsx` — yaz-filtrele, ok tuşları, `Enter`/`Esc`, **Türkçe eşleşme** (`normalizeTr`; `ingilizce` → `İngilizce`). 12 testi var. `SessionForm`'un öğrenci/grup alanı buna geçti; branş, öğretmen ve ödeme yöntemi gibi **kısa listeler `Select` kaldı** — orada yerel `<select>` doğru olan |
+| K2 | **Kurs sahibi kendi öğretmenlerini ve çalışma düzenini programa giremiyor.** Öğretmenin adı migration'dan gelen `'Öğretmen'`; çalışma saatleri, ders süresi ve devamsızlık politikası sabit | ✅ `/faz-07 §0a`–`§0d` (2026-07-26), **ADR-037**. `Tanımlar → Öğretmenler` (ekle/düzenle/arşivle, pasif ayrı), `Tanımlar → Genel` (11 işletme ayarı, ikisi para politikası), takvimde öğretmen filtre ekseni ve meta satırı (ADR-038), K-1 çakışma uyarısı `teacher_id`'ye daraldı (`DENETIM-FAZ1 > C5` kapandı) |

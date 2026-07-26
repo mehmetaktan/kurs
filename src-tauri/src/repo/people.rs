@@ -5,9 +5,10 @@
 //! olurdu ve bir ekranın unutması aramayı sessizce bozardı.
 
 use rusqlite::{params, Connection, Row};
+use serde::Deserialize;
 
 use crate::clock;
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use crate::model::{Guardian, Student, StudentGuardian, StudentNote, Teacher};
 use crate::repo::{last_id, Record};
 use crate::text;
@@ -71,6 +72,79 @@ pub fn update_teacher(conn: &Connection, id: i64, t: &Teacher) -> AppResult<()> 
         ],
     )?;
     Ok(())
+}
+
+/// `Tanımlar → Öğretmenler` formunun girdisi (ADR-037). `id` doluysa güncelleme.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TeacherInput {
+    #[serde(default)]
+    pub id: Option<i64>,
+    pub full_name: String,
+    pub color: String,
+    #[serde(default)]
+    pub phone: Option<String>,
+    #[serde(default)]
+    pub email: Option<String>,
+    /// Varsayılanı YOK: eksik gelirse serde hata verir. `#[serde(default)]` konsaydı
+    /// alanı unutan bir ekran öğretmeni sessizce pasife düşürürdü.
+    pub is_active: bool,
+    #[serde(default)]
+    pub sort_order: i64,
+}
+
+/// Öğretmen kaydeder (ADR-037 — ADR-011 düştü).
+///
+/// Adın tekilliği **şemada zorlanmıyor**: iki farklı kişi aynı adı taşıyabilir ve
+/// `teacher`da `search_name` sütunu yok (§1.3). Boş ad ise reddedilir — `full_name`
+/// grup listesinde ve ders bloğunda doğrudan gösteriliyor, boş satır orada
+/// "öğretmen atanmamış" ile karışırdı.
+pub fn save_teacher(conn: &Connection, input: &TeacherInput) -> AppResult<i64> {
+    let full_name = input.full_name.trim();
+    if full_name.is_empty() {
+        return Err(AppError::new(
+            "teacher.fullName",
+            "Öğretmen adı boş olamaz. Örnek: Ayşe Demir",
+        ));
+    }
+    let color = input.color.trim();
+    if color.is_empty() {
+        return Err(AppError::new(
+            "teacher.color",
+            "Öğretmen için bir renk seçin.",
+        ));
+    }
+
+    let teacher = Teacher {
+        id: input.id,
+        full_name: full_name.to_string(),
+        color: color.to_string(),
+        phone: blank_to_none(&input.phone),
+        email: blank_to_none(&input.email),
+        is_active: input.is_active,
+        sort_order: input.sort_order,
+        created_at: None,
+        updated_at: None,
+        deleted_at: None,
+    };
+
+    match input.id {
+        Some(id) => {
+            update_teacher(conn, id, &teacher)?;
+            Ok(id)
+        }
+        None => insert_teacher(conn, &teacher),
+    }
+}
+
+/// Boş metin `NULL`'a düşer — `''` ile `NULL` arasında ekranda hiçbir fark yok,
+/// sorguda var.
+fn blank_to_none(value: &Option<String>) -> Option<String> {
+    value
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(str::to_string)
 }
 
 // ---------------------------------------------------------------------------

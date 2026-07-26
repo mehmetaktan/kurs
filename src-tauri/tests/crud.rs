@@ -282,3 +282,134 @@ fn arsivlenen_ogrenci_grup_yoklama_listesinden_cikar() {
         -25000
     );
 }
+
+// ===========================================================================
+// Öğretmen ve işletme ayarları — ADR-037 (`/faz-07 §0a`, `§0c`)
+// ===========================================================================
+
+#[test]
+fn ogretmen_eklenir_duzenlenir_ve_arsivlenir() {
+    let conn = conn();
+    // Migration'ın başlangıç satırı (§1.3) burada, adı 'Öğretmen'.
+    let basta = repo::list_live::<Teacher>(&conn).unwrap();
+    assert_eq!(basta.len(), 1);
+    assert_eq!(basta[0].full_name, "Öğretmen");
+
+    // ADR-037'nin bütün mesele ettiği şey: kurs sahibi o adı düzeltebilmeli.
+    repo::people::save_teacher(
+        &conn,
+        &repo::people::TeacherInput {
+            id: basta[0].id,
+            full_name: "Ayşe Demir".into(),
+            color: "#5f8f6b".into(),
+            phone: Some("0532 111 22 33".into()),
+            email: None,
+            is_active: true,
+            sort_order: 0,
+        },
+    )
+    .unwrap();
+
+    let ikinci = teacher(&conn, "Veli Kaya");
+    let hepsi = repo::list_live::<Teacher>(&conn).unwrap();
+    assert_eq!(hepsi.len(), 2, "kurs çok öğretmenli (ADR-037)");
+    assert!(hepsi.iter().any(|t| t.full_name == "Ayşe Demir"));
+
+    repo::archive::<Teacher>(&conn, ikinci).unwrap();
+    let kalan = repo::list_live::<Teacher>(&conn).unwrap();
+    assert_eq!(kalan.len(), 1, "arşivlenen öğretmen canlı listeden çıkar");
+
+    repo::restore::<Teacher>(&conn, ikinci).unwrap();
+    assert_eq!(repo::list_live::<Teacher>(&conn).unwrap().len(), 2);
+}
+
+#[test]
+fn pasif_ogretmen_listede_kalir() {
+    let conn = conn();
+    let id = teacher(&conn, "Veli Kaya");
+    repo::people::save_teacher(
+        &conn,
+        &repo::people::TeacherInput {
+            id: Some(id),
+            full_name: "Veli Kaya".into(),
+            color: "#5f8f6b".into(),
+            phone: None,
+            email: None,
+            is_active: false,
+            sort_order: 0,
+        },
+    )
+    .unwrap();
+
+    // `is_active = 0` "artık ders vermiyor" demek, arşiv değil: Tanımlar ekranı
+    // onu göstermeye devam eder, yoksa kullanıcı geri açamaz.
+    let live = repo::list_live::<Teacher>(&conn).unwrap();
+    let veli = live
+        .iter()
+        .find(|t| t.id == Some(id))
+        .expect("listede kalmalı");
+    assert!(!veli.is_active);
+}
+
+#[test]
+fn ogretmen_adi_bos_birakilamaz() {
+    let conn = conn();
+    let err = repo::people::save_teacher(
+        &conn,
+        &repo::people::TeacherInput {
+            id: None,
+            full_name: "   ".into(),
+            color: "#5f8f6b".into(),
+            phone: None,
+            email: None,
+            is_active: true,
+            sort_order: 0,
+        },
+    )
+    .unwrap_err();
+
+    assert_eq!(err.code, "teacher.fullName");
+    assert_eq!(repo::list_live::<Teacher>(&conn).unwrap().len(), 1);
+}
+
+#[test]
+fn ayar_yazilir_ve_geri_okunur() {
+    let conn = conn();
+    repo::setting::update_existing(&conn, "day_start", "09:00").unwrap();
+    assert_eq!(
+        repo::setting::value(&conn, "day_start").unwrap().as_deref(),
+        Some("09:00")
+    );
+}
+
+#[test]
+fn olmayan_ayar_anahtari_reddedilir() {
+    let conn = conn();
+    // `set` yeni anahtar yaratırdı; `update_existing` yazım hatasını hata yapar —
+    // `Tanımlar → Genel` ekranı bu yüzden onu kullanıyor.
+    let err = repo::setting::update_existing(&conn, "day_startt", "09:00").unwrap_err();
+    assert_eq!(err.code, "setting_not_found");
+    assert!(repo::setting::value(&conn, "day_startt").unwrap().is_none());
+}
+
+#[test]
+fn duzenlenebilir_ayar_listesi_programin_kendi_satirlarini_disarida_birakir() {
+    // ADR-024: kurum adı `config/kurum.json`'dan geliyor, `setting`ten değil.
+    // Diğer ikisini program yazar: makbuz sayacı ve son yedekleme zamanı.
+    for key in ["institution_name", "receipt_next_no", "last_backup_at"] {
+        assert!(
+            !repo::setting::EDITABLE_KEYS.contains(&key),
+            "{key} kullanıcı ekranından yazılamamalı"
+        );
+    }
+
+    // Ve tabloda gerçekten var olan anahtarlar listeleniyor — yazım hatası
+    // ekranın hiç çalışmamasına yol açardı.
+    let conn = conn();
+    for key in repo::setting::EDITABLE_KEYS {
+        assert!(
+            repo::setting::get(&conn, key).unwrap().is_some(),
+            "{key} `001_initial.sql` başlangıç verisinde yok"
+        );
+    }
+}

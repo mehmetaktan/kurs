@@ -85,7 +85,7 @@ kilitli: `.npmrc`.** CI aynı dosyaları okur — yerelde çalışan sürüm CI'
 > Aynı sınıftan bir tuzak Node'da da var, o yüzden sürüm oraya da tam yazılır: her Node
 > yayını farklı bir npm getirir.
 
-## Klasör yapısı (Faz 5C)
+## Klasör yapısı (para fazı §0)
 
 ```
 kurs/
@@ -97,6 +97,8 @@ kurs/
 │   ├── i18n/tr.ts             BÜTÜN Türkçe metinler (ADR-007) — kurum adı BURADA DEĞİL
 │   ├── styles/                tokens.css (TEK kaynak) · base.css · density.css
 │   ├── ui/                    komponent kütüphanesi — ekranlar buradan alır
+│   │                          SearchSelect (uzun liste) ile Select (kısa liste)
+│   │                          YAN YANA durur — ADR-041, biri ötekini elemez
 │   ├── shell/                 AppShell · SidebarNav · PageHeader · GlobalSearch · routes.ts
 │   ├── pages/
 │   │   ├── bugun/             Faz 5B: TodayPage · today.ts (sıralama, "şimdi" çizgisi)
@@ -107,7 +109,8 @@ kurs/
 │   │   │                      calendarGrid.ts (geometri) · drag.ts (ADR-030) · filters.ts
 │   │   │                      DONDURULDU (ADR-034) — üstüne iş yazılmaz; değişim
 │   │   │                      gerekirse yalnızca bu klasör değişir, Rust yerinde kalır
-│   │   └── tanimlar/          Faz 5A: branşlar · tatil günleri · renk paleti
+│   │   └── tanimlar/          branşlar · tatil günleri · renk paleti (Faz 5A) ·
+│   │                          öğretmenler · genel ayarlar (para fazı §0, ADR-037)
 │   ├── dev/                   /dev/komponentler · /dev/durum — ÜRETİME GİRMEZ.
 │   │                          Metinleri KENDİ sözlüğünde (showcase.tr.ts · status.tr.ts):
 │   │                          tr.ts her ekrandan import ediliyor, oraya yazılan dize
@@ -118,6 +121,7 @@ kurs/
 │                              router.ts (ADR-023)
 └── src-tauri/
     ├── migrations/            şemanın tek kaynağı — sıralı, checksum'lı, elle düzeltilmez
+    │                          003: package_usage ters kayıt zinciri (ADR-036)
     ├── capabilities/          Tauri 2 yetki dosyaları
     ├── src/
     │   ├── lib.rs             AppState + Tauri kurulumu
@@ -138,6 +142,9 @@ kurs/
 
 Repository katmanı `search_name` ve `phone_digits`'i **kendisi üretir**; çağıran boş
 bırakır. `ledger_entry`'nin `update`/`archive` fonksiyonu **yoktur** — append-only (K5).
+**`package_usage` de öyle** (ADR-036): düzeltme ters kayıtla yazılır, satır arşivlenmez.
+Tüketim `repo/finance.rs > consume_package_credit` / `restore_package_credit` üzerinden;
+ikisi de **yön belirtir ve idempotenttir** (ADR-040) — Faz 6 yalnızca çağırır.
 
 `repo/people.rs` tabloların CRUD'u, `repo/roster.rs` **ekranın istediği birleşik satır**
 (bakiye, kalan ders, veli, işlenen ders). İkisi ayrı durur ki tablo katmanı ekrana

@@ -714,7 +714,10 @@ pub fn add_note(
         &StudentNote {
             id: None,
             student_id,
-            teacher_id: None, // ADR-011: tek öğretmen; yazar ayrımı v2'de
+            // Notun yazarı ayırt edilmiyor, hepsi "Ofis". Çok öğretmenlilikle anlam
+            // kazandı ama ADR-037'nin kapsamı dışında — `DURUM.md` borç tablosunda,
+            // Notlar sekmesiyle birlikte Faz 6'da.
+            teacher_id: None,
             body: body.to_string(),
             noted_on: noted_on.unwrap_or_else(clock::today_local_string),
             created_at: None,

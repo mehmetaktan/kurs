@@ -84,6 +84,21 @@ impl From<rusqlite::Error> for AppError {
                  Yanlışsa tahsilatı iptal edin; makbuz \"İPTAL\" damgalanır.",
             );
         }
+        // ADR-036 — `ledger_entry`'nin iki mührünün ders hakkı tarafındaki ikizi.
+        if text.contains("package_usage_is_immutable") {
+            return AppError::new(
+                "package_usage_immutable",
+                "Ders hakkı kaydı değiştirilemez ve silinemez. Yanlışsa yoklamayı \
+                 düzeltin — hak otomatik olarak geri verilir.",
+            );
+        }
+        if text.contains("pkgusage_reversal_mismatch") {
+            return AppError::new(
+                "pkgusage_reversal_mismatch",
+                "Ders hakkı düzeltmesi asıl kayıtla uyuşmuyor. İşlemi kapatıp yeniden \
+                 deneyin; sorun sürerse en son yedeği geri yükleyin.",
+            );
+        }
 
         // --- tekillik ihlalleri ---
         if text.contains("UNIQUE constraint failed") {
@@ -119,10 +134,19 @@ impl From<rusqlite::Error> for AppError {
                     "Bu kayıt daha önce iptal edilmiş. Listeyi yenileyin.",
                 );
             }
+            // `ux_pkgusage_head` (ADR-036) — bir yoklamanın en fazla BİR başlık satırı
+            // olur. Çift tık ikinci kez hak düşüremez; düzeltme zinciri bu indeksin
+            // dışında kalıyor (`reverses_id IS NULL` süzgeci).
             if text.contains("package_usage.attendance_id") {
                 return AppError::new(
                     "lesson_already_consumed",
                     "Bu ders için paket hakkı zaten düşülmüş. Listeyi yenileyin.",
+                );
+            }
+            if text.contains("package_usage.reverses_id") {
+                return AppError::new(
+                    "already_reversed",
+                    "Bu ders hakkı hareketi daha önce düzeltilmiş. Listeyi yenileyin.",
                 );
             }
             // Tekillik `search_name` üzerinde (K9): `Matematik` ile `matematik` aynı

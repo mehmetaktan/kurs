@@ -54,6 +54,7 @@ function row(over: Partial<DaySessionRow> & { id: number; startsAt: string }): D
     subjectName: 'Matematik',
     subjectColor: null,
     teacherId: 1,
+    teacherName: 'Ayşe Demir',
     studyGroupId: 1,
     studentId: null,
     title: 'Grup A',
@@ -326,7 +327,7 @@ describe('sürükleme — 5px eşiği ve kapsam sorusu', () => {
 })
 
 describe('gün görünümü', () => {
-  it('tek sütun çizer (ADR-011 — öğretmen sütunu yok)', async () => {
+  it('tek sütun çizer (ADR-038 — öğretmen sütunu yok)', async () => {
     api.fetchRangeSessions.mockResolvedValue([row({ id: 1, startsAt: '2026-07-22 16:00' })])
     draw()
     await waitFor(() => expect(blocks()).toHaveLength(1))
@@ -351,5 +352,82 @@ describe('ay görünümü', () => {
       expect(api.fetchRangeSessions).toHaveBeenLastCalledWith('2026-06-29', '2026-08-09'),
     )
     expect(screen.getByText('Temmuz 2026')).toBeTruthy()
+  })
+})
+
+// ADR-038 — dondurulmuş takvimin dar istisnası: öğretmen filtre ekseni ve meta satırı.
+describe('öğretmen ekseni', () => {
+  /**
+   * Çip ile ders bloğu ayrı ayrı sorulmalı: blok da öğretmenin adını yazıyor (meta
+   * satırı), ikisi de `button`. Ayıran şey `aria-pressed` — yalnızca çipte var.
+   */
+  const chip = (name: RegExp) =>
+    screen
+      .getAllByRole('button', { name })
+      .find((el) => el.hasAttribute('aria-pressed')) as HTMLElement
+
+  const iki = [
+    row({ id: 1, startsAt: '2026-07-22 16:00', teacherId: 1, teacherName: 'Ayşe Demir' }),
+    row({
+      id: 2,
+      startsAt: '2026-07-23 16:00',
+      teacherId: 2,
+      teacherName: 'Veli Kaya',
+      title: 'Grup B',
+    }),
+  ]
+
+  it('ders bloğunun meta satırında öğretmen adı yazar', async () => {
+    api.fetchRangeSessions.mockResolvedValue([row({ id: 1, startsAt: '2026-07-22 16:00' })])
+    draw()
+    await waitFor(() => expect(blocks()).toHaveLength(1))
+
+    expect(blocks()[0]!.textContent).toContain('Ayşe Demir')
+  })
+
+  it('birden fazla öğretmen varsa çip satırı çıkar ve süzer', async () => {
+    api.fetchRangeSessions.mockResolvedValue(iki)
+    draw()
+    await waitFor(() => expect(blocks()).toHaveLength(2))
+
+    fireEvent.click(chip(/Ayşe Demir/))
+    await waitFor(() => expect(blocks()).toHaveLength(1))
+    expect(blocks()[0]!.textContent).toContain('Grup A')
+  })
+
+  it('tek öğretmenli haftada çip satırı hiç çıkmaz', async () => {
+    api.fetchRangeSessions.mockResolvedValue([row({ id: 1, startsAt: '2026-07-22 16:00' })])
+    draw()
+    await waitFor(() => expect(blocks()).toHaveLength(1))
+
+    // Süzmeyecek bir çip satırı sadece yer kaplar.
+    expect(
+      screen.queryAllByRole('button', { name: /Ayşe Demir/ }).some((el) =>
+        el.hasAttribute('aria-pressed'),
+      ),
+    ).toBe(false)
+  })
+
+  it('branş ve öğretmen ekseni birlikte süzer', async () => {
+    api.fetchRangeSessions.mockResolvedValue([
+      ...iki,
+      row({
+        id: 3,
+        startsAt: '2026-07-24 16:00',
+        subjectId: 2,
+        subjectName: 'Fizik',
+        teacherId: 1,
+        teacherName: 'Ayşe Demir',
+        title: 'Grup C',
+      }),
+    ])
+    draw()
+    await waitFor(() => expect(blocks()).toHaveLength(3))
+
+    fireEvent.click(chip(/Ayşe Demir/))
+    await waitFor(() => expect(blocks()).toHaveLength(2))
+    fireEvent.click(chip(/Matematik/))
+    await waitFor(() => expect(blocks()).toHaveLength(1))
+    expect(blocks()[0]!.textContent).toContain('Grup A')
   })
 })

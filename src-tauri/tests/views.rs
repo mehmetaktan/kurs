@@ -299,6 +299,7 @@ fn kalan_ders_hakki_status_guncellenmese_de_dogru() {
                 used_on: format!("2026-03-{:02}", i + 2),
                 delta: -1,
                 reason: "attendance".into(),
+                reverses_id: None,
                 memo: None,
                 created_at: None,
                 updated_at: None,
@@ -379,23 +380,35 @@ fn paket_hakki_iadesi_delta_arti_bir_ile_yazilir() {
     )
     .unwrap();
 
-    let usage = |delta: i64, reason: &str, day: &str| PackageUsage {
-        id: None,
-        package_id,
-        attendance_id: None,
-        used_on: day.into(),
-        delta,
-        reason: reason.into(),
-        memo: None,
-        created_at: None,
-        updated_at: None,
-        deleted_at: None,
-    };
+    let head = repo::finance::insert_package_usage(
+        &conn,
+        &PackageUsage {
+            id: None,
+            package_id,
+            attendance_id: None,
+            used_on: "2026-03-02".into(),
+            delta: -1,
+            reason: "attendance".into(),
+            reverses_id: None,
+            memo: None,
+            created_at: None,
+            updated_at: None,
+            deleted_at: None,
+        },
+    )
+    .unwrap();
 
-    repo::finance::insert_package_usage(&conn, &usage(-1, "attendance", "2026-03-02")).unwrap();
     // Seans iptal edildi: satır SİLİNMEZ, iade satırı yazılır (§1.12 / §4).
-    repo::finance::insert_package_usage(&conn, &usage(1, "cancellation_restore", "2026-03-03"))
-        .unwrap();
+    // ADR-036'dan sonra iade bir **ters kayıt**: `delta` çağırandan değil hedeften
+    // türetiliyor ve `trg_pkgusage_reversal_valid` bunu zorluyor.
+    repo::finance::insert_package_usage_reversal(
+        &conn,
+        head,
+        "2026-03-03",
+        "cancellation_restore",
+        None,
+    )
+    .unwrap();
 
     assert_eq!(
         repo::views::package_remaining(&conn, package_id)

@@ -41,6 +41,7 @@ const ROW: DaySessionRow = {
   subjectName: 'Matematik',
   subjectColor: null,
   teacherId: 1,
+  teacherName: 'Ayşe Demir',
   studyGroupId: 1,
   studentId: null,
   title: 'Grup A',
@@ -81,7 +82,11 @@ describe('SessionForm — çakışma uyarısı', () => {
     )
     await screen.findByLabelText('Grup')
 
-    fireEvent.change(screen.getByLabelText('Grup'), { target: { value: '1' } })
+    // K1 — grup/öğrenci alanı artık aranabilir seçim: odaklan, seçeneği tıkla.
+    fireEvent.focus(screen.getByLabelText('Grup'))
+    fireEvent.mouseDown(screen.getByText('Grup A'))
+    // ADR-037 — çakışma uyarısı öğretmene bakıyor; alan otomatik dolmuyor.
+    fireEvent.change(screen.getByLabelText('Öğretmen'), { target: { value: '1' } })
     const time = screen.getByLabelText('Saat')
     fireEvent.change(time, { target: { value: '16:00' } })
     fireEvent.blur(time)
@@ -131,6 +136,46 @@ describe('SessionForm — çakışma uyarısı', () => {
 
     await waitFor(() => expect(api.saveSession).toHaveBeenCalledTimes(1))
     expect(screen.queryByText('Bu saatte başka bir ders var')).toBeNull()
+  })
+
+  it('uyarı öğretmene bağlı sorulur — ADR-037 / DENETIM-FAZ1 > C5', async () => {
+    await fillAndSave()
+
+    await waitFor(() => expect(api.fetchSessionConflicts).toHaveBeenCalled())
+    // Dördüncü argüman `teacherId`: uyarının "aynı öğretmen aynı saatte" olması
+    // buna bağlı. Bu satır olmadan kural PRD K-1'i değil "aynı saatte iki ders"i
+    // sorardı — üç faz boyunca öyleydi.
+    expect(api.fetchSessionConflicts).toHaveBeenLastCalledWith(
+      '2026-07-27 16:00',
+      '2026-07-27 17:00',
+      null,
+      1,
+    )
+  })
+
+  it('öğretmen seçilmemişse çakışma hiç sorulmaz', async () => {
+    render(<SessionForm open today={TODAY} onClose={() => {}} onSaved={() => {}} />)
+    await screen.findByLabelText('Grup')
+
+    fireEvent.focus(screen.getByLabelText('Grup'))
+    fireEvent.mouseDown(screen.getByText('Grup A'))
+    const time = screen.getByLabelText('Saat')
+    fireEvent.change(time, { target: { value: '16:00' } })
+    fireEvent.blur(time)
+    await waitFor(() =>
+      expect((screen.getByLabelText(/Süre/) as HTMLInputElement).value).toBe('60'),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }))
+
+    await waitFor(() => expect(api.saveSession).toHaveBeenCalledTimes(1))
+    // Sorulsa da boş dönerdi (Rust `teacher_id` yoksa boş liste veriyor), ama
+    // sormamak niyeti ekranda da görünür kılıyor.
+    expect(api.fetchSessionConflicts).toHaveBeenLastCalledWith(
+      '2026-07-27 16:00',
+      '2026-07-27 17:00',
+      null,
+      null,
+    )
   })
 })
 

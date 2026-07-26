@@ -26,7 +26,13 @@ import { SessionActions, type SessionAction } from '../dersler/SessionActions'
 import { SessionForm } from '../dersler/SessionForm'
 import { TemplateModal } from '../dersler/TemplateModal'
 import { addDays, shiftMonth, weekDays, weekStart } from './calendarGrid'
-import { allDaysClosed, filterBySubjects, subjectChips } from './filters'
+import {
+  allDaysClosed,
+  filterBySubjects,
+  filterByTeachers,
+  subjectChips,
+  teacherChips,
+} from './filters'
 import { MonthGrid } from './MonthGrid'
 import { MoveDialog, type PendingMove } from './MoveDialog'
 import { WeekGrid } from './WeekGrid'
@@ -37,8 +43,9 @@ type CalendarView = 'month' | 'week' | 'day'
 /**
  * Takvim ekranı — `EKRANLAR §2`, `ADR-031` (ızgara elde yazıldı).
  *
- * **Öğretmen filtresi yok** (ADR-011: tek öğretmen); tek eksen branş. Gün görünümü de
- * tek sütun — tasarımda öğretmen başına sütun açıyordu.
+ * **İki filtre ekseni: branş ve öğretmen** (ADR-038 — kurs çok öğretmenli, ADR-037).
+ * **Gün görünümü tek sütun kalır**; tasarımın öğretmen-başına-sütun düzeni ADR-034'ün
+ * dondurmasının içinde ve kurulmuyor.
  *
  * "Şimdi" tek kaynaktan geliyor (`local_now`, ADR-029): başlık, "şimdi" çizgisi ve
  * açılış kaydırması aynı damgayı okuyor. Ekran hiçbir yerde `new Date()` çağırmıyor.
@@ -53,6 +60,7 @@ export function CalendarPage() {
   const [hasSchedule, setHasSchedule] = useState(true)
   const [error, setError] = useState<AppError | null>(null)
   const [subjects, setSubjects] = useState<ReadonlySet<number>>(new Set())
+  const [teachers, setTeachers] = useState<ReadonlySet<number>>(new Set())
 
   const [formOpen, setFormOpen] = useState(false)
   const [templateOpen, setTemplateOpen] = useState(false)
@@ -96,7 +104,13 @@ export function CalendarPage() {
   }, [load])
 
   const chips = useMemo(() => subjectChips(rows ?? []), [rows])
-  const visible = useMemo(() => filterBySubjects(rows ?? [], subjects), [rows, subjects])
+  // Öğretmen çipleri **süzülmemiş** listeden: branş seçilince öğretmen sayıları da
+  // düşseydi kullanıcı iki eksenin hangisini daralttığını takip edemezdi.
+  const teacherRow = useMemo(() => teacherChips(rows ?? []), [rows])
+  const visible = useMemo(
+    () => filterByTeachers(filterBySubjects(rows ?? [], subjects), teachers),
+    [rows, subjects, teachers],
+  )
 
   const refresh = () => {
     setFormOpen(false)
@@ -229,6 +243,22 @@ export function CalendarPage() {
                 count={chip.count}
                 active={subjects.has(chip.id)}
                 onClick={() => setSubjects(toggle(subjects, chip.id))}
+              />
+            ))}
+          </ChipRow>
+        )}
+
+        {/* İkinci eksen yalnızca birden fazla öğretmen görünürken çıkar: tek
+            öğretmenli bir haftada çip satırı hiçbir şeyi süzmez, sadece yer kaplar. */}
+        {teacherRow.length > 1 && (
+          <ChipRow>
+            {teacherRow.map((chip) => (
+              <FilterChip
+                key={chip.id}
+                label={chip.name}
+                count={chip.count}
+                active={teachers.has(chip.id)}
+                onClick={() => setTeachers(toggle(teachers, chip.id))}
               />
             ))}
           </ChipRow>

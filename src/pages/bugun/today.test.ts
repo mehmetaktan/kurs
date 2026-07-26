@@ -23,6 +23,7 @@ function row(id: number, startsAt: string, endsAt: string, extra: Partial<DaySes
     subjectName: 'Matematik',
     subjectColor: null,
     teacherId: 1,
+    teacherName: 'Ayşe Demir',
     studyGroupId: 1,
     studentId: null,
     title: 'Grup A',

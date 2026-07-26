@@ -354,15 +354,18 @@ pub struct Conflict {
     pub label: String,
 }
 
-/// Verilen aralıkla çakışan canlı seanslar.
+/// Verilen aralıkta **aynı öğretmenin** başka dersi var mı (PRD K-1).
 ///
 /// **Bitişik ders çakışmaz**: karşılaştırma `<` ve `>` ile kurulu, `<=` ile değil.
 /// 16:00–17:00 ile 17:00–18:00 arka arkaya iki derstir; bunu çakışma saymak uyarıyı
 /// gürültüye çevirir ve kullanıcı bir süre sonra hepsini onaylamaya başlar.
 ///
-/// **Öğretmen süzgeci yok** çünkü ADR-011 tek öğretmen diyor: bu kurulumda üst üste gelen
-/// her ders zaten aynı öğretmenin. İkinci öğretmen eklendiğinde buraya `teacher_id`
-/// koşulu girer; sorgunun geri kalanı aynı kalır.
+/// **Öğretmen süzgeci ADR-037 ile geldi** (`DENETIM-FAZ1 > C5`). Kural "aynı saatte iki
+/// ders" değil, PRD K-1'in yazdığı gibi *"aynı öğretmen aynı saatte iki derste"*: kursta
+/// birden fazla öğretmen var, farklı öğretmenlerin aynı saate düşen dersleri normal.
+/// Öğretmensiz seans (`teacher_id IS NULL`) **hiç uyarı üretmez** — kimin çakıştığını
+/// söyleyemeyen bir uyarı kullanıcıya "bir şey yanlış" demekten öteye geçmez, ve
+/// öğretmeni atanmamış iki ders birbirinin dersi olmak zorunda değil.
 ///
 /// İptal edilmiş seans çakışma saymaz — o saatte ders yok.
 pub fn detect_conflicts(
@@ -370,7 +373,12 @@ pub fn detect_conflicts(
     starts_at: &str,
     ends_at: &str,
     ignore_session_id: Option<i64>,
+    teacher_id: Option<i64>,
 ) -> AppResult<Vec<Conflict>> {
+    let Some(teacher_id) = teacher_id else {
+        return Ok(Vec::new());
+    };
+
     let mut stmt = conn.prepare(
         "SELECT s.id, s.starts_at, s.ends_at, sub.name, g.name, st.full_name \
          FROM session s \
@@ -380,25 +388,29 @@ pub fn detect_conflicts(
          WHERE s.deleted_at IS NULL \
            AND s.status <> 'cancelled' \
            AND s.id IS NOT ?3 \
+           AND s.teacher_id = ?4 \
            AND s.starts_at < ?2 AND s.ends_at > ?1 \
          ORDER BY s.starts_at",
     )?;
-    let rows = stmt.query_map(params![starts_at, ends_at, ignore_session_id], |row| {
-        let subject: String = row.get(3)?;
-        let group: Option<String> = row.get(4)?;
-        let student: Option<String> = row.get(5)?;
-        let who = group.or(student).unwrap_or_default();
-        Ok(Conflict {
-            session_id: row.get(0)?,
-            starts_at: row.get(1)?,
-            ends_at: row.get(2)?,
-            label: if who.is_empty() {
-                subject
-            } else {
-                format!("{subject} · {who}")
-            },
-        })
-    })?;
+    let rows = stmt.query_map(
+        params![starts_at, ends_at, ignore_session_id, teacher_id],
+        |row| {
+            let subject: String = row.get(3)?;
+            let group: Option<String> = row.get(4)?;
+            let student: Option<String> = row.get(5)?;
+            let who = group.or(student).unwrap_or_default();
+            Ok(Conflict {
+                session_id: row.get(0)?,
+                starts_at: row.get(1)?,
+                ends_at: row.get(2)?,
+                label: if who.is_empty() {
+                    subject
+                } else {
+                    format!("{subject} · {who}")
+                },
+            })
+        },
+    )?;
 
     let mut out = Vec::new();
     for row in rows {
@@ -731,6 +743,9 @@ pub struct DaySessionRow {
     pub subject_name: String,
     pub subject_color: Option<String>,
     pub teacher_id: Option<i64>,
+    /// Ders bloğunun meta satırında yazan ad (ADR-038). **Arşivlenmiş öğretmenin adı da
+    /// gelir**: geçmiş ders o kişiye ait ve `—` göstermek bilgi siler.
+    pub teacher_name: Option<String>,
     pub study_group_id: Option<i64>,
     pub student_id: Option<i64>,
     /// Grubun ya da öğrencinin adı — satırın ikinci satırında yazan şey.
@@ -783,7 +798,7 @@ pub fn session_rows_between(
 ) -> AppResult<Vec<DaySessionRow>> {
     let mut stmt = conn.prepare(
         "SELECT s.id, s.series_id, s.starts_at, s.ends_at, s.kind, \
-                s.subject_id, sub.name, sub.color, s.teacher_id, \
+                s.subject_id, sub.name, sub.color, s.teacher_id, t.full_name, \
                 s.study_group_id, s.student_id, \
                 COALESCE(g.name, st.full_name, sub.name), \
                 s.status, s.attendance_taken_at IS NOT NULL, \
@@ -797,6 +812,7 @@ pub fn session_rows_between(
                 s.is_makeup, s.cancel_reason \
          FROM session s \
          JOIN subject sub ON sub.id = s.subject_id \
+         LEFT JOIN teacher t ON t.id = s.teacher_id \
          LEFT JOIN study_group g ON g.id = s.study_group_id \
          LEFT JOIN student st ON st.id = s.student_id \
          LEFT JOIN ( SELECT session_id, \
@@ -820,16 +836,17 @@ pub fn session_rows_between(
             subject_name: row.get(6)?,
             subject_color: row.get(7)?,
             teacher_id: row.get(8)?,
-            study_group_id: row.get(9)?,
-            student_id: row.get(10)?,
-            title: row.get(11)?,
-            status: row.get(12)?,
-            attendance_taken: row.get(13)?,
-            student_count: row.get(14)?,
-            present_count: row.get(15)?,
-            marked_count: row.get(16)?,
-            is_makeup: row.get(17)?,
-            cancel_reason: row.get(18)?,
+            teacher_name: row.get(9)?,
+            study_group_id: row.get(10)?,
+            student_id: row.get(11)?,
+            title: row.get(12)?,
+            status: row.get(13)?,
+            attendance_taken: row.get(14)?,
+            student_count: row.get(15)?,
+            present_count: row.get(16)?,
+            marked_count: row.get(17)?,
+            is_makeup: row.get(18)?,
+            cancel_reason: row.get(19)?,
         })
     })?;
 

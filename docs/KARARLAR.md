@@ -1242,3 +1242,74 @@ okunur), **plan kaynağı** olmaktan çıkar. Sıralamanın kaynağı `docs/YOL-
 
 **Durum.** Kabul edildi (2026-07-26, ürün sahibinin *"sanki sen yönetmeden çok tema
 yönetiyorsun"* itirazı üzerine). ADR-033'ün süreç ailesindendir.
+
+---
+
+## ADR-040 — Paket tüketimi: en eski aktif paketten, ve fonksiyon "yön" belirtir
+
+**Karar.** İki parça, ikisi de `repo::finance` içinde ve testli:
+
+1. **Hangi paketten düşülür:** aynı öğrencide birden fazla aktif paket varsa **en eskisi**
+   (`sold_on`, eşitlikte `id`) — R5.12. "Aktif paket" bir sorgudur, bir sütun değildir:
+   `remaining > 0 AND (valid_until IS NULL OR valid_until >= :today)`. `status` yalnızca
+   `'cancelled'` için bağlayıcı (`VERI-MODELI §1.23`). Kullanılabilir paket yoksa
+   **hata döner** — sessizce geçmek dersi bedavaya getirirdi: ne hak düşer, ne borç yazılır.
+
+2. **Fonksiyon ne vaat eder:** `consume_package_credit(attendance_id, today)` "bir satır
+   ekle" demez, ***"bu yoklamanın hakkı düşmüş olsun"*** der. Eşi
+   `restore_package_credit(attendance_id)` bunun tersini vaat eder. İkisi de **idempotent**
+   ve zincirin ucuna bakarak karar verir:
+
+   | Zincirin ucu | `consume` | `restore` |
+   |---|---|---|
+   | yok | başlık satırı (`−1`) | hiçbir şey |
+   | `−1` (düşmüş) | hiçbir şey | ters kayıt (`+1`) |
+   | `+1` (iade edilmiş) | ters kayıt (`−1`) | hiçbir şey |
+
+**Gerekçe.** İmza `/faz-06`'nın yoklama ekranı için **şimdi** sabitleniyor; ekran yalnızca
+çağıracak. Fonksiyon "satır ekle" sözleşmesi verseydi *hangi* satırın yazılacağını ekran
+hesaplardı — yoklamayı ikinci kez değiştiren kullanıcı (`Geldi → Mazeretli → Geldi`,
+`VERI-MODELI §4`) için bu, aynı zincir mantığının ikinci bir kopyası demek. Yön belirten
+sözleşme ayrıca çift tıkı ve "iki kez iptal" durumunu şemaya değil **anlama** dayanarak
+kapatıyor: `ux_pkgusage_head` zaten ikinci başlığı reddediyor, ama hata göstermek yerine
+hiçbir şey yapmamak doğru davranış — kullanıcı bir şeyi yanlış yapmadı.
+
+FIFO'nun gerekçesi ayrı: paket **satın alma sırasıyla** tükenmezse eski paket kullanılmadan
+kalır ve `package_expiry_days` girildiği gün (S3 şu an süresiz diyor, ama alan duruyor)
+kullanıcı parasını ödediği hakkı kaybeder.
+
+**Sonuç.** `repo::finance::consume_package_credit` / `restore_package_credit`;
+`oldest_active_package` FIFO'yu tek yerde tutuyor. `/faz-06` bunları **çağırır**, mantığı
+tekrar yazmaz. Ekran bağlantısı ve düğme bu fazda yapılmadı — Faz 5B'nin "çalışmayan düğme
+koymaktansa durumu yaz" kararının aynısı.
+
+**Durum.** Kabul edildi (2026-07-26, `/faz-07 §2` ve `§4`). ADR-036'nın üstüne oturuyor:
+zincir modeli olmadan bu sözleşme yazılamazdı.
+
+---
+
+## ADR-041 — Aranabilir seçim yerel `<select>`in yerine geçmez, yanına gelir
+
+**Karar.** `src/ui/SearchSelect.tsx` eklendi; `Select` **olduğu gibi kaldı**. Hangisinin
+kullanılacağı listenin uzunluğuna göre belirlenir, ekranın modasına göre değil:
+
+| Liste | Komponent | Örnek |
+|---|---|---|
+| Kullanıcının **yazdığı** kayıtlar — sayısı zamanla büyür | `SearchSelect` | öğrenci, grup, (para fazında) borçlu seçimi |
+| Sabit ya da elle sayılabilir küçük küme | `Select` | branş, öğretmen, ödeme yöntemi, satır yoğunluğu |
+
+Eşleşme **`lib/format.ts > normalizeTr`** ile yapılır; `toLocale*` yasak (ADR-030'un ICU
+satırı). `ingilizce` yazınca `İngilizce` bulunur.
+
+**Gerekçe.** K1 ürün sahibinin şikâyetiydi (*"ne selectbox'larda arama var"*) ve haklıydı —
+ama "hepsini değiştir" yanlış cevap. Yerel `<select>` klavye, dokunmatik ve ekran okuyucu
+davranışını **işletim sisteminden** alıyor; beş seçenekli bir alanda onu elde yazılmış bir
+listbox'la değiştirmek, kazanç olmadan üç davranışı birden bize devrediyor. Windows'a
+teslim ettiğimiz ve tek gerçek Windows kanıtının bir test listesi olduğu bir projede bu
+kötü bir takas.
+
+**Sonuç.** Yeni ekranlar bu tabloya bakar. Para fazının tahsilat ekranı `SearchSelect`
+kullanır (uzun öğrenci listesi), ödeme yöntemi `Select` kalır. Komponentin 12 testi var:
+süzme, Türkçe eşleşme, klavye gezinmesi, `Esc` davranışı.
+
+**Durum.** Kabul edildi (2026-07-26, `/faz-07 §0e`). `KULLANILABILIRLIK.md > K1` kapandı.

@@ -6,6 +6,19 @@ description: Faz Para — fiyat tarifesi, paket, tahsilat, ekstre ve makbuz (esk
 
 > **Bu faz eski Faz 7 ile Faz 8'in birleşimidir** (2026-07-26, ürün sahibinin kararı).
 > `/faz-08` komutu buraya katıldı. **Sıradaki iş bu.**
+>
+> ### ✅ Birinci oturumda biten (2026-07-26) — tekrar yapma
+>
+> - **§0 tamamen** (0a–0e). `KULLANILABILIRLIK.md` K1 ve K2 kapandı,
+>   `DENETIM-FAZ1 > C5` kapandı, ADR-011 atıfları temizlendi. Yeni: **ADR-041**
+>   (aranabilir seçim `Select`in yerine geçmez, yanına gelir).
+> - **§4 tamamen.** `003_package_usage_reversal_chain.sql` yazıldı ve uygulandı;
+>   ADR-036'nın **yedi kanıt dizisi yeşil**; `consume_package_credit` /
+>   `restore_package_credit` yazıldı ve testlendi (**ADR-040** — en eski aktif paket +
+>   yön belirten idempotent sözleşme). Ekran bağlantısı bilerek yok, Faz 6'da.
+>
+> **Sıradaki oturum §1'den (fiyat tarifesi) başlar.** İkinci dikişe (§5) varılmadı;
+> 536 test yeşil (320 TypeScript + 216 Rust).
 
 Önce oku: `CLAUDE.md`, `docs/DURUM.md`, `docs/VERI-MODELI.md` (**§3 ve §4 satır satır**),
 `docs/PRD.md`, `docs/KARARLAR.md` — özellikle ADR-003, ADR-004, ADR-006, **ADR-014**,

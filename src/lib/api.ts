@@ -334,12 +334,58 @@ export interface Teacher {
   id: number
   fullName: string
   color: string
+  phone: string | null
+  email: string | null
+  /** `false` = "artık ders vermiyor". Arşiv değil — arşivlenmiş öğretmen hiç gelmez. */
   isActive: boolean
+  sortOrder: number
 }
 
-/** ADR-011: tek öğretmen. Alan yine de yazılır, yoksa K-1 uyarısı ölü doğar. */
+export interface TeacherInput {
+  id: number | null
+  fullName: string
+  color: string
+  phone: string | null
+  email: string | null
+  isActive: boolean
+  sortOrder: number
+}
+
+/**
+ * Öğretmenler — **pasifler dahil**, arşivlenmişler hariç. Sırasız (ADR-020).
+ *
+ * Kurs çok öğretmenli (ADR-037). Seçim kutuları pasifleri süzer; `Tanımlar →
+ * Öğretmenler` hepsini gösterir, yoksa pasife alınan öğretmen geri açılamaz.
+ */
 export function fetchTeachers(): Promise<Teacher[]> {
   return call<Teacher[]>('list_teachers')
+}
+
+export function saveTeacher(input: TeacherInput): Promise<number> {
+  return call<number>('save_teacher', { input })
+}
+
+export function archiveTeacher(teacherId: number): Promise<boolean> {
+  return call<boolean>('archive_teacher', { teacherId })
+}
+
+/** §1.2 `setting` — anahtar/değer. Ekran yalnızca `EDITABLE_KEYS`'i gösterir. */
+export interface Setting {
+  key: string
+  value: string
+}
+
+export function fetchSettings(): Promise<Setting[]> {
+  return call<Setting[]>('list_settings')
+}
+
+/**
+ * `Tanımlar → Genel` — anahtar Rust'ta beyaz listeden geçer (`EDITABLE_KEYS`).
+ * Ekrana çıkmayan üç satır (`institution_name`, `receipt_next_no`, `last_backup_at`)
+ * buradan da yazılamaz.
+ */
+export function updateSetting(key: string, value: string): Promise<void> {
+  return call<void>('update_setting', { key, value })
 }
 
 /** Haftalık programın bir satırı: "Salı 16:00 · 60 dk". */
@@ -494,13 +540,26 @@ export interface Conflict {
   label: string
 }
 
-/** Çakışma **uyarıdır, engel değil** (K-1 / R3.11). Boş dizi "çakışma yok". */
+/**
+ * **Aynı öğretmenin** çakışan dersleri (PRD K-1). Uyarıdır, engel değil (R3.11);
+ * boş dizi "çakışma yok".
+ *
+ * `teacherId` boşsa boş dizi döner (ADR-037): farklı öğretmenlerin aynı saate düşen
+ * dersleri çakışma değil, ve kimin çakıştığını söyleyemeyen uyarı kullanıcıya hiçbir
+ * şey anlatmıyor.
+ */
 export function fetchSessionConflicts(
   startsAt: string,
   endsAt: string,
   ignoreSessionId: number | null = null,
+  teacherId: number | null = null,
 ): Promise<Conflict[]> {
-  return call<Conflict[]>('session_conflicts', { startsAt, endsAt, ignoreSessionId })
+  return call<Conflict[]>('session_conflicts', {
+    startsAt,
+    endsAt,
+    ignoreSessionId,
+    teacherId,
+  })
 }
 
 /** Kapsam: en dar olan varsayılan. `only` şablona bağlı dersi **iptal eder**, silmez. */
@@ -577,6 +636,8 @@ export interface DaySessionRow {
   subjectName: string
   subjectColor: string | null
   teacherId: number | null
+  /** Ders bloğunun meta satırındaki ad (ADR-038). Arşivlenmiş öğretmenin adı da gelir. */
+  teacherName: string | null
   studyGroupId: number | null
   studentId: number | null
   /** Grubun ya da öğrencinin adı. */

@@ -84,9 +84,10 @@ export function GroupForm({ open, groupId, onClose, onSaved }: Props) {
       if (groupId === null) {
         setDraft({
           ...EMPTY,
-          // Tek öğretmen varsa alan ONUN üzerine gelir (ADR-011). Gizlenmiyor: yazan
-          // bir ekran olmazsa `teacher_id` NULL kalır ve K-1 çakışma uyarısı ölü doğar.
-          teacherId: nextTeachers.length === 1 ? String(nextTeachers[0]!.id) : '',
+          // ADR-037: öğretmen **gerçek bir seçim**, otomatik doldurulmuyor. Tek adayı
+          // seçen satır, ikinci öğretmen eklendiğinde bütün grupları sessizce
+          // birincisine yazardı.
+          teacherId: '',
           subjectId: nextSubjects.length === 1 ? String(nextSubjects[0]!.id) : '',
         })
       } else {
@@ -217,10 +218,19 @@ export function GroupForm({ open, groupId, onClose, onSaved }: Props) {
             onChange={(event) => setDraft({ ...draft, subjectId: event.target.value })}
           />
 
+          {/* Kısa liste — yerel `<select>` doğru olan (K1 aranabilir seçimi uzun
+              listeler için). Pasif öğretmen yeni gruba atanmaz; düzenlenen grubun
+              öğretmeni pasife alınmışsa listede kalır. */}
           <Select
             label={tr.groups.form.teacher}
+            placeholder={tr.groups.form.teacherPlaceholder}
             value={draft.teacherId}
-            options={teachers.map((teacher) => ({
+            options={sortTrBy(
+              teachers.filter(
+                (teacher) => teacher.isActive || String(teacher.id) === draft.teacherId,
+              ),
+              (teacher) => teacher.fullName,
+            ).map((teacher) => ({
               value: String(teacher.id),
               label: teacher.fullName,
             }))}

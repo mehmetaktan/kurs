@@ -41,6 +41,10 @@ export type {
 export { DatePicker, TimePicker } from './Picker'
 export type { DatePickerProps, TimePickerProps } from './Picker'
 
+// Uzun listeler için (K1). Kısa listelerde `Select` doğru olan — ikisi yan yana durur.
+export { SearchSelect } from './SearchSelect'
+export type { SearchSelectProps } from './SearchSelect'
+
 export { Table } from './Table'
 export type { Column, TableProps } from './Table'
 

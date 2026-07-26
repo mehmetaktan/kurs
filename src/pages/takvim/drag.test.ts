@@ -108,7 +108,7 @@ describe('sütun değişimi', () => {
     expect(sag.kind === 'move' && sag.dayIndex).toBe(6)
   })
 
-  it('gün görünümünde tek sütun var, yatay hareket etkisiz (ADR-011)', () => {
+  it('gün görünümünde tek sütun var, yatay hareket etkisiz (ADR-038)', () => {
     const out = dragOutcome(500, 0, { ...ORIGIN, dayIndex: 0 }, { ...GEO, dayCount: 1 })
     expect(out.kind === 'move' && out.dayIndex).toBe(0)
   })

@@ -193,6 +193,11 @@ pub fn run() {
             // Faz 5C — takvim
             commands::range_sessions,
             commands::closed_days,
+            // Para fazı §0 — öğretmenler ve işletme ayarları (ADR-037)
+            commands::save_teacher,
+            commands::archive_teacher,
+            commands::restore_teacher,
+            commands::update_setting,
         ])
         .run(tauri::generate_context!())
         .expect("Tauri uygulaması başlatılamadı");

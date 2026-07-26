@@ -23,7 +23,7 @@ import { dragOutcome, isDropAllowed, isSamePlace, snapToSlot, type DragOrigin } 
 import styles from './Calendar.module.css'
 
 export interface WeekGridProps {
-  /** Görünen günler: haftada 7, gün görünümünde 1 (ADR-011 — öğretmen sütunu yok). */
+  /** Görünen günler: haftada 7, gün görünümünde 1 (ADR-038 — öğretmen sütunu yok). */
   days: readonly string[]
   /**
    * `'YYYY-MM-DD HH:MM'` — **tek kaynak** (`local_now`, ADR-029). Bugünün hangi gün
@@ -393,6 +393,9 @@ function SessionBlock({
           : row.kind === 'group'
             ? `${row.studentCount}`
             : tr.calendar.solo}
+        {/* ADR-038 — kurs çok öğretmenli; blok kimin dersi olduğunu söylemek zorunda.
+            Atanmamışsa satır kısalıyor, `—` yazılmıyor: meta satırı dar. */}
+        {row.teacherName !== null && `${tr.units.separator}${row.teacherName}`}
         {row.isMakeup && `${tr.units.separator}${tr.calendar.makeup}`}
       </span>
     </button>
