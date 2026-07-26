@@ -11,7 +11,7 @@
 
 use chrono::{Duration, NaiveDate};
 use rusqlite::{params, Connection, Row};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::clock;
 use crate::error::{AppError, AppResult};
@@ -280,6 +280,60 @@ fn parse_day(value: &str, code: &str) -> AppResult<NaiveDate> {
 // package (§1.11)
 // ---------------------------------------------------------------------------
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstallmentInput {
+    pub due_on: String,
+    pub amount: i64,
+    pub label: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PackageSaleInput {
+    pub student_id: i64,
+    pub enrollment_id: Option<i64>,
+    pub price_rule_id: Option<i64>,
+    pub lesson_count: i64,
+    /// Satış anındaki indirimli ders başı tutar snapshot'ı (ADR-006/ADR-035).
+    pub unit_price: i64,
+    pub total_price: i64,
+    pub sold_on: String,
+    pub installments: Vec<InstallmentInput>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PackageOverview {
+    pub package_id: i64,
+    pub student_id: i64,
+    pub price_rule_id: Option<i64>,
+    pub name: Option<String>,
+    pub lesson_count: i64,
+    pub remaining: i64,
+    pub unit_price: i64,
+    pub total_price: i64,
+    pub sold_on: String,
+    pub status: String,
+    pub installment_count: i64,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PackageCloseMode {
+    LeaveCredit,
+    Refund,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PackageCloseReport {
+    pub remaining_lessons: i64,
+    pub unused_kurus: i64,
+    pub credit_entry_id: Option<i64>,
+    pub refund_entry_id: Option<i64>,
+}
+
 impl Record for Package {
     const TABLE: &'static str = "package";
     const COLUMNS: &'static str = "id, student_id, enrollment_id, price_rule_id, lesson_count, \
@@ -346,6 +400,241 @@ pub fn packages_of(conn: &Connection, student_id: i64) -> AppResult<Vec<Package>
         out.push(row?);
     }
     Ok(out)
+}
+
+/// Paket satışı yalnızca paket ve zorunlu taksit planını yazar. Deftere satır yazmaz;
+/// borç her taksidin vadesinde §3'te doğar (ADR-015).
+pub fn sell_package(conn: &Connection, input: &PackageSaleInput) -> AppResult<i64> {
+    validate_package_sale(input)?;
+    crate::repo::in_transaction(conn, |conn| {
+        let package_id = insert_package(
+            conn,
+            &Package {
+                id: None,
+                student_id: input.student_id,
+                enrollment_id: input.enrollment_id,
+                price_rule_id: input.price_rule_id,
+                lesson_count: input.lesson_count,
+                unit_price: input.unit_price,
+                total_price: input.total_price,
+                sold_on: input.sold_on.clone(),
+                // Paket süresizdir; satış yüzeyi bu alanı hiç almaz.
+                valid_until: None,
+                status: "active".into(),
+                created_at: None,
+                updated_at: None,
+                deleted_at: None,
+            },
+        )?;
+        for (index, installment) in input.installments.iter().enumerate() {
+            insert_installment(
+                conn,
+                &Installment {
+                    id: None,
+                    student_id: input.student_id,
+                    package_id: Some(package_id),
+                    enrollment_id: input.enrollment_id,
+                    seq: i64::try_from(index + 1).map_err(|_| {
+                        AppError::new(
+                            "package.installments",
+                            "Taksit sayısı çok büyük. Planı daha az satıra bölün.",
+                        )
+                    })?,
+                    due_on: installment.due_on.clone(),
+                    amount: installment.amount,
+                    label: installment.label.clone(),
+                    accrued_entry_id: None,
+                    created_at: None,
+                    updated_at: None,
+                    deleted_at: None,
+                },
+            )?;
+        }
+        Ok(package_id)
+    })
+}
+
+pub fn package_overviews(conn: &Connection, student_id: i64) -> AppResult<Vec<PackageOverview>> {
+    let mut stmt = conn.prepare(
+        "SELECT p.id, p.student_id, p.price_rule_id, pr.name, p.lesson_count, \
+                p.lesson_count + COALESCE(SUM(u.delta), 0), p.unit_price, p.total_price, \
+                p.sold_on, p.status, \
+                (SELECT COUNT(*) FROM installment i \
+                 WHERE i.package_id = p.id AND i.deleted_at IS NULL) \
+         FROM package p \
+         LEFT JOIN price_rule pr ON pr.id = p.price_rule_id \
+         LEFT JOIN package_usage u ON u.package_id = p.id AND u.deleted_at IS NULL \
+         WHERE p.student_id = ?1 AND p.deleted_at IS NULL \
+         GROUP BY p.id ORDER BY p.sold_on DESC, p.id DESC",
+    )?;
+    let rows = stmt.query_map([student_id], |row| {
+        Ok(PackageOverview {
+            package_id: row.get(0)?,
+            student_id: row.get(1)?,
+            price_rule_id: row.get(2)?,
+            name: row.get(3)?,
+            lesson_count: row.get(4)?,
+            remaining: row.get(5)?,
+            unit_price: row.get(6)?,
+            total_price: row.get(7)?,
+            sold_on: row.get(8)?,
+            status: row.get(9)?,
+            installment_count: row.get(10)?,
+        })
+    })?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row?);
+    }
+    Ok(out)
+}
+
+/// ADR-035'in iki dalı. Önce kullanılmayan hak tutarı alacak yazılır; iade seçilirse
+/// aynı tutar nakit çıkışı olarak ikinci append-only hareketle kapanır. Kalan haklar
+/// tek tek `manual` hareketlerle sıfırlanır; geçmiş tüketimler silinmez.
+pub fn close_package(
+    conn: &Connection,
+    package_id: i64,
+    closed_on: &str,
+    mode: PackageCloseMode,
+) -> AppResult<PackageCloseReport> {
+    parse_day(closed_on, "package.closedOn")?;
+    crate::repo::in_transaction(conn, |conn| {
+        let mut package: Package = crate::repo::require(conn, package_id)?;
+        if package.status == "cancelled" {
+            return Err(AppError::new(
+                "package_already_closed",
+                "Bu paket daha önce kapatılmış. Öğrenci ekstresini yenileyin.",
+            ));
+        }
+        let remaining = crate::repo::views::package_remaining(conn, package_id)?
+            .map(|row| row.remaining.max(0))
+            .unwrap_or(0);
+        let unused_kurus = package.unit_price.checked_mul(remaining).ok_or_else(|| {
+            AppError::new(
+                "package_amount_overflow",
+                "Kalan paket tutarı hesaplanamadı. Ders sayısı ve birim ücreti kontrol edin.",
+            )
+        })?;
+
+        let credit_entry_id = if unused_kurus > 0 {
+            Some(insert_ledger_entry(
+                conn,
+                &LedgerEntry {
+                    id: None,
+                    student_id: package.student_id,
+                    entry_date: closed_on.to_string(),
+                    kind: "adjustment".into(),
+                    amount: unused_kurus,
+                    attendance_id: None,
+                    installment_id: None,
+                    payment_id: None,
+                    reverses_id: None,
+                    memo: Some("Kullanılmayan paket hakkı".into()),
+                    created_at: None,
+                    updated_at: None,
+                    deleted_at: None,
+                },
+            )?)
+        } else {
+            None
+        };
+        let refund_entry_id = if unused_kurus > 0 && matches!(mode, PackageCloseMode::Refund) {
+            Some(insert_ledger_entry(
+                conn,
+                &LedgerEntry {
+                    id: None,
+                    student_id: package.student_id,
+                    entry_date: closed_on.to_string(),
+                    kind: "adjustment".into(),
+                    amount: -unused_kurus,
+                    attendance_id: None,
+                    installment_id: None,
+                    payment_id: None,
+                    reverses_id: None,
+                    memo: Some("İade".into()),
+                    created_at: None,
+                    updated_at: None,
+                    deleted_at: None,
+                },
+            )?)
+        } else {
+            None
+        };
+
+        // Kapanan paketin henüz tahakkuk etmemiş taksitleri ileride borç doğuramaz.
+        conn.execute(
+            "UPDATE installment SET deleted_at = ?2, updated_at = ?2 \
+             WHERE package_id = ?1 AND accrued_entry_id IS NULL AND deleted_at IS NULL",
+            params![package_id, clock::now_local()],
+        )?;
+        for _ in 0..remaining {
+            insert_package_usage(
+                conn,
+                &PackageUsage {
+                    id: None,
+                    package_id,
+                    attendance_id: None,
+                    used_on: closed_on.to_string(),
+                    delta: -1,
+                    reason: "manual".into(),
+                    reverses_id: None,
+                    memo: Some("Paket kapatma".into()),
+                    created_at: None,
+                    updated_at: None,
+                    deleted_at: None,
+                },
+            )?;
+        }
+        package.status = "cancelled".into();
+        update_package(conn, package_id, &package)?;
+
+        Ok(PackageCloseReport {
+            remaining_lessons: remaining,
+            unused_kurus,
+            credit_entry_id,
+            refund_entry_id,
+        })
+    })
+}
+
+fn validate_package_sale(input: &PackageSaleInput) -> AppResult<()> {
+    if input.lesson_count < 1 || input.unit_price < 0 || input.total_price < 0 {
+        return Err(AppError::new(
+            "package.amount",
+            "Ders sayısı en az 1 olmalı; birim ve toplam tutar negatif olamaz.",
+        ));
+    }
+    parse_day(&input.sold_on, "package.soldOn")?;
+    if input.installments.is_empty() {
+        return Err(AppError::new(
+            "package.installments",
+            "Taksit planı zorunludur. Peşin satış için satış gününe tek taksit ekleyin.",
+        ));
+    }
+    let mut sum = 0_i64;
+    for installment in &input.installments {
+        parse_day(&installment.due_on, "package.installmentDueOn")?;
+        if installment.amount <= 0 {
+            return Err(AppError::new(
+                "package.installmentAmount",
+                "Her taksit sıfırdan büyük olmalı. Taksit tutarlarını düzeltin.",
+            ));
+        }
+        sum = sum.checked_add(installment.amount).ok_or_else(|| {
+            AppError::new(
+                "package.installmentTotal",
+                "Taksit toplamı hesaplanamadı. Tutarları küçültüp yeniden deneyin.",
+            )
+        })?;
+    }
+    if sum != input.total_price {
+        return Err(AppError::new(
+            "package.installmentTotal",
+            "Taksitlerin toplamı paket toplamına eşit olmalı. Planı kontrol edin.",
+        ));
+    }
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------

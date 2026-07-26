@@ -149,6 +149,10 @@ pub fn run() {
             commands::price_rules,
             commands::save_price_rule,
             commands::archive_price_rule,
+            // Para fazı §2 — paket ve taksit planı
+            commands::sell_package,
+            commands::student_packages,
+            commands::close_package,
             // Faz 4 — öğrenci ve veli
             commands::student_list,
             commands::student_detail,

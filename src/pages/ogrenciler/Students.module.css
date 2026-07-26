@@ -201,6 +201,77 @@
   border-radius: var(--radius-7);
 }
 
+/* ── Paket satışı ve kapatma (E12 / ADR-035) ────────────────────────────── */
+
+.packageForm {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.packageCounters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.packageCounters > div {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2-5);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-faint);
+  border-radius: var(--radius-9);
+}
+
+.packageCounters span,
+.packagePlanTitle {
+  font-size: var(--font-size-meta);
+  color: var(--color-text-muted);
+}
+
+.packageDiscount,
+.packageListHead,
+.packageRow {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.packageSummary {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  font-size: var(--font-size-meta);
+  color: var(--color-text-secondary);
+  background: var(--color-warning-bg);
+  border-radius: var(--radius-9);
+}
+
+.packageSection {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.packageList {
+  display: grid;
+  padding-top: var(--space-3);
+}
+
+.packageRow {
+  padding: var(--space-2-5) 0;
+  border-bottom: 1px solid var(--color-border-faint);
+}
+
+.packageRow:last-child {
+  border-bottom: 0;
+}
+
+.packageRow > div {
+  display: grid;
+  gap: var(--space-1);
+}
+
 /* Veli arama sonuçları — modal içinde. */
 .guardianResults {
   display: flex;

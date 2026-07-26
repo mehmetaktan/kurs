@@ -119,6 +119,61 @@ export function archivePriceRule(priceRuleId: number): Promise<boolean> {
   return call<boolean>('archive_price_rule', { priceRuleId })
 }
 
+export interface InstallmentInput {
+  dueOn: string
+  amount: number
+  label: string | null
+}
+
+export interface PackageSaleInput {
+  studentId: number
+  enrollmentId: number | null
+  priceRuleId: number | null
+  lessonCount: number
+  unitPrice: number
+  totalPrice: number
+  soldOn: string
+  installments: InstallmentInput[]
+}
+
+export interface PackageOverview {
+  packageId: number
+  studentId: number
+  priceRuleId: number | null
+  name: string | null
+  lessonCount: number
+  remaining: number
+  unitPrice: number
+  totalPrice: number
+  soldOn: string
+  status: string
+  installmentCount: number
+}
+
+export type PackageCloseMode = 'leave_credit' | 'refund'
+
+export interface PackageCloseReport {
+  remainingLessons: number
+  unusedKurus: number
+  creditEntryId: number | null
+  refundEntryId: number | null
+}
+
+export function sellPackage(input: PackageSaleInput): Promise<number> {
+  return call<number>('sell_package', { input })
+}
+
+export function fetchStudentPackages(studentId: number): Promise<PackageOverview[]> {
+  return call<PackageOverview[]>('student_packages', { studentId })
+}
+
+export function closePackage(
+  packageId: number,
+  mode: PackageCloseMode,
+): Promise<PackageCloseReport> {
+  return call<PackageCloseReport>('close_package', { packageId, mode })
+}
+
 // ─── Faz 4 — öğrenci ve veli ──────────────────────────────────────────────────
 //
 // Tipler `src-tauri/src/repo/roster.rs` ile birebir (`rename_all = "camelCase"`).

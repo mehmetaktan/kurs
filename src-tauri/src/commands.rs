@@ -16,7 +16,9 @@ use crate::model::{
     ClosedDay, Guardian, PriceRule, Setting, Student, StudentBalance, StudentDebt, StudyGroup,
     Subject, Teacher,
 };
-use crate::repo::finance::PriceRuleInput;
+use crate::repo::finance::{
+    PackageCloseMode, PackageCloseReport, PackageOverview, PackageSaleInput, PriceRuleInput,
+};
 use crate::repo::people::TeacherInput;
 use crate::repo::roster::{StudentDetail, StudentInput, StudentQuery, StudentRow};
 use crate::repo::schedule::{
@@ -115,6 +117,34 @@ pub fn save_price_rule(state: State<'_, AppState>, input: PriceRuleInput) -> App
 #[tauri::command]
 pub fn archive_price_rule(state: State<'_, AppState>, price_rule_id: i64) -> AppResult<bool> {
     state.with_conn(|conn| repo::archive::<PriceRule>(conn, price_rule_id))
+}
+
+// ---------------------------------------------------------------------------
+// Para fazı §2 — paket satışı ve kapatma
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+pub fn sell_package(state: State<'_, AppState>, input: PackageSaleInput) -> AppResult<i64> {
+    state.with_conn(|conn| repo::finance::sell_package(conn, &input))
+}
+
+#[tauri::command]
+pub fn student_packages(
+    state: State<'_, AppState>,
+    student_id: i64,
+) -> AppResult<Vec<PackageOverview>> {
+    state.with_conn(|conn| repo::finance::package_overviews(conn, student_id))
+}
+
+#[tauri::command]
+pub fn close_package(
+    state: State<'_, AppState>,
+    package_id: i64,
+    closed_on: Option<String>,
+    mode: PackageCloseMode,
+) -> AppResult<PackageCloseReport> {
+    let day = closed_on.unwrap_or_else(clock::today_local_string);
+    state.with_conn(|conn| repo::finance::close_package(conn, package_id, &day, mode))
 }
 
 // ---------------------------------------------------------------------------

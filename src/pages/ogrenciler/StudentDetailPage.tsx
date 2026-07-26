@@ -4,10 +4,14 @@ import {
   addStudentNote,
   archiveStudent,
   archiveStudentNote,
+  closePackage,
+  fetchStudentPackages,
   fetchStudentDetail,
   restoreStudent,
   setStudentActive,
   type AppError,
+  type PackageCloseMode,
+  type PackageOverview,
   type StudentDetail,
 } from '../../lib/api'
 import { formatDate, formatLira, formatPhone, formatTime, weekdayTr } from '../../lib/format'
@@ -22,6 +26,8 @@ import {
   EmptyState,
   ErrorState,
   LoadingState,
+  Modal,
+  ModalOption,
   StatCard,
   StatStrip,
   StatusDot,
@@ -30,6 +36,7 @@ import {
   useToast,
 } from '../../ui'
 import { StudentForm } from './StudentForm'
+import { PackageSaleModal } from './PackageSaleModal'
 import styles from './Students.module.css'
 
 type DetailTab = 'info' | 'lessons' | 'payments' | 'notes'
@@ -48,19 +55,28 @@ const STUDENTS_PATH = '/ogrenciler'
  */
 export function StudentDetailPage({ studentId }: { studentId: number }) {
   const [detail, setDetail] = useState<StudentDetail | null>(null)
+  const [packages, setPackages] = useState<PackageOverview[] | null>(null)
   const [error, setError] = useState<AppError | null>(null)
   const [tab, setTab] = useState<DetailTab>('info')
   const [formOpen, setFormOpen] = useState(false)
   const [confirmArchive, setConfirmArchive] = useState(false)
+  const [packageSaleOpen, setPackageSaleOpen] = useState(false)
+  const [closingPackage, setClosingPackage] = useState<PackageOverview | null>(null)
   const toast = useToast()
 
   const load = useCallback(async () => {
     setError(null)
     try {
-      setDetail(await fetchStudentDetail(studentId))
+      const [nextDetail, nextPackages] = await Promise.all([
+        fetchStudentDetail(studentId),
+        fetchStudentPackages(studentId),
+      ])
+      setDetail(nextDetail)
+      setPackages(nextPackages)
     } catch (err) {
       setError(err as AppError)
       setDetail(null)
+      setPackages(null)
     }
   }, [studentId])
 
@@ -71,13 +87,20 @@ export function StudentDetailPage({ studentId }: { studentId: number }) {
   // `Esc` listeye döner (tasarımdaki `Esc listeye dön` ipucu). Diyalog ya da çekmece
   // açıkken devreye girmez: onların kendi `Esc`'i var ve önce onlar kapanmalı.
   useEffect(() => {
-    if (formOpen || confirmArchive) return
+    if (formOpen || confirmArchive || packageSaleOpen || closingPackage) return
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') navigate(STUDENTS_PATH)
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [formOpen, confirmArchive])
+  }, [formOpen, confirmArchive, packageSaleOpen, closingPackage])
+
+  const finishPackageClose = async (mode: PackageCloseMode) => {
+    if (!closingPackage) return
+    const packageId = closingPackage.packageId
+    setClosingPackage(null)
+    await run(() => closePackage(packageId, mode), tr.students.packages.closeDone)
+  }
 
   const run = async (action: () => Promise<unknown>, message: string) => {
     try {
@@ -197,7 +220,14 @@ export function StudentDetailPage({ studentId }: { studentId: number }) {
         />
 
         <div className={styles.tabPanel}>
-          {tab === 'info' && <InfoTab detail={detail} />}
+          {tab === 'info' && (
+            <InfoTab
+              detail={detail}
+              packages={packages ?? []}
+              onSell={() => setPackageSaleOpen(true)}
+              onClosePackage={setClosingPackage}
+            />
+          )}
 
           {/* Faz 6 ve Faz 8 — boş bir sekme değil, ne zaman geleceğini söyleyen kart. */}
           {tab === 'lessons' && (
@@ -235,6 +265,40 @@ export function StudentDetailPage({ studentId }: { studentId: number }) {
           setFormOpen(false)
           void load()
         }}
+      />
+
+      <PackageSaleModal
+        open={packageSaleOpen}
+        studentId={student.id}
+        studentName={student.fullName}
+        balanceKurus={row.balanceKurus}
+        onClose={() => setPackageSaleOpen(false)}
+        onSaved={() => {
+          setPackageSaleOpen(false)
+          void load()
+        }}
+      />
+
+      <Modal
+        open={closingPackage !== null}
+        title={tr.students.packages.closeTitle}
+        description={tr.students.packages.closeDescription}
+        onClose={() => setClosingPackage(null)}
+        actions={
+          <>
+            <ModalOption
+              title={tr.students.packages.leaveCredit}
+              hint={tr.students.packages.leaveCreditHint}
+              onClick={() => void finishPackageClose('leave_credit')}
+            />
+            <ModalOption
+              title={tr.students.packages.refund}
+              hint={tr.students.packages.refundHint}
+              tone="danger"
+              onClick={() => void finishPackageClose('refund')}
+            />
+          </>
+        }
       />
 
       {/*
@@ -346,11 +410,22 @@ function SummaryStrip({ detail }: { detail: StudentDetail }) {
   )
 }
 
-function InfoTab({ detail }: { detail: StudentDetail }) {
+function InfoTab({
+  detail,
+  packages,
+  onSell,
+  onClosePackage,
+}: {
+  detail: StudentDetail
+  packages: PackageOverview[]
+  onSell: () => void
+  onClosePackage: (item: PackageOverview) => void
+}) {
   const { student, row, guardians } = detail
 
   return (
-    <Card>
+    <div className={styles.packageSection}>
+      <Card>
       <dl className={styles.infoGrid}>
         <Fact label={tr.students.detail.info.school} value={student.school} />
         <Fact label={tr.students.detail.info.grade} value={student.grade} />
@@ -395,7 +470,43 @@ function InfoTab({ detail }: { detail: StudentDetail }) {
           </div>
         ))}
       </div>
-    </Card>
+      </Card>
+      <Card>
+      <div className={styles.packageListHead}>
+        <strong>{tr.students.packages.listTitle}</strong>
+        <Button variant="primary" size="small" onClick={onSell}>
+          {tr.students.packages.action}
+        </Button>
+      </div>
+      {packages.length === 0 ? (
+        <p className={styles.hint}>{tr.students.packages.listEmpty}</p>
+      ) : (
+        <div className={styles.packageList}>
+          {packages.map((item) => (
+            <div className={styles.packageRow} key={item.packageId}>
+              <div>
+                <strong>{item.name ?? tr.students.packages.listTitle}</strong>
+                <span className={styles.hint}>
+                  {formatDate(item.soldOn)} {tr.students.packages.sold}
+                  {tr.units.separator}{formatLira(item.totalPrice)}
+                </span>
+              </div>
+              <span className={styles.tabular}>
+                {item.status === 'cancelled'
+                  ? tr.students.packages.closed
+                  : `${item.remaining} ${tr.students.packages.remaining}`}
+              </span>
+              {item.status !== 'cancelled' && item.remaining > 0 && (
+                <Button size="small" variant="danger" onClick={() => onClosePackage(item)}>
+                  {tr.students.packages.close}
+                </Button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      </Card>
+    </div>
   )
 }
 

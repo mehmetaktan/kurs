@@ -2,7 +2,9 @@ mod common;
 
 use kurs_takip_lib::model::PriceRule;
 use kurs_takip_lib::repo;
-use kurs_takip_lib::repo::finance::PriceRuleInput;
+use kurs_takip_lib::repo::finance::{
+    InstallmentInput, PackageCloseMode, PackageSaleInput, PriceRuleInput,
+};
 
 fn rule_input(subject_id: i64, unit_price: i64, valid_from: &str) -> PriceRuleInput {
     PriceRuleInput {
@@ -18,6 +20,37 @@ fn rule_input(subject_id: i64, unit_price: i64, valid_from: &str) -> PriceRuleIn
         default_installments: 1,
         valid_from: valid_from.into(),
     }
+}
+
+fn sale_input(student_id: i64) -> PackageSaleInput {
+    PackageSaleInput {
+        student_id,
+        enrollment_id: None,
+        price_rule_id: None,
+        lesson_count: 8,
+        unit_price: 25_000,
+        total_price: 200_000,
+        sold_on: "2026-03-01".into(),
+        installments: vec![
+            InstallmentInput {
+                due_on: "2026-03-01".into(),
+                amount: 100_000,
+                label: Some("1. taksit".into()),
+            },
+            InstallmentInput {
+                due_on: "2026-04-01".into(),
+                amount: 100_000,
+                label: Some("2. taksit".into()),
+            },
+        ],
+    }
+}
+
+fn balance(conn: &rusqlite::Connection, student_id: i64) -> i64 {
+    repo::views::student_balance(conn, student_id)
+        .unwrap()
+        .unwrap()
+        .balance_kurus
 }
 
 #[test]
@@ -99,4 +132,113 @@ fn gecersiz_para_ve_paket_tarifesi_reddedilir() {
             .code,
         "priceRule.package"
     );
+}
+
+#[test]
+fn paket_satisi_paket_ve_zorunlu_taksitleri_yazar_deftere_yazmaz() {
+    let conn = common::conn();
+    let student_id = common::student(&conn, "Paket Öğrencisi");
+    let package_id = repo::finance::sell_package(&conn, &sale_input(student_id)).unwrap();
+
+    let package: kurs_takip_lib::model::Package = repo::require(&conn, package_id).unwrap();
+    assert_eq!(package.valid_until, None);
+    assert_eq!(package.unit_price, 25_000);
+    assert_eq!(
+        repo::count_live::<kurs_takip_lib::model::Installment>(&conn).unwrap(),
+        2
+    );
+    assert_eq!(
+        repo::count_live::<kurs_takip_lib::model::LedgerEntry>(&conn).unwrap(),
+        0
+    );
+}
+
+#[test]
+fn taksit_plani_yoksa_veya_toplami_pakete_esit_degilse_satis_geri_alinir() {
+    let conn = common::conn();
+    let student_id = common::student(&conn, "Plansız Öğrenci");
+    let mut input = sale_input(student_id);
+    input.installments.clear();
+    assert_eq!(
+        repo::finance::sell_package(&conn, &input).unwrap_err().code,
+        "package.installments"
+    );
+    assert_eq!(
+        repo::count_live::<kurs_takip_lib::model::Package>(&conn).unwrap(),
+        0
+    );
+
+    let mut input = sale_input(student_id);
+    input.installments[1].amount = 99_999;
+    assert_eq!(
+        repo::finance::sell_package(&conn, &input).unwrap_err().code,
+        "package.installmentTotal"
+    );
+    assert_eq!(
+        repo::count_live::<kurs_takip_lib::model::Package>(&conn).unwrap(),
+        0
+    );
+}
+
+#[test]
+fn paket_kapatma_avansi_unit_price_snapshotundan_yazar_ve_hakki_sifirlar() {
+    let conn = common::conn();
+    let student_id = common::student(&conn, "Avans Öğrencisi");
+    let package_id = repo::finance::sell_package(&conn, &sale_input(student_id)).unwrap();
+    for _ in 0..3 {
+        common::consume(&conn, package_id, None, "2026-03-10");
+    }
+
+    let report = repo::finance::close_package(
+        &conn,
+        package_id,
+        "2026-03-20",
+        PackageCloseMode::LeaveCredit,
+    )
+    .unwrap();
+    assert_eq!(report.remaining_lessons, 5);
+    assert_eq!(report.unused_kurus, 125_000);
+    assert!(report.credit_entry_id.is_some());
+    assert_eq!(report.refund_entry_id, None);
+    assert_eq!(balance(&conn, student_id), 125_000);
+
+    let usage_sum: i64 = conn
+        .query_row(
+            "SELECT COALESCE(SUM(delta), 0) FROM package_usage WHERE package_id = ?1",
+            [package_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(8 + usage_sum, 0);
+    let package: kurs_takip_lib::model::Package = repo::require(&conn, package_id).unwrap();
+    assert_eq!(package.status, "cancelled");
+    assert_eq!(
+        repo::count_live::<kurs_takip_lib::model::Installment>(&conn).unwrap(),
+        0
+    );
+}
+
+#[test]
+fn paket_kapatma_iade_dalinda_avansi_nakit_cikisiyla_kapatir() {
+    let conn = common::conn();
+    let student_id = common::student(&conn, "İade Öğrencisi");
+    let package_id = repo::finance::sell_package(&conn, &sale_input(student_id)).unwrap();
+    for _ in 0..3 {
+        common::consume(&conn, package_id, None, "2026-03-10");
+    }
+
+    let report =
+        repo::finance::close_package(&conn, package_id, "2026-03-20", PackageCloseMode::Refund)
+            .unwrap();
+    assert_eq!(report.unused_kurus, 125_000);
+    assert!(report.credit_entry_id.is_some());
+    assert!(report.refund_entry_id.is_some());
+    assert_eq!(balance(&conn, student_id), 0);
+
+    let memos: Vec<String> = repo::finance::ledger_of(&conn, student_id)
+        .unwrap()
+        .into_iter()
+        .filter_map(|entry| entry.memo)
+        .collect();
+    assert_eq!(memos, vec!["Kullanılmayan paket hakkı", "İade"]);
 }
