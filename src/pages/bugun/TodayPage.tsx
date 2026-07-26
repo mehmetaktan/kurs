@@ -2,12 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { tr } from '../../i18n/tr'
 import {
   fetchDaySessions,
+  fetchDebtorRows,
   fetchHasSchedule,
   fetchLocalNow,
   type AppError,
   type DaySessionRow,
+  type DebtorRow,
 } from '../../lib/api'
-import { formatDateWithWeekday, formatTime } from '../../lib/format'
+import { formatDateWithWeekday, formatLira, formatTime } from '../../lib/format'
 import { PageContent } from '../../shell/AppShell'
 import { PageHeader } from '../../shell/PageHeader'
 import {
@@ -27,15 +29,13 @@ import { TemplateModal } from '../dersler/TemplateModal'
 import { subjectColorOf } from '../tanimlar/palette'
 import { isPendingAttendance, pendingAttendanceCount, splitByNow } from './today'
 import styles from './Today.module.css'
+import { sortDebtors, visibleReceivableKurus } from '../odemeler/debtors'
 
 /**
  * EKRANLAR.md §1 — açılış ekranı. Kurs sahibi her sabah bunu açıyor.
  *
- * **Ekran üç bölümlü ve bu fazda biri doluyor.** Borç listesi Faz 8'i, "paketi bitmek
- * üzere" Faz 7'yi, yedekleme şeridi Faz 10'u bekliyor. Bölümler **kaldırılmadı**
- * (R1.6): yerleri belli olsun ve sonraki fazlar boşluk aramasın. Metinleri "yok" değil
- * "yakında" diyor — "borçlu öğrenci yok" demek, kontrol edilmemiş bir şeyi doğru gibi
- * sunmak olurdu.
+ * Borç listesi defter kaynaklı gerçek veriyi gösterir. Paket uyarısı ve yedekleme
+ * şeridi sonraki işlerini bekler; bölümler kaldırılmaz (R1.6).
  *
  * **"Şimdi" Rust'tan geliyor** (`local_now`, `chrono::Local`): §0'ın SQLite için koyduğu
  * kural arayüzde de geçerli, yoksa "bugün" iki ayrı yerden gelirdi.
@@ -45,6 +45,8 @@ export function TodayPage() {
   const [rows, setRows] = useState<DaySessionRow[] | null>(null)
   const [hasSchedule, setHasSchedule] = useState(true)
   const [error, setError] = useState<AppError | null>(null)
+  const [debtors, setDebtors] = useState<DebtorRow[] | null>(null)
+  const [debtError, setDebtError] = useState<AppError | null>(null)
 
   const [formOpen, setFormOpen] = useState(false)
   const [templateOpen, setTemplateOpen] = useState(false)
@@ -53,6 +55,8 @@ export function TodayPage() {
 
   const load = useCallback(async () => {
     setError(null)
+    setDebtError(null)
+    setDebtors(null)
     try {
       const stamp = await fetchLocalNow()
       setNow(stamp)
@@ -62,6 +66,12 @@ export function TodayPage() {
       ])
       setRows(today)
       setHasSchedule(schedule)
+      try {
+        const debtRows = await fetchDebtorRows({ search: null, filter: 'all', today: stamp.slice(0, 10) })
+        setDebtors(sortDebtors(debtRows.filter((row) => !row.archived), 'debt_desc'))
+      } catch (err) {
+        setDebtError(err as AppError)
+      }
     } catch (err) {
       setError(err as AppError)
       setRows(null)
@@ -181,9 +191,9 @@ export function TodayPage() {
             )}
           </section>
 
-          {/* Üç yan bölüm de tasarımda var; veri kaynakları sonraki fazlarda bağlanıyor. */}
+          {/* Üç yan bölüm tasarımda kalır; borç listesi artık defterden okunur. */}
           <aside className={styles.side}>
-            <SideSection title={tr.today.debtors.heading} body={tr.today.debtors.soon} />
+            <DebtorSection rows={debtors} error={debtError} />
             <SideSection title={tr.today.packages.heading} body={tr.today.packages.soon} />
             <SideSection title={tr.today.backup.heading} body={tr.today.backup.soon} />
           </aside>
@@ -373,6 +383,32 @@ function SideSection({ title, body }: { title: string; body: string }) {
     <Card className={styles.sideCard}>
       <SectionHeader title={title} />
       <p className={styles.sideBody}>{body}</p>
+    </Card>
+  )
+}
+
+function DebtorSection({ rows, error }: { rows: DebtorRow[] | null; error: AppError | null }) {
+  const total = rows === null ? 0 : visibleReceivableKurus(rows)
+  return (
+    <Card className={styles.sideCard}>
+      <SectionHeader
+        title={tr.today.debtors.heading}
+        meta={rows === null ? null : `${rows.length} ${tr.today.debtors.countSuffix}${tr.units.separator}${formatLira(total)}`}
+      />
+      {rows === null && !error && <LoadingState inline />}
+      {error && <ErrorState inline message={error.message} />}
+      {rows !== null && !error && rows.length === 0 && <p className={styles.sideBody}>{tr.today.debtors.empty}</p>}
+      {rows !== null && !error && rows.length > 0 && (
+        <div className={styles.debtorList}>
+          {rows.map((row) => (
+            <div className={styles.debtorRow} key={row.studentId}>
+              <span>{row.fullName}</span>
+              <strong>{formatLira(row.debtKurus)}</strong>
+              <small>{row.daysOverdue && row.daysOverdue > 0 ? `${row.daysOverdue} ${tr.today.debtors.daysOverdue}` : tr.today.debtors.current}</small>
+            </div>
+          ))}
+        </div>
+      )}
     </Card>
   )
 }

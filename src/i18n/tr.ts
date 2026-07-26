@@ -927,7 +927,10 @@ export const tr = {
     // "borçlu öğrenci yok" demek kontrol edilmemiş bir şeyi doğru gibi sunmak olurdu.
     debtors: {
       heading: 'Borcu olan öğrenciler',
-      soon: 'Borçlu listesi tahsilat modülüyle birlikte gelecek.',
+      countSuffix: 'öğrenci',
+      daysOverdue: 'gün gecikti',
+      current: 'Güncel borç',
+      empty: 'Gecikmiş ödemesi olan öğrenci yok.',
     },
     packages: {
       heading: 'Paketi bitmek üzere',

@@ -43,6 +43,7 @@ import {
   type StudentChip,
 } from './filters'
 import styles from './Students.module.css'
+import { PaymentModal } from '../odemeler/PaymentModal'
 
 /** Arama her tuşta Rust'a gitmesin; yazarken 150 ms bekleniyor. */
 const SEARCH_DEBOUNCE_MS = 150
@@ -71,6 +72,7 @@ export function StudentsPage() {
   const [selected, setSelected] = useState<StudentRow | null>(null)
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<number | null>(null)
+  const [paymentStudentId, setPaymentStudentId] = useState<number | undefined>(undefined)
 
   const searchRef = useRef<HTMLInputElement>(null)
   const toast = useToast()
@@ -153,7 +155,11 @@ export function StudentsPage() {
 
   // Sekiz kolon tanımı her render'da yeniden kuruluyor — `useMemo` etmiyoruz. Ölçüldüğünde
   // kazanç yok, karşılığında `onRestore` bağımlılığını elde tutmak gerekiyordu.
-  const columns = buildColumns(chip === 'archived', (row) => void onRestore(row))
+  const columns = buildColumns(
+    chip === 'archived',
+    (row) => void onRestore(row),
+    (row) => setPaymentStudentId(row.id),
+  )
 
   return (
     <>
@@ -293,19 +299,24 @@ export function StudentsPage() {
           void load()
         }}
       />
+      <PaymentModal
+        open={paymentStudentId !== undefined}
+        initialStudentId={paymentStudentId ?? null}
+        onClose={() => setPaymentStudentId(undefined)}
+        onSaved={() => void load()}
+      />
     </>
   )
 }
 
 /**
- * Tasarımın kolon şablonu (EKRANLAR.md §3), MVP'ye göre daraltılmış: "Tahsilat al"
- * düğmesi Faz 8'de geliyor, o yüzden son kolon şimdilik **Aç** — arşiv görünümünde
- * **Geri al** (E2). Boş bir yer tutucu düğme koymaktansa bugün gerçekten çalışan
- * eylemi koyuyoruz.
+ * Tasarımın kolon şablonu (EKRANLAR.md §3): canlı listede doğrudan **Tahsilat al**,
+ * arşiv görünümünde **Geri al** (E2).
  */
 function buildColumns(
   archivedView: boolean,
   onRestore: (row: StudentRow) => void,
+  onPayment: (row: StudentRow) => void,
 ): Column<StudentRow>[] {
   return [
     {
@@ -411,8 +422,8 @@ function buildColumns(
             {tr.students.table.restore}
           </Button>
         ) : (
-          <Button size="small" onClick={() => navigate(`/ogrenciler/${row.id}`)}>
-            {tr.students.table.open}
+          <Button size="small" variant="primary" onClick={() => onPayment(row)}>
+            {tr.payments.takePayment}
           </Button>
         ),
     },
