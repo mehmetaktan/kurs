@@ -57,7 +57,7 @@ komutla ikinci oturumda devam edilir. Dikiş yeri faz komutunda yazılıdır.
 |---|---|
 | `docs/DURUM.md` | Nerede kaldık — **son durum**, oturum arşivi değil. Her oturum sonunda güncellenir |
 | `docs/KARARLAR.md` | Kilitli kararlar + ADR'ler. **Buradaki kararlar yeniden tartışılmaz.** |
-| `docs/YOL-HARITASI.md` | Plan ve bağımlılıklar — **kalan üç faz**: `/faz-07` (para) → `/faz-06` (yoklama) → `/faz-10` (teslim) |
+| `docs/YOL-HARITASI.md` | Plan ve bağımlılıklar — **kalan iki faz**: `/faz-06` (yoklama) → `/faz-10` (teslim) |
 | `docs/KULLANILABILIRLIK.md` | Ürün sahibinin kullanım şikâyetleri; **her kod oturumu buradan §0 ile başlar** |
 | `docs/TASARIM-KAYNAGI.md` | Claude Design projesi nasıl okunur |
 | `docs/PRD.md` | Ürün gereksinimleri (Faz 1) |
@@ -65,6 +65,7 @@ komutla ikinci oturumda devam edilir. Dikiş yeri faz komutunda yazılıdır.
 | `docs/EKRANLAR.md` | Ekran envanteri (Faz 1) |
 | `docs/TASARIM-SISTEMI.md` | Renk, tipografi, spacing, komponentler (Faz 1) |
 | `docs/DENETIM-FAZ1.md` | Faz 1 denetimi — 25 bulgu, kanıtları ve düzeltmeleri |
+| `docs/DENETIM-PARA.md` | Para fazı denetimi — planın tek zorunlu denetimi (ADR-033), üç bulgu |
 | `docs/CODEX-DEVIR.md` | `/faz-07 §5–§9`'un dış ajana devri (ADR-042): prompt + denetim listesi |
 | `AGENTS.md` (kökte) | **Dış kodlama ajanlarının** giriş kapısı — Codex `CLAUDE.md`'yi okumaz, bunu okur |
 

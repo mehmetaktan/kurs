@@ -10,16 +10,49 @@ description: Faz 6 — Yoklama, devamsızlık ve telafi dersi
 > dondurulduğu için** (ADR-034) bu fazın açılışında takvim işi yok — 5C'den devreden
 > "sürükleme jestini ekranda sür" maddesi **kapsam dışı.**
 
-Önce oku: `CLAUDE.md`, `docs/DURUM.md`, `docs/VERI-MODELI.md`,
-`docs/KULLANILABILIRLIK.md` (§0'ın kaynağı), `docs/KARARLAR.md` (**ADR-015**, **ADR-016**,
-**ADR-022**, **ADR-036**).
+Önce oku: `CLAUDE.md`, `docs/DURUM.md`, `docs/VERI-MODELI.md`, `docs/DENETIM-PARA.md`
+(§0'ın kaynağı), `docs/KULLANILABILIRLIK.md`, `docs/KARARLAR.md` (**ADR-015**, **ADR-016**,
+**ADR-022**, **ADR-036**, **ADR-040**, **ADR-044**).
+
+> **Bu faz da Codex'te — ADR-042'nin devamı.** Prompt `docs/CODEX-DEVIR.md`'de; sınırlar
+> aynı: migration yok, `docs/**` ve ADR yok, takvim yok, tek defter yolu, bölümlü commit.
+> Claude Code'un işi Codex tıkandığında cevaplamak ve dönüşte denetlemek.
 
 ---
 
-## 0. Kullanılabilirlik
+## 0. Para fazı denetiminin bıraktıkları — **ilk iş bu**
 
-`docs/KULLANILABILIRLIK.md`'nin en üstündeki açık maddelerle başla. Ürün sahibi oraya
-madde eklediyse onlar önce yapılır; liste boşsa bu bölüm atlanır.
+`docs/DENETIM-PARA.md`. Üç madde bu faza düştü; **P1 kodun geri kalanından önce yapılır**,
+çünkü bu fazın kendisi onu tetikleyecek olan koddur.
+
+### 0a. `charge_session` paketli öğrenciyi tanımıyor — **P1, ADR-044**
+
+Bugün paketli bir öğrencinin dersi işlenirse hem `package_usage(delta = −1)` **hem**
+`ledger_entry(session_charge)` yazılır; paketin taksitleri ayrıca tahakkuk ettiği için
+**aynı ders iki kez faturalanır.** ADR-015'in ihlali. Zincir:
+`resolve_unit_price` sadece `pricing_model='per_session'` kayıtlarına bakıyor → paketlide
+bulamıyor → `session.unit_price` snapshot'ına düşüyor → o snapshot'ı yazan
+`schedule::solo_unit_price` `pricing_model`'e **bakmıyor.**
+
+Bu faz `charge_session`'ı **çağıran** faz. Çağrıyı yazmadan önce:
+
+- `charge_session` öğrencinin o ders için **aktif paketi var mı** diye kendisi sorar,
+  varsa `Ok(None)` döner. **Ayrım çağırana bırakılmaz** (ADR-044'ün gerekçesi).
+- `schedule::solo_unit_price`'a `pricing_model = 'per_session'` filtresi eklenir —
+  savunma iki katmanda.
+- Testi: *paketli öğrencinin işlenen dersi deftere satır yazmaz, yalnızca hak düşer* ve
+  *paketsizde tam tersi*. `cancel_session_financials` zaten simetrik ve savunmalı,
+  **ona dokunma.**
+
+### 0b. Depoya sızan üretilmiş dosya — **P3**
+
+`output/pdf/ornek-makbuz.pdf` commit edilmiş. Depodan çıkar (`git rm --cached`),
+`.gitignore`'a `output/` ekle.
+
+### 0c. Kullanılabilirlik
+
+`docs/KULLANILABILIRLIK.md`'nin en üstündeki açık maddelerle devam et. Ürün sahibi oraya
+madde eklediyse onlar yapılır; liste boşsa bu bölüm atlanır.
 
 ---
 

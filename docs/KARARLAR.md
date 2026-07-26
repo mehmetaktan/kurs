@@ -1375,3 +1375,70 @@ ayrı bir onay makamı değil, zaten planda duruyordu; devir onun kapsamını ge
 
 **Durum.** Kabul edildi (2026-07-26, yönetici oturumu, ürün sahibinin kararı).
 Aynı oturumda kapsam §5–§9'dan **§1–§10'a** genişletildi — gerekçe yukarıdaki kutuda.
+
+---
+
+## ADR-043 — Makbuz PDF'i `printpdf` ile üretilir, font pakete gömülür
+
+**Karar.** Makbuz PDF'i Rust tarafında **`printpdf`** ile üretilir; Türkçe karakterler için
+**Noto Sans** `src-tauri/assets/NotoSans-Receipt.ttf.b64` olarak depoda durur ve
+`include_str!` ile **derleme anında pakete gömülür**. Üretilen dosya sistemin varsayılan
+görüntüleyicisinde açılır; bunun için `tauri-plugin-opener` ve **tek bir yetki** eklendi:
+`opener:allow-open-path`. Genel dosya sistemi, kabuk ve ağ yetkisi hâlâ **verilmiyor**.
+
+**Gerekçe.** `CLAUDE.md > Windows` gömülü fontu zorunlu kılıyor: varsayılan PDF
+fontlarında `ğ ş İ ı ç ö ü` yok ve makine üzerinde kurulu font varsayılamaz. Font
+**base64 metin** olarak tutuluyor çünkü ikili dosya `git diff`'te okunamaz ve
+`include_str!` derleme anında çözüyor — çalışma anında dosya arama, dolayısıyla Windows
+yol sorunu yok. Fontun lisansı (OFL) `src-tauri/assets/OFL-NotoSans.txt` ile birlikte
+taşınıyor; teslim paketinde bulunması gereken şey bu.
+
+`opener` eklentisi platforma özel API değil (ADR-008 ile çelişmez): Tauri'nin kendi soyut
+katmanı, Windows'ta `ShellExecute`, macOS'ta `open` çağırıyor ve **tek bir yola** izin
+veriliyor.
+
+**Sonuç.** Gömülü olduğunun kanıtı testte: üretilen baytlarda `FontFile2` aranıyor
+(`receipt.rs`). Yeni bağımlılıklar: `printpdf` (default-features kapalı), `base64`,
+`tauri-plugin-opener`.
+
+**Durum.** Kabul edildi (2026-07-27, para fazı denetimi). Karar Codex'in uygulamasından
+sonra yazıldı — ADR-042 gereği dış ajan ADR yazamıyor, mimari izi yönetici kayda geçirir.
+
+---
+
+## ADR-044 — Ders ücreti paketli öğrencide yazılmaz; `charge_session` bunu kendisi bilir
+
+**Karar.** `repo::finance::charge_session` bir yoklamayı borçlandırmadan önce **öğrencinin
+o ders için aktif paketi olup olmadığını kendisi sorar** ve paketliyse `Ok(None)` döner.
+Ayrım çağırana bırakılmaz.
+
+**Gerekçe — para fazı denetiminde bulundu (`DENETIM-PARA > P1`).** Bugünkü zincir paketli
+öğrenciye borç yazıyor:
+
+1. `resolve_unit_price` yalnızca `pricing_model = 'per_session'` kayıtlarına bakar;
+   paketli öğrencide eşleşme bulamaz,
+2. bulamayınca `session.unit_price` **snapshot'ına** düşer,
+3. o snapshot'ı yazan `schedule::solo_unit_price` (Faz 5A) `pricing_model`'e
+   **bakmıyor** — paketli kaydın birim ücretini de seansa yazmış durumda.
+
+Sonuç: paketli öğrencinin dersi işlendiğinde hem `package_usage(delta = −1)` hem
+`ledger_entry(session_charge)` doğar. Öğrenci hem ders hakkını kaybeder hem borçlanır;
+paketin taksitleri zaten ayrıca tahakkuk ettiği için **aynı ders iki kez faturalanır.**
+ADR-015'in "paketli öğrencide ders işlemek deftere hiçbir satır yazmaz" kuralının ihlali.
+
+**Bugün canlı bir hata değil**: `charge_session` üretim kodundan çağrılmıyor, yalnızca
+testlerden. Çağrıyı **Faz 6 yazacak** — yani bu, yoklama ekranı bağlandığı gün patlayacak
+bir mayın. Bu yüzden düzeltme Faz 6'nın ilk maddesi.
+
+**Neden fonksiyonun içinde, çağıranda değil.** ADR-042'nin "iki yol iki bakiye" kuralının
+aynısı: ayrım çağırana bırakılırsa yoklama ekranı, telafi akışı ve ileride gelen her
+toplu işlem aynı kararı **yeniden** vermek zorunda kalır; biri unutursa hata sessizdir ve
+ekstrede birikir. Doğru yer, ücreti zaten çözen fonksiyondur.
+
+**Sonuç.** Faz 6'da: (a) `charge_session` paket kontrolü kazanır, (b) testi yazılır —
+*paketli öğrencinin işlenen dersi deftere satır yazmaz, yalnızca hak düşer*, (c)
+`schedule::solo_unit_price`'ın paketli kayıttan fiyat snapshot'ı yazması ayrıca
+daraltılır (`pricing_model = 'per_session'` filtresi) — savunma iki katmanda birden.
+`cancel_session_financials` zaten simetrik ve savunmalı, ona dokunulmaz.
+
+**Durum.** Kabul edildi (2026-07-27, para fazı denetimi).

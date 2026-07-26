@@ -1,9 +1,9 @@
 # Durum
 
-**Son güncelleme:** 2026-07-26 · yönetici oturumu — para fazının kalanı Codex'e devredildi (ADR-042)
-**Sıradaki iş:** **Codex** `/faz-07` §1–§10'u yazar (`docs/CODEX-DEVIR.md`'deki prompt);
-Claude Code'un işi dönüşteki **para fazı denetimi**
-**Kalan plan:** `/faz-07` (para, Codex'te) → `/faz-06` (yoklama) → `/faz-10` (teslim)
+**Son güncelleme:** 2026-07-27 · **para fazı bitti ve denetlendi** (`docs/DENETIM-PARA.md`)
+**Sıradaki iş:** **Codex** `/faz-06`'yı yazar (prompt `docs/CODEX-DEVIR.md`'de) —
+**ilk madde denetimin P1 bulgusu**, ADR-044
+**Kalan plan:** `/faz-06` (yoklama, Codex'te) → `/faz-10` (teslim)
 
 > Bu dosya **son durumu** tutar, oturum arşivi değildir. Geçmiş `git log`'da, gerekçeler
 > `docs/KARARLAR.md`'de.
@@ -12,7 +12,7 @@ Claude Code'un işi dönüşteki **para fazı denetimi**
 
 ## Nerede duruyoruz
 
-`npm run check` yeşil: **536 test** (320 TypeScript + 216 Rust) + typecheck + ESLint +
+`npm run check` yeşil: **588 test** (345 TypeScript + 243 Rust) + typecheck + ESLint +
 clippy + rustfmt + paket denetimi.
 
 | Çalışıyor | Nerede |
@@ -21,62 +21,40 @@ clippy + rustfmt + paket denetimi.
 | Seans üretim motoru — ufka kadar, idempotent, açılışta | `repo/schedule.rs` · `repo/ops.rs` |
 | Bugün ekranı, ders ekle/düzenle, ertele/iptal/sil, şablon | `pages/bugun/` · `pages/dersler/` |
 | Takvim — ay/hafta/gün, sürükle-bırak (**donduruldu**, ADR-034) | `pages/takvim/` |
-| **Öğretmenler ve işletme ayarları** (bu oturum) | `pages/tanimlar/TeachersTab · GeneralTab` |
-| **Ders hakkı sayacı** — zincir modeli + tüketim fonksiyonu (bu oturum) | `migrations/003_*` · `repo/finance.rs` |
+| Öğretmenler ve işletme ayarları | `pages/tanimlar/TeachersTab · GeneralTab` |
+| Ders hakkı sayacı — zincir modeli + tüketim fonksiyonu | `migrations/003_*` · `repo/finance.rs` |
+| **Para: tarife · paket/taksit · tahsilat · borçlu · ekstre · makbuz PDF** | `pages/odemeler/` · `pages/tanimlar/PriceRulesTab` · `repo/finance.rs` · `receipt.rs` |
 
 ---
 
-## Bu oturumda ne bitti
+## Para fazı bitti — `/faz-07` (ADR-042, Codex)
 
-**§0 — kurs sahibi kendi programını tanımlayabiliyor** (ADR-037/038, `KULLANILABILIRLIK`
-K1 ve K2 ✅):
+Program **ilk kez para takip ediyor**: fiyat tarifesi (tarihli geçmişle) · paket ve
+taksit satışı · vade tahakkuku · tahsilat ve otomatik mahsup · borçlu listesi · cari
+ekstre (yazdırma + BOM'lu CSV) · gömülü fontlu makbuz PDF · öğrenci ve Bugün ekranlarının
+paraya bağlanması. 8 commit (`3d80e44..4288405`), 45 dosya, 588 test.
 
-- `Tanımlar → Öğretmenler` — ekle/düzenle/arşivle. Migration'ın `'Öğretmen'` satırı artık
-  düzenlenebilir. **Tek adayı otomatik seçen satır kaldırıldı**; öğretmen gerçek bir seçim.
-  `is_active` ile arşiv ayrı: pasif listede kalır, seçim kutularında çıkmaz.
-- `Tanımlar → Genel` — 11 işletme ayarı, anında kayıt. Yazan komut **beyaz listeden**
-  geçiyor (`EDITABLE_KEYS`); programın kendi üç satırı ekranda da yok, komutta da yazılamaz.
-  İki devamsızlık satırı ADR-016'nın para politikası ve para fazının girdisi.
-- **K-1 çakışma uyarısı `teacher_id`'ye daraldı** — `DENETIM-FAZ1 > C5` **kapandı** (üç faz
-  boyunca açıktı). Aynı öğretmen çakışır, farklı öğretmen çakışmaz, öğretmensiz seans uyarı
-  üretmez.
-- Takvime öğretmen filtre ekseni + ders bloğunda öğretmen adı (ADR-038'in dar istisnası).
-  **Gün görünümü tek sütun kaldı**, geometriye dokunulmadı.
-- `src/ui/SearchSelect.tsx` — Türkçe eşleşen aranabilir seçim (**ADR-041**). `Select`
-  bozulmadan kaldı; hangisinin nerede kullanılacağı ADR'de tabloya bağlandı.
-- 13 ADR-011 atfının hepsi temizlendi.
+**Denetim yapıldı — `docs/DENETIM-PARA.md`.** Dış ajan sınırlara uydu: migration yok,
+belge yok, ADR yok, takvim yok, tek defter yolu, bölümlü commit. Doğrulananlar: ADR-015'in
+satış kuralı, ADR-014'ün iptal zinciri (`payment.deleted_at` boş kalıyor), K-9'un mahsup
+sınırı, en eski vadeden mahsup, tahakkuk idempotency'si, float yokluğu, gömülü font.
 
-**§4'ün kapısı — ADR-036 uygulandı:**
+Denetimin yazdığı iki karar: **ADR-043** (makbuz PDF yığını — `printpdf`, base64 gömülü
+Noto Sans, tek `opener` yetkisi), **ADR-044** (ders ücreti paketli öğrencide yazılmaz).
 
-- `003_package_usage_reversal_chain.sql`: `reverses_id`, `ux_pkgusage_att` kalktı,
-  `ux_pkgusage_head` + `ux_pkgusage_reverses` geldi, üç tetikleyici.
-- **Kanıt şartı yeşil** — yedi dizinin hepsi, `Geldi → Mazeretli → Geldi` dahil (eski
-  şemada bu satır *yazılamıyordu*). `v_package_remaining` yeniden yazılmadı, gerekmedi.
-- Migration **gerçek geliştirme veritabanının kopyasına da uygulandı** (11 mevcut satır):
-  indeksler kuruldu, kalan haklar değişmedi. Fresh in-memory testi bu riski göstermezdi.
-- `consume_package_credit(attendance_id, today)` + `restore_package_credit` yazıldı ve
-  testlendi — **ADR-040**. İmza `/faz-06` için sabit; ekran bağlantısı yapılmadı.
+## Sıradaki iş — `/faz-06` yine Codex'te
 
----
+Devir sürüyor (ADR-042'nin kalıbı): prompt `docs/CODEX-DEVIR.md`'nin başında, sınırlar
+aynı — migration yok, `docs/**` ve ADR yok, takvim yok, tek defter yolu, bölümlü commit.
+Kurallar kökteki `AGENTS.md`'de (Codex `CLAUDE.md`'yi kendiliğinden okumaz).
 
-## Para fazının kalanı Codex'te — ADR-042
+**Faz 6'nın ilk maddesi denetimin P1 bulgusu — ADR-044.** `charge_session` paketli
+öğrenciyi tanımıyor; bu fazın kendisi o fonksiyonu çağıracak, yani düzeltilmezse mayına
+basılacak. Ayrıntı `docs/DENETIM-PARA.md` ve `/faz-06 §0a`.
 
-`/faz-07`'nin **§1'den §10'a** kadarı dış bir kodlama ajanına verildi: fiyat tarifesi ·
-paket/taksit satışı · deftere yansıma · tahsilat · borçlu listesi · cari ekstre · makbuz
-PDF · öğrenci detayının para bölümü. Sebep kapasite değil, **aracın gerçek bir iş
-üzerinde denenmesi** — bu yüzden faz bölünmedi, araya oturum sokulmadı.
-
-Çalışma dalı `main`. Sınırlar: migration yok, `docs/**` ve ADR yok, takvim yok
-(ADR-034), `ledger_entry`'ye ikinci yazma yolu yok. Prompt ve dönüşteki denetim listesi
-**`docs/CODEX-DEVIR.md`**'de; kurallar ayrıca kökteki **`AGENTS.md`**'de (Codex
-`CLAUDE.md`'yi kendiliğinden okumaz).
-
-**Claude Code'un bu fazdaki işi:** Codex tıkanır veya bir kararı zorlarsa yönetici
-oturumunda cevaplamak, ve faz bitince **para fazı denetimini** yapmak — ADR-033'ün
-plandaki tek zorunlu denetimi, artık `/faz-07`'nin tamamını kapsıyor.
-
-§0 ve §4 **bitti**, Codex'in kapsamı dışında. §4'ün kalan tek işi Faz 6'nın
-`consume_package_credit`'i çağırması.
+**Claude Code'un işi:** Codex tıkandığında yönetici oturumunda cevaplamak, dönüşte
+denetlemek. Faz 6 sonrası ayrı denetim oturumu **zorunlu değil** (ADR-033) — zorunlu olan
+tekti ve yapıldı; yine de devredilen iş diff'ten okunur.
 
 ### Sahiplik kontrolü (ADR-039)
 
@@ -84,23 +62,22 @@ plandaki tek zorunlu denetimi, artık `/faz-07`'nin tamamını kapsıyor.
 düzenini** tanımlıyor; dersini planlıyor, taşıyor, iptal ediyor; takvimi öğretmene göre
 süzüyor.
 
-*Yapamadığı ne?* **Para takibi** (bu fazın kalanı), yoklama (Faz 6), yedekleme ve özet
-ekranı (Faz 10). Üçü de plandaki bir faza ait — **plan eksik değil.**
+Artık **parasını da takip ediyor**: tarife giriyor, paket ve taksit satıyor, tahsilat
+alıyor, borçlusunu görüyor, ekstre ve makbuz basıyor.
 
-### Bu fazın en büyük riski
+*Yapamadığı ne?* **Yoklama** (Faz 6), yedekleme ve özet ekranı (Faz 10). İkisi de plandaki
+bir faza ait — **plan eksik değil.**
 
-**Para mantığının testini kısmak.** Kalan iş iki fazın birleşimi ve projenin en pahalı
-yanlış olan yeri: defter, tahakkuk, mahsup. Risk "yetişmez" değil, *yetiştirmeye çalışıp
-testi ertelemek*. Testsiz fonksiyon bırakılmaz (`CLAUDE.md > Para`).
+### Sıradaki fazın en büyük riski
 
-İkinci risk: **§2'nin ADR-035 dalları.** Paket kapatmanın iki yolu (avans bırak / iade et)
-`ledger_entry`'ye append-only satır yazıyor ve kalan tutar paketin `unit_price`
-**snapshot'ından** hesaplanıyor — indirim yeniden hesaplanmaz. Bu satır yanlış yazılırsa
-hata her ekstrede çoğalır.
+**P1'in atlanması.** Faz 6 `charge_session`'ı çağıran fazdır; düzeltme yapılmadan çağrı
+yazılırsa paketli her öğrenci işlenen her ders için ikinci kez borçlanır ve hata
+**sessizdir** — ekranda değil, ay sonu ekstrede görünür. Prompt bunu ilk madde yapıyor,
+denetimde ilk bakılacak yer burası.
 
-**Devre özgü üçüncü risk: tek yığın commit.** `main` üzerinde çalışılıyor, geri alma yolu
-`git revert`. Bölümler ayrı commit'lenmezse denetimde çıkan bir hata için tek seçenek
-fazın tamamını geri almak olur. Prompt bunu yazıyor; denetimde ilk bakılacaklardan biri.
+İkinci risk: **ikinci bir tüketim yolu.** `consume_package_credit` / `restore_package_credit`
+yazılı ve testli (ADR-040); yoklama ekranının kendi sayaç mantığını kurması iki sayaç
+üretir. ADR-036'nın zincir değişmezi ancak tek yol varken korunur.
 
 ---
 
@@ -128,10 +105,11 @@ S9 (Windows sürümü) ve S10 (kod imzalama sertifikası) Faz 10 öncesi cevapla
 
 | Ne | Nereye bağlı |
 |---|---|
-| Bugün ekranının yan panelinde borç bölümü "yakında" diyor | `/faz-07 §9` (bu faz, §5 dikişinden sonra) |
-| Öğrenciler listesinin son kolonu `Aç` — tasarımda `Tahsilat al` | `/faz-07 §9` (aynı yer) |
-| `search_students` komutu atıl (`student_list` aramayı da yapıyor) | Para fazında kullanılmazsa kaldırılır |
-| `DENETIM-FAZ1` **A ve B bölümleri taranmadı** (C bölümü tarandı ve kapandı) | Para fazı denetimi — yalnızca doğrulama, kod değil |
+| **`charge_session` paketli öğrenciyi tanımıyor — çift faturalama** (`DENETIM-PARA > P1`) | **`/faz-06 §0a`** — ADR-044, o fazın ilk maddesi |
+| **Makbuz numarası vazgeçilen tahsilatta atlıyor** (`DENETIM-PARA > P2`) | Ürün sahibinin cevabını bekliyor — `PRD §9 > S11` |
+| `output/pdf/ornek-makbuz.pdf` depoya commit edilmiş (`DENETIM-PARA > P3`) | `/faz-06 §0b` — `.gitignore`'a `output/` |
+| `search_students` komutu atıl (`student_list` aramayı da yapıyor) | Faz 10 (teslim öncesi tarama) |
+| `DENETIM-FAZ1` **A ve B bölümleri taranmadı** (C bölümü tarandı ve kapandı) | Faz 10 (teslim öncesi tarama) |
 | **Arşivlenen branş/öğretmen ekrandan geri alınamıyor.** `restore_*` komutları var, arşiv görünümü yok. Öğrencide var (E2), tanımlarda yok | Faz 10 (teslim öncesi tarama) |
 | `student_note.teacher_id` hep `NULL` — notun yazarı ayırt edilmiyor | Faz 6 (notlar sekmesiyle) |
 | Öğrenci detayında `Kayıtlar` sekmesi yok | Faz 6 (`Dersler` sekmesiyle) |

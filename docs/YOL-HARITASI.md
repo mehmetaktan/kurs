@@ -9,46 +9,25 @@ açılmıyor (ADR-033).
 
 ---
 
-## Kalan plan — üç faz
+## Kalan plan — iki faz
 
 | Sıra | Faz | Komut | Ne çıkar |
 |---|---|---|---|
-| **1** | **Para** — fiyat tarifesi, paket/taksit, tahsilat, borçlu listesi, ekstre, makbuz PDF (eski 7 + 8) · **§0 ✅ ve §4 ✅; kalanı (§1–§10) Codex'te — ADR-042** | `/faz-07` | Program ilk kez **para takip ediyor**. §0'da önce **öğretmen ve işletme ayarları** (ADR-037) |
-| **2** | **Yoklama & Telafi** — yoklama girişi, devamsızlık, telafi dersi, **paket tüketiminin bağlanması** | `/faz-06` | Ders sonrası rutini kapanır; ADR-015'in ders hakkı sayacı ekrana bağlanır |
-| **3** | **Teslim** — özet ekranı (kırpılmış Faz 9), yedekleme, hata dayanıklılığı, kurulum, kılavuz | `/faz-10` | Kurs sahibinin kullandığı hâl |
+| **1** | **Yoklama & Telafi** — yoklama girişi, devamsızlık, telafi dersi, **paket tüketiminin bağlanması** · **Codex'te** (ADR-042) | `/faz-06` | Ders sonrası rutini kapanır. İlk madde `DENETIM-PARA > P1` (ADR-044) |
+| **2** | **Teslim** — özet ekranı (kırpılmış Faz 9), yedekleme, hata dayanıklılığı, kurulum, kılavuz, **tek `.msi` ve elle Windows testi** | `/faz-10` | Kurs sahibinin kullandığı hâl |
 
-**Sıra 1 sığmazsa** bölünür ama **yeni komut açılmaz**. İki dikiş yeri var:
-`/faz-07 §1` (öncesi §0 — öğretmenler, ayarlar, çakışma uyarısı, aranabilir seçim) ve
-`/faz-07 §5` (öncesi tarife + paket + tahakkuk, sonrası tahsilat + ekstre + makbuz).
-Aynı komutla devam edilir, arada denetim veya karar oturumu **yok**.
+**Para fazı bitti (2026-07-27)** ve plandaki **tek zorunlu denetim yapıldı** —
+`docs/DENETIM-PARA.md`. Üç bulgudan ikisi Faz 6'ya, biri ürün sahibinin cevabına bağlandı.
 
-> **Birinci oturum (2026-07-26) §0'ı bitirdi ve §4'ü öne aldı**: ADR-036'nın migration'ı,
-> yedi kanıt dizisi ve tüketim fonksiyonu (ADR-040) yazıldı. Sıradaki oturum §1'den
-> (fiyat tarifesi) devam eder ve **§3'te durur.**
->
-> **Kalanın tamamı (§1–§10) dış bir ajana — Codex'e — devredildi: ADR-042.** Tarife,
-> paket/taksit, defter, tahsilat, borçlu listesi, ekstre ve makbuz PDF `main` üzerinde
-> orada yazılıyor. Claude Code bu fazda kod yazmıyor; işi Codex tıkandığında cevaplamak
-> ve faz bitince **para fazı denetimini** yapmak. Devir yeni bir denetim oturumu
-> doğurmaz — plandaki zorunlu denetimin kapsamını genişletir.
+### Neden Faz 6 yine Codex'te
 
-### Sıra 1'in §0'ı neden var
+Devir denendi ve tuttu (ADR-042): dış ajan sınırlara uydu, sekiz bölümlü commit geldi,
+denetimde tek gerçek hata çıktı ve o da devirden değil, **altındaki eski bir varsayımdan**
+doğdu. Aynı kalıp Faz 6'da sürüyor; prompt `docs/CODEX-DEVIR.md`'de.
 
-Kurs sahibi bugün programında **hiçbir işletme değerini değiştiremiyor**: öğretmenin adı
-migration'dan gelen `'Öğretmen'`, çalışma saatleri sabit, devamsızlık politikası sabit.
-Sonuncusu para mantığının doğrudan girdisi — kullanıcının değiştiremediği bir politikayı
-sabit sayıp üstüne defter kurmak, sonra değiştirmek pahalı. Ayrıntı: **ADR-037**, hata
-analizi: **ADR-039**.
-
-**Denetim** yalnızca Sıra 1'den sonra (para mantığı — `CLAUDE.md`'nin kendi istisnası).
-Sıra 2 ve 3 kendi kapanışlarındaki kontrol listesiyle yeter.
-
-### Neden para yoklamadan önce
-
-Uygulamanın adı "ders ve **tahsilat** takip" ve tahsilat hiç yok. Yoklamanın paraya
-değdiği tek yer paket tüketimi (ADR-015): o fonksiyon `/faz-07`'de **yazılır ve Rust'ta
-testlenir**, ekran bağlantısı `/faz-06`'da yapılır. Bu ayrım rework üretmiyor — tüketim
-fonksiyonunu yoklama kaydı çağıracak, imzası şimdi sabitleniyor.
+**Denetim** planda tekti ve para fazından sonra yapıldı. Faz 6 ve Faz 10 kendi
+kapanışlarındaki kontrol listesiyle yeter (ADR-033) — devredilen iş yine de diff'ten
+okunur.
 
 ---
 
@@ -66,8 +45,9 @@ fonksiyonunu yoklama kaydı çağıracak, imzası şimdi sabitleniyor.
 | 5C | Takvim ekranı (`/faz-05c`) | ADR-032; **donduruldu — ADR-034** |
 | Para §0 | Öğretmenler, işletme ayarları, çakışma uyarısı, aranabilir seçim (`/faz-07`) | ADR-041; `DENETIM-FAZ1 > C5` kapandı |
 | Para §4 | `package_usage` ters kayıt zinciri + tüketim fonksiyonu (`/faz-07`) | `003_*.sql`; ADR-036'nın kanıt şartı yeşil; ADR-040 |
+| **Para §1–§10** | Tarife, paket/taksit, defter, tahsilat, borçlu, ekstre, makbuz PDF (`/faz-07`, **Codex**) | ADR-043, ADR-044; **denetlendi** — `docs/DENETIM-PARA.md` |
 
-536 test (320 TypeScript + 216 Rust), `npm run check` yeşil, Windows `.msi` üretiliyor.
+588 test (345 TypeScript + 243 Rust), `npm run check` yeşil, Windows `.msi` CI'da üretiliyor.
 
 Ayrıntı git geçmişinde (`git log --oneline`) ve ADR'lerde; `docs/DURUM.md` yalnızca
 **son durumu** tutar, oturum arşivi değildir.
@@ -79,7 +59,7 @@ Ayrıntı git geçmişinde (`git log --oneline`) ve ADR'lerde; `docs/DURUM.md` y
 ```
 … 4 ──> 5A ──> 5B ──> 5C (donduruldu)
          │
-         └──> 7+8 (para) ──> 6 (yoklama) ──> 10 (teslim)
+         └──> 7+8 (para) ✅ ──> 6 (yoklama) ──> 10 (teslim)
 ```
 
 - **Para fazı 5A'ya bağlı**, 5B/5C'ye değil: seansları motor üretiyor, takvim değil.
@@ -93,8 +73,8 @@ Ayrıntı git geçmişinde (`git log --oneline`) ve ADR'lerde; `docs/DURUM.md` y
 | Ne zaman | Ne |
 |---|---|
 | Faz 5A sonu ✅ | **CI ilk kez tümüyle yeşil** (2026-07-26). Şemanın Windows'ta kurulduğu kanıtlı — testler gerçek migration'ları uyguluyor |
-| Faz 5C sonu ✅ | **İlk gerçek Windows testi.** `.msi` kurs sahibine gönderiliyor; 5 maddelik test listesi Segoe UI metrikleri, DPI ölçekleme, kaydırma çubuğu ve ICU verisini yokluyor |
-| **Para fazı sonu** | **Para mantığının testleri yeşil.** Buradan sonra şema değişikliği pahalı. Denetim burada yapılır |
+| **Para fazı sonu ✅** | **Para mantığının testleri yeşil** (2026-07-27). Buradan sonra şema değişikliği pahalı. Plandaki tek zorunlu denetim burada yapıldı |
+| Faz 10 · teslim kapısı | **Projenin tek elle Windows testi.** Ara `.msi` denemeleri kaldırıldı; tek paket orada üretilir ve orada kurulur |
 | Faz 10 sonu | Kurulum dosyası + kullanım kılavuzu + otomatik yedekleme |
 
 ---

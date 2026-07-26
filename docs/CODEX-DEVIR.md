@@ -1,4 +1,80 @@
-# Codex devri — `/faz-07`'nin kalanı (§1–§10)
+# Codex devri
+
+ADR-042 ile başladı ve sürüyor: `/faz-07` **bitti ve denetlendi**
+(`docs/DENETIM-PARA.md`), sıradaki devir **`/faz-06` — Yoklama & Telafi**.
+
+---
+
+# Sıradaki prompt — `/faz-06`
+
+```
+Bu depoda /faz-06'yı (Yoklama & Telafi) yazacaksın. /faz-07 bitti ve denetlendi;
+denetimin bu faza düşen üç maddesi §0'da duruyor ve İLK İŞ ONLAR.
+
+Başlamadan önce sırayla oku:
+- AGENTS.md — kurallar, dokunulmayacak yollar ve kapı
+- CLAUDE.md — projenin anayasası, tamamını oku
+- docs/DENETIM-PARA.md — para fazı denetiminin bulguları; P1 kritik
+- .claude/commands/faz-06.md — şartnamen, §0'dan başla
+- docs/VERI-MODELI.md §1.16 ve §4 — yoklama durumları ve "yoklama düzeltilirse
+  ne yazılır" zinciri. SATIR SATIR OKU
+- docs/DURUM.md — nerede kalındı
+- docs/KARARLAR.md'de ADR-015, ADR-016, ADR-022, ADR-036, ADR-040, ADR-044
+
+İLK MADDE — P1, ADR-044. Bugün paketli bir öğrencinin dersi işlenirse hem
+package_usage(delta=-1) hem ledger_entry(session_charge) yazılıyor; paketin
+taksitleri ayrıca tahakkuk ettiği için aynı ders İKİ KEZ faturalanıyor. Sebep:
+resolve_unit_price yalnızca pricing_model='per_session' kayıtlarına bakıyor,
+bulamayınca session.unit_price snapshot'ına düşüyor, o snapshot'ı yazan
+schedule::solo_unit_price ise pricing_model'e bakmıyor. Bu fazı yazarken
+charge_session'ı ÇAĞIRACAKSIN, yani mayına basacaksın. Önce düzelt:
+charge_session öğrencinin aktif paketi var mı diye KENDİSİ sorsun ve paketliyse
+Ok(None) dönsün — ayrımı çağırana bırakma; ayrıca solo_unit_price'a
+pricing_model='per_session' filtresi ekle. Testi: paketli öğrencinin işlenen
+dersi deftere satır yazmaz yalnızca hak düşer; paketsizde tam tersi.
+cancel_session_financials zaten simetrik ve savunmalı — ona dokunma.
+
+Bu kararlar KİLİTLİ, uygulanır — yeniden tartışılmaz, ADR yazılmaz:
+- Yoklama durumları şemadaki dört değerdir: present, excused, unexcused,
+  cancelled. Girilmemiş satır pending'dir. "Geç geldi" ve "Gelmedi" YOK.
+- Mazeretli/mazeretsiz ayrımı doğrudan para etkisidir (ADR-016) ve politikası
+  Tanımlar → Genel'deki iki ayardan okunur, koda gömülmez.
+- Paket tüketimi BURADA KURULMAZ, kurulmuş hâlde geliyor: consume_package_credit
+  ve restore_package_credit yazıldı ve testlendi (ADR-040). İkisi de yön belirtir
+  ve idempotenttir. Senin işin onları ÇAĞIRMAK. İkinci bir tüketim yolu yazma.
+- Yoklama düzeltmesi ikinci bir session_charge yazmaz; ters kaydın tersini yazar
+  (ADR-022) ve ders hakkı tarafında zincirin bir sonraki halkasını yazar
+  (ADR-036). Geldi → Mazeretli → Geldi dizisi şema seviyesinde mümkün; ekranın
+  da aynı diziyi doğru üretmesi lazım.
+- Telafi kısayolu YALNIZCA excused durumunda çıkar; telafi seansı işlendiğinde
+  ikinci kez borç yazılmaz ve ikinci kez hak düşmez (is_makeup = 1).
+
+Migration yazma: şema kapalı, ADR-036'nın 003_*.sql'i son değişiklikti.
+attendance, package_usage, session, ledger_entry tabloları ve v_package_remaining
+hazır. Bir sütuna ihtiyacın olursa dur ve sor.
+
+ledger_entry'ye ikinci bir yazma yolu açma — repo/finance.rs'in
+insert_ledger_entry / insert_reversal / charge_session / reverse_session_charge
+fonksiyonlarını çağır.
+
+Ayrıca §0'da: output/pdf/ornek-makbuz.pdf depoya commit edilmiş; git rm --cached
+ile çıkar ve .gitignore'a output/ ekle.
+
+Sırayla çalış ve HER BÖLÜMÜ AYRI COMMIT ET: §0 denetim düzeltmeleri → §1 yoklama
+ekranı → §2 seans durumu ve paket tüketiminin bağlanması → §3 telafi dersi →
+§3b yoklama düzeltme → §4 öğrenci detayı Dersler sekmesi → §5 devamsızlık
+raporu. Her commit'ten önce `npm run check` yeşil olacak.
+
+Para ve ders hakkı mantığına dokunan her fonksiyonun testi olacak. §6'daki test
+listesine ek olarak: ekran yolundan geçen bir düzeltme zincirinden sonra HEM
+defter (ADR-022) HEM ders hakkı (ADR-036) değişmezleri tutmalı.
+
+Bitince `npm run check` çıktısını ve ekran görüntülerini göster.
+```
+
+---
+
+# Tamamlanan devir — `/faz-07` (§1–§10)
 
 Kararı ve sınırları **ADR-042**'de. Bu dosya devrin **uygulama yüzeyi**: Codex'e verilecek
 prompt ve dönüşte denetlenecekler.
