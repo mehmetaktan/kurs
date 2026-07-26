@@ -93,6 +93,74 @@ fn arsivlenmis_borclu_listeden_kaybolmaz() {
 }
 
 #[test]
+fn borclu_ekrani_arama_cip_arsiv_ve_avansi_tek_sorguda_dogru_getirir() {
+    let conn = conn();
+    let debtor = student(&conn, "İpek Şahin");
+    ledger(&conn, debtor, "2026-03-02", "session_charge", -60_000);
+    let package_id = package(&conn, debtor);
+    repo::finance::insert_installment(
+        &conn,
+        &Installment {
+            id: None,
+            student_id: debtor,
+            package_id: Some(package_id),
+            enrollment_id: None,
+            seq: 1,
+            due_on: "2026-03-15".into(),
+            amount: 60_000,
+            label: Some("Mart taksiti".into()),
+            accrued_entry_id: None,
+            created_at: None,
+            updated_at: None,
+            deleted_at: None,
+        },
+    )
+    .unwrap();
+    repo::archive::<Student>(&conn, debtor).unwrap();
+    let advance = student(&conn, "Avans Öğrencisi");
+    ledger(&conn, advance, "2026-03-05", "payment", 40_000);
+
+    let rows = repo::views::debtor_rows(
+        &conn,
+        &repo::views::DebtQuery {
+            search: Some("ipek".into()),
+            filter: "all".into(),
+            today: "2026-03-20".into(),
+        },
+    )
+    .unwrap();
+    assert_eq!(rows.len(), 1, "Türkçe İ araması eşleşmeli");
+    assert_eq!(rows[0].student_id, debtor);
+    assert!(rows[0].archived, "arşiv borcu gizlememeli");
+    assert_eq!(rows[0].debt_kurus, 60_000);
+    assert_eq!(rows[0].days_overdue, Some(18));
+
+    let due_this_month = repo::views::debtor_rows(
+        &conn,
+        &repo::views::DebtQuery {
+            search: None,
+            filter: "due_this_month".into(),
+            today: "2026-03-20".into(),
+        },
+    )
+    .unwrap();
+    assert_eq!(due_this_month[0].student_id, debtor);
+
+    let advances = repo::views::debtor_rows(
+        &conn,
+        &repo::views::DebtQuery {
+            search: None,
+            filter: "advance".into(),
+            today: "2026-03-20".into(),
+        },
+    )
+    .unwrap();
+    assert_eq!(advances.len(), 1);
+    assert_eq!(advances[0].student_id, advance);
+    assert_eq!(advances[0].advance_kurus, 40_000);
+}
+
+#[test]
 fn fifo_vade_en_eski_kapanmamis_borcun_gunudur() {
     let conn = conn();
     let id = student(&conn, "Mustafa Çelik");

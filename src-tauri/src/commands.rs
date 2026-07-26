@@ -99,6 +99,14 @@ pub fn student_debts(state: State<'_, AppState>) -> AppResult<Vec<StudentDebt>> 
     state.with_conn(repo::views::student_debts)
 }
 
+#[tauri::command]
+pub fn debtor_rows(
+    state: State<'_, AppState>,
+    query: repo::views::DebtQuery,
+) -> AppResult<Vec<repo::views::DebtorRow>> {
+    state.with_conn(|conn| repo::views::debtor_rows(conn, &query))
+}
+
 // ---------------------------------------------------------------------------
 // Para fazı §1 — fiyat tarifesi
 // ---------------------------------------------------------------------------

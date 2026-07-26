@@ -151,6 +151,7 @@ pub fn run() {
             commands::search_students,
             commands::student_balance,
             commands::student_debts,
+            commands::debtor_rows,
             // Para fazı §1 — tarifeler
             commands::price_rules,
             commands::save_price_rule,

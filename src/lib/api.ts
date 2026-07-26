@@ -71,6 +71,29 @@ export function fetchStudentDebts(): Promise<StudentDebt[]> {
   return call<StudentDebt[]>('student_debts')
 }
 
+export type DebtFilter = 'all' | 'overdue' | 'due_this_month' | 'advance'
+
+export interface DebtQuery {
+  search?: string | null
+  filter: DebtFilter
+  today: string
+}
+
+export interface DebtorRow {
+  studentId: number
+  fullName: string
+  guardianPhone: string | null
+  archived: boolean
+  debtKurus: number
+  advanceKurus: number
+  oldestDueOn: string | null
+  daysOverdue: number | null
+}
+
+export function fetchDebtorRows(query: DebtQuery): Promise<DebtorRow[]> {
+  return call<DebtorRow[]>('debtor_rows', { query })
+}
+
 // ─── Para fazı §1 — fiyat tarifesi ───────────────────────────────────────────
 
 export type PricingModel = 'per_session' | 'package' | 'period'

@@ -6,9 +6,10 @@
 //! `installment` satırı üretmediği için o listede hiç görünmezdi.
 
 use chrono::NaiveDate;
-use rusqlite::Connection;
+use rusqlite::{params, Connection};
+use serde::{Deserialize, Serialize};
 
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use crate::model::{InstallmentOpen, PackageRemaining, StudentBalance, StudentDebt};
 
 /// Tek öğrencinin bakiyesi. **Negatif = borçlu** (K3).
@@ -82,6 +83,106 @@ pub fn student_debt(conn: &Connection, student_id: i64) -> AppResult<Option<Stud
         Some(row) => Ok(Some(row?)),
         None => Ok(None),
     }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DebtQuery {
+    pub search: Option<String>,
+    pub filter: String,
+    pub today: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DebtorRow {
+    pub student_id: i64,
+    pub full_name: String,
+    pub guardian_phone: Option<String>,
+    pub archived: bool,
+    pub debt_kurus: i64,
+    pub advance_kurus: i64,
+    pub oldest_due_on: Option<String>,
+    pub days_overdue: Option<i64>,
+}
+
+/// E14 birleşik satırı. Borç tutarı yalnızca `v_student_debt`'ten gelir (ADR-018);
+/// `v_installment_open` sadece "bu ay" filtresinin üyeliğini belirler.
+pub fn debtor_rows(conn: &Connection, query: &DebtQuery) -> AppResult<Vec<DebtorRow>> {
+    let today = NaiveDate::parse_from_str(&query.today, "%Y-%m-%d").map_err(|_| {
+        AppError::new(
+            "debt.today",
+            "Borçlu listesi tarihi okunamadı. Ekranı yenileyip yeniden deneyin.",
+        )
+    })?;
+    if !matches!(
+        query.filter.as_str(),
+        "all" | "overdue" | "due_this_month" | "advance"
+    ) {
+        return Err(AppError::new(
+            "debt.filter",
+            "Borç filtresi tanınmadı. Filtreyi temizleyip yeniden deneyin.",
+        ));
+    }
+    let raw_search = query.search.as_deref().unwrap_or("").trim();
+    let search_name = crate::text::search_name(raw_search);
+    let phone_digits = crate::text::phone_digits(raw_search);
+    let mut stmt = conn.prepare(
+        "SELECT s.id, s.full_name, \
+                (SELECT g.phone FROM student_guardian sg \
+                 JOIN guardian g ON g.id = sg.guardian_id AND g.deleted_at IS NULL \
+                 WHERE sg.student_id = s.id AND sg.deleted_at IS NULL \
+                 ORDER BY sg.is_primary DESC, sg.id LIMIT 1), \
+                s.deleted_at IS NOT NULL, COALESCE(d.debt_kurus, 0), \
+                MAX(COALESCE(b.balance_kurus, 0), 0), d.oldest_due_on, \
+                COALESCE((SELECT GROUP_CONCAT(g.full_name, ' ') FROM student_guardian sg \
+                  JOIN guardian g ON g.id = sg.guardian_id AND g.deleted_at IS NULL \
+                  WHERE sg.student_id = s.id AND sg.deleted_at IS NULL), ''), \
+                COALESCE((SELECT GROUP_CONCAT(g.phone_digits, ' ') FROM student_guardian sg \
+                  JOIN guardian g ON g.id = sg.guardian_id AND g.deleted_at IS NULL \
+                  WHERE sg.student_id = s.id AND sg.deleted_at IS NULL), '') \
+         FROM student s \
+         LEFT JOIN v_student_debt d ON d.student_id = s.id \
+         LEFT JOIN v_student_balance b ON b.student_id = s.id \
+         WHERE ( \
+           (?1 = 'all' AND COALESCE(d.debt_kurus, 0) > 0) OR \
+           (?1 = 'overdue' AND COALESCE(d.debt_kurus, 0) > 0 AND d.oldest_due_on < ?2) OR \
+           (?1 = 'due_this_month' AND COALESCE(d.debt_kurus, 0) > 0 AND EXISTS ( \
+             SELECT 1 FROM v_installment_open io \
+             WHERE io.student_id = s.id AND substr(io.due_on, 1, 7) = substr(?2, 1, 7) \
+           )) OR \
+           (?1 = 'advance' AND COALESCE(b.balance_kurus, 0) > 0) \
+         )",
+    )?;
+    let rows = stmt.query_map(params![query.filter, query.today], |row| {
+        let oldest_due_on: Option<String> = row.get(6)?;
+        Ok((
+            DebtorRow {
+                student_id: row.get(0)?,
+                full_name: row.get(1)?,
+                guardian_phone: row.get(2)?,
+                archived: row.get(3)?,
+                debt_kurus: row.get(4)?,
+                advance_kurus: row.get(5)?,
+                days_overdue: days_overdue(today, oldest_due_on.as_deref()),
+                oldest_due_on,
+            },
+            row.get::<_, String>(7)?,
+            row.get::<_, String>(8)?,
+        ))
+    })?;
+    let mut out = Vec::new();
+    for row in rows {
+        let (item, guardian_names, guardian_phones) = row?;
+        if raw_search.is_empty()
+            || crate::text::search_name(&item.full_name).contains(&search_name)
+            || crate::text::search_name(&guardian_names).contains(&search_name)
+            || (!phone_digits.is_empty() && guardian_phones.contains(&phone_digits))
+        {
+            out.push(item);
+        }
+    }
+    Ok(out)
 }
 
 /// Öğrencinin defterinde hiç hareket var mı.

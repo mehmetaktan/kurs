@@ -9,3 +9,11 @@
 .advance { padding: 10px 12px; border-radius: var(--radius-8); background: #edf4ef; color: var(--color-success); font-size: var(--font-size-body); }
 .modalActions { display: flex; justify-content: flex-end; gap: 8px; }
 @media (max-width: 620px) { .formPair { grid-template-columns: 1fr; } }
+.toolbar { display: flex; align-items: end; justify-content: space-between; gap: var(--space-4); margin-bottom: var(--space-4); }
+.sortSelect { width: 180px; }
+.studentCell { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.studentCell > div { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.studentCell strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.muted { color: var(--color-text-muted); }
+.debt { color: var(--color-danger); font-variant-numeric: tabular-nums; }
+.advanceText { color: var(--color-success); font-variant-numeric: tabular-nums; }
