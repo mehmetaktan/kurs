@@ -118,11 +118,25 @@ kurs bilgileri → ilk branş → ilk öğrenci.
 **`docs/KULLANIM-KILAVUZU.md`** — günlük, haftalık, aylık rutinler.
 `docs/PRD.md`'deki rutinlerle aynı sırada olsun.
 
-## 8. Teslim öncesi kontrol listesi
+## 8. Teslim öncesi kontrol listesi — **projenin tek elle Windows testi**
+
+> **Ara `.msi` denemeleri kaldırıldı (2026-07-26, ürün sahibinin kararı).** Faz 5C'de
+> gönderilen `.msi` kurulmadı ve her oturum açılışında tekrar sorulması gürültü üretti.
+> Karar: **tek `.msi` burada üretilir**, elle test de burada yapılır. O güne kadar
+> Windows kanıtı **CI**'dır (`ci.yml`'in Windows işi gerçek migration'ları uyguluyor ve
+> paketi kuruyor) — yeterli değil ama **ölçülebilir**, ve elle teste dönene kadar
+> aradaki tek şey ekran davranışı.
+>
+> Bu yüzden aşağıdaki liste artık bir "ara doğrulama" değil, **teslim kapısı**: burada
+> kırmızı çıkan bir madde teslimi durdurur.
 
 Windows'ta test edilmesi gereken her şeyi maddele ve bana ver:
 kurulum, Türkçe karakterler, PDF çıktısı, Excel dışa aktarma, yedek al/geri yükle,
 tarih-saat, yazdırma, program kapatıp açma, ikinci kez kurulum (veri korunuyor mu).
+
+Faz 5C'nin 5 maddesi de bu listeye katılır ve burada ilk kez gerçekten koşulur:
+Segoe UI metrikleri (yerleşim taşması), DPI ölçekleme, kaydırma çubuğu genişliği,
+ICU verisi (Türkçe sıralama/`İ`-`ı`), sistem font stack'inin oturması.
 
 ---
 

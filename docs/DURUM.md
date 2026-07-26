@@ -106,12 +106,15 @@ Tıkanınca uydurma yok: buraya yaz ve **tek soruyla** sor (ADR-033).
 
 ---
 
-## Ürün sahibinden beklenen iki şey
+## Ürün sahibinden beklenen tek şey
 
-1. **Windows testi.** `.msi` gönderildi; 5 maddelik liste Segoe UI metriklerini, DPI'ı,
-   kaydırma çubuğunu ve ICU verisini yokluyor. **Tek gerçek Windows kanıtı bu.**
-2. **Kullanılabilirlik maddeleri.** `docs/KULLANILABILIRLIK.md` şu an boş — yazılan her
-   satır bir sonraki kod oturumunun §0'ı olur.
+**Kullanılabilirlik maddeleri.** `docs/KULLANILABILIRLIK.md` şu an boş — yazılan her
+satır bir sonraki kod oturumunun §0'ı olur.
+
+> **Windows testi kapatıldı — ürün sahibinin kararı (2026-07-26).** `.msi` kurma ve elle
+> test etme işi **teslim fazına** ertelendi (`/faz-10 §8`), tek `.msi` orada üretilecek.
+> Bu madde bir daha oturum açılışında sorulmaz; Windows kanıtı o güne kadar **CI**
+> (`.github/workflows/ci.yml` Windows işi yeşil).
 
 ## Açık sorular
 

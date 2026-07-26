@@ -65,6 +65,8 @@ komutla ikinci oturumda devam edilir. Dikiş yeri faz komutunda yazılıdır.
 | `docs/EKRANLAR.md` | Ekran envanteri (Faz 1) |
 | `docs/TASARIM-SISTEMI.md` | Renk, tipografi, spacing, komponentler (Faz 1) |
 | `docs/DENETIM-FAZ1.md` | Faz 1 denetimi — 25 bulgu, kanıtları ve düzeltmeleri |
+| `docs/CODEX-DEVIR.md` | `/faz-07 §5–§9`'un dış ajana devri (ADR-042): prompt + denetim listesi |
+| `AGENTS.md` (kökte) | **Dış kodlama ajanlarının** giriş kapısı — Codex `CLAUDE.md`'yi okumaz, bunu okur |
 
 ## Stack
 
