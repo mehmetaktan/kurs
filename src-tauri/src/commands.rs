@@ -13,11 +13,12 @@ use tauri::State;
 use crate::clock;
 use crate::error::AppResult;
 use crate::model::{
-    ClosedDay, Guardian, PriceRule, Setting, Student, StudentBalance, StudentDebt, StudyGroup,
-    Subject, Teacher,
+    ClosedDay, Guardian, InstallmentOpen, PriceRule, Setting, Student, StudentBalance, StudentDebt,
+    StudyGroup, Subject, Teacher,
 };
 use crate::repo::finance::{
-    PackageCloseMode, PackageCloseReport, PackageOverview, PackageSaleInput, PriceRuleInput,
+    PackageCloseMode, PackageCloseReport, PackageOverview, PackageSaleInput,
+    PaymentAllocationInput, PaymentInput, PaymentReport, PriceRuleInput,
 };
 use crate::repo::people::TeacherInput;
 use crate::repo::roster::{StudentDetail, StudentInput, StudentQuery, StudentRow};
@@ -145,6 +146,47 @@ pub fn close_package(
 ) -> AppResult<PackageCloseReport> {
     let day = closed_on.unwrap_or_else(clock::today_local_string);
     state.with_conn(|conn| repo::finance::close_package(conn, package_id, &day, mode))
+}
+
+// ---------------------------------------------------------------------------
+// Para fazı §5 — tahsilat
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+pub fn reserve_receipt_no(state: State<'_, AppState>) -> AppResult<String> {
+    state.with_conn(repo::finance::reserve_receipt_no)
+}
+
+#[tauri::command]
+pub fn open_installments(
+    state: State<'_, AppState>,
+    student_id: i64,
+) -> AppResult<Vec<InstallmentOpen>> {
+    state.with_conn(|conn| repo::views::open_installments(conn, student_id))
+}
+
+#[tauri::command]
+pub fn suggest_payment_allocations(
+    state: State<'_, AppState>,
+    student_id: i64,
+    amount: i64,
+) -> AppResult<Vec<PaymentAllocationInput>> {
+    state.with_conn(|conn| repo::finance::suggest_payment_allocations(conn, student_id, amount))
+}
+
+#[tauri::command]
+pub fn record_payment(state: State<'_, AppState>, input: PaymentInput) -> AppResult<PaymentReport> {
+    state.with_conn(|conn| repo::finance::record_payment(conn, &input))
+}
+
+#[tauri::command]
+pub fn cancel_payment(
+    state: State<'_, AppState>,
+    payment_id: i64,
+    cancelled_on: Option<String>,
+) -> AppResult<i64> {
+    let day = cancelled_on.unwrap_or_else(clock::today_local_string);
+    state.with_conn(|conn| repo::finance::cancel_payment(conn, payment_id, &day))
 }
 
 // ---------------------------------------------------------------------------

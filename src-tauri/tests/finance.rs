@@ -3,7 +3,8 @@ mod common;
 use kurs_takip_lib::model::{Attendance, PriceRule, Session};
 use kurs_takip_lib::repo;
 use kurs_takip_lib::repo::finance::{
-    InstallmentInput, PackageCloseMode, PackageSaleInput, PriceRuleInput,
+    InstallmentInput, PackageCloseMode, PackageSaleInput, PaymentAllocationInput, PaymentInput,
+    PriceRuleInput,
 };
 
 fn rule_input(subject_id: i64, unit_price: i64, valid_from: &str) -> PriceRuleInput {
@@ -51,6 +52,30 @@ fn balance(conn: &rusqlite::Connection, student_id: i64) -> i64 {
         .unwrap()
         .unwrap()
         .balance_kurus
+}
+
+fn payable_student(conn: &rusqlite::Connection, name: &str) -> i64 {
+    let student_id = common::student(conn, name);
+    repo::finance::sell_package(conn, &sale_input(student_id)).unwrap();
+    repo::finance::accrue_due_installments(conn, "2026-04-01").unwrap();
+    student_id
+}
+
+fn payment_input(
+    student_id: i64,
+    amount: i64,
+    receipt_no: &str,
+    allocations: Vec<PaymentAllocationInput>,
+) -> PaymentInput {
+    PaymentInput {
+        student_id,
+        paid_on: "2026-04-01".into(),
+        amount,
+        method: "cash".into(),
+        receipt_no: receipt_no.into(),
+        note: None,
+        allocations,
+    }
 }
 
 fn solo_attendance(
@@ -527,4 +552,141 @@ fn seans_iptali_paket_hakkini_bir_kez_geri_verir_deftere_dokunmaz() {
         .query_row("SELECT COUNT(*) FROM ledger_entry", [], |row| row.get(0))
         .unwrap();
     assert_eq!(ledger_rows, 0);
+}
+
+#[test]
+fn makbuz_numarasi_atomik_rezerve_edilir_ve_atlamadan_artar() {
+    let conn = common::conn();
+    assert_eq!(repo::finance::reserve_receipt_no(&conn).unwrap(), "2026-1");
+    assert_eq!(repo::finance::reserve_receipt_no(&conn).unwrap(), "2026-2");
+    let next = repo::setting::value(&conn, "receipt_next_no").unwrap();
+    assert_eq!(next.as_deref(), Some("3"));
+}
+
+#[test]
+fn otomatik_mahsup_tum_acik_taksitleri_en_eski_vadeden_doldurur() {
+    let conn = common::conn();
+    let student_id = payable_student(&conn, "FIFO Öğrencisi");
+    let suggested = repo::finance::suggest_payment_allocations(&conn, student_id, 150_000).unwrap();
+
+    assert_eq!(suggested.len(), 2);
+    assert_eq!(suggested[0].amount, 100_000);
+    assert_eq!(suggested[1].amount, 50_000);
+    let due_dates: Vec<String> = suggested
+        .iter()
+        .map(|item| {
+            conn.query_row(
+                "SELECT due_on FROM installment WHERE id = ?1",
+                [item.installment_id],
+                |row| row.get(0),
+            )
+            .unwrap()
+        })
+        .collect();
+    assert_eq!(due_dates, ["2026-03-01", "2026-04-01"]);
+}
+
+#[test]
+fn kismi_tam_ve_fazla_tahsilat_bakiyeyi_ve_mahsuplari_dogru_yazar() {
+    for (name, amount, expected_balance, expected_allocated, expected_advance) in [
+        ("Kısmi", 60_000, -140_000, 60_000, 0),
+        ("Tam", 200_000, 0, 200_000, 0),
+        ("Fazla", 250_000, 50_000, 200_000, 50_000),
+    ] {
+        let conn = common::conn();
+        let student_id = payable_student(&conn, name);
+        let allocations =
+            repo::finance::suggest_payment_allocations(&conn, student_id, amount).unwrap();
+        let report = repo::finance::record_payment(
+            &conn,
+            &payment_input(student_id, amount, &format!("2026-{name}"), allocations),
+        )
+        .unwrap();
+
+        assert_eq!(balance(&conn, student_id), expected_balance);
+        assert_eq!(report.allocated_kurus, expected_allocated);
+        assert_eq!(report.advance_kurus, expected_advance);
+        common::assert_ledger_invariant(&conn);
+    }
+}
+
+#[test]
+fn mahsup_odemeyi_ve_taksidin_acik_tutarini_asamaz() {
+    let conn = common::conn();
+    let student_id = payable_student(&conn, "Sınır Öğrencisi");
+    let first = repo::views::open_installments(&conn, student_id).unwrap()[0].id;
+    let error = repo::finance::record_payment(
+        &conn,
+        &payment_input(
+            student_id,
+            50_000,
+            "2026-SINIR",
+            vec![PaymentAllocationInput {
+                installment_id: first,
+                amount: 60_000,
+            }],
+        ),
+    )
+    .unwrap_err();
+    assert_eq!(error.code, "payment.allocationTotal");
+    let payment_count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM payment", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(payment_count, 0, "hatalı işlem tamamen geri alınmalı");
+
+    let error = repo::finance::record_payment(
+        &conn,
+        &payment_input(
+            student_id,
+            110_000,
+            "2026-ACIK",
+            vec![PaymentAllocationInput {
+                installment_id: first,
+                amount: 110_000,
+            }],
+        ),
+    )
+    .unwrap_err();
+    assert_eq!(error.code, "payment.allocationOpen");
+}
+
+#[test]
+fn tahsilat_iptali_ters_kayit_yazar_mahsuplari_arsivler_odemeyi_silmez() {
+    let conn = common::conn();
+    let student_id = payable_student(&conn, "İptal Tahsilat");
+    let allocations =
+        repo::finance::suggest_payment_allocations(&conn, student_id, 200_000).unwrap();
+    let report = repo::finance::record_payment(
+        &conn,
+        &payment_input(student_id, 200_000, "2026-IPTAL", allocations),
+    )
+    .unwrap();
+    assert_eq!(balance(&conn, student_id), 0);
+
+    repo::finance::cancel_payment(&conn, report.payment_id, "2026-04-02").unwrap();
+    assert_eq!(balance(&conn, student_id), -200_000);
+    let (deleted_at, live_allocations): (Option<String>, i64) = conn
+        .query_row(
+            "SELECT p.deleted_at, (SELECT COUNT(*) FROM payment_allocation a \
+             WHERE a.payment_id = p.id AND a.deleted_at IS NULL) \
+             FROM payment p WHERE p.id = ?1",
+            [report.payment_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(deleted_at, None);
+    assert_eq!(live_allocations, 0);
+    let open_total: i64 = repo::views::open_installments(&conn, student_id)
+        .unwrap()
+        .iter()
+        .map(|item| item.open_kurus)
+        .sum();
+    assert_eq!(open_total, 200_000);
+    assert_eq!(
+        repo::finance::cancel_payment(&conn, report.payment_id, "2026-04-02")
+            .unwrap_err()
+            .code,
+        "payment_already_cancelled"
+    );
+    common::assert_ledger_invariant(&conn);
 }

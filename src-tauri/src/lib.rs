@@ -159,6 +159,12 @@ pub fn run() {
             commands::sell_package,
             commands::student_packages,
             commands::close_package,
+            // Para fazı §5 — tahsilat
+            commands::reserve_receipt_no,
+            commands::open_installments,
+            commands::suggest_payment_allocations,
+            commands::record_payment,
+            commands::cancel_payment,
             // Faz 4 — öğrenci ve veli
             commands::student_list,
             commands::student_detail,

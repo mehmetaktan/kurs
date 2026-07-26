@@ -6,6 +6,7 @@ import { GroupDetailPage } from './pages/gruplar/GroupDetailPage'
 import { GroupsPage } from './pages/gruplar/GroupsPage'
 import { StudentDetailPage } from './pages/ogrenciler/StudentDetailPage'
 import { StudentsPage } from './pages/ogrenciler/StudentsPage'
+import { PaymentsPage } from './pages/odemeler/PaymentsPage'
 import { CalendarPage } from './pages/takvim/CalendarPage'
 import { DefinitionsPage } from './pages/tanimlar/DefinitionsPage'
 import { AppShell } from './shell/AppShell'
@@ -55,6 +56,7 @@ function RoutedPage({ path }: { path: string }) {
   if (matchRoute(STUDENTS_PATH, path)) return <StudentsPage />
   if (matchRoute(GROUPS_PATH, path)) return <GroupsPage />
   if (matchRoute(DEFINITIONS_PATH, path)) return <DefinitionsPage />
+  if (path === '/odemeler') return <PaymentsPage />
 
   const student = matchRoute(`${STUDENTS_PATH}/:id`, path)
   if (student) {

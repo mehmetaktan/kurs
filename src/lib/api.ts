@@ -174,6 +174,63 @@ export function closePackage(
   return call<PackageCloseReport>('close_package', { packageId, mode })
 }
 
+// ─── Para fazı §5 — tahsilat ─────────────────────────────────────────────────
+
+export interface InstallmentOpen {
+  id: number
+  studentId: number
+  packageId: number | null
+  seq: number
+  dueOn: string
+  label: string | null
+  openKurus: number
+}
+
+export interface PaymentAllocationInput {
+  installmentId: number
+  amount: number
+}
+
+export interface PaymentInput {
+  studentId: number
+  paidOn: string
+  amount: number
+  method: 'cash' | 'card' | 'transfer'
+  receiptNo: string
+  note: string | null
+  allocations: PaymentAllocationInput[]
+}
+
+export interface PaymentReport {
+  paymentId: number
+  ledgerEntryId: number
+  allocatedKurus: number
+  advanceKurus: number
+}
+
+export function reserveReceiptNo(): Promise<string> {
+  return call<string>('reserve_receipt_no')
+}
+
+export function fetchOpenInstallments(studentId: number): Promise<InstallmentOpen[]> {
+  return call<InstallmentOpen[]>('open_installments', { studentId })
+}
+
+export function suggestPaymentAllocations(
+  studentId: number,
+  amount: number,
+): Promise<PaymentAllocationInput[]> {
+  return call<PaymentAllocationInput[]>('suggest_payment_allocations', { studentId, amount })
+}
+
+export function recordPayment(input: PaymentInput): Promise<PaymentReport> {
+  return call<PaymentReport>('record_payment', { input })
+}
+
+export function cancelPayment(paymentId: number): Promise<number> {
+  return call<number>('cancel_payment', { paymentId })
+}
+
 // ─── Faz 4 — öğrenci ve veli ──────────────────────────────────────────────────
 //
 // Tipler `src-tauri/src/repo/roster.rs` ile birebir (`rename_all = "camelCase"`).

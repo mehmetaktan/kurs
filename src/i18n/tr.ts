@@ -391,6 +391,41 @@ export const tr = {
   },
 
   // Faz 5A — Tanımlar (EKRANLAR.md E7 branşlar, E8 tatil günleri).
+  payments: {
+    takePayment: 'Tahsilat al',
+    introTitle: 'Tahsilat kaydı hazır',
+    introBody: 'Öğrenciyi seçip tahsilatı kaydedin. Borçlu listesi bu ekranın sonraki bölümünde gösterilecek.',
+    modal: {
+      title: 'Tahsilat al',
+      student: 'Öğrenci',
+      studentPlaceholder: 'Öğrenci seçin',
+      amount: 'Tutar',
+      date: 'Tarih',
+      method: 'Ödeme yöntemi',
+      methods: { cash: 'Nakit', card: 'Kart', transfer: 'Havale' },
+      receiptNo: 'Makbuz numarası',
+      receiptHint: 'Otomatik ayrıldı; matbu koçan için değiştirebilirsiniz.',
+      note: 'Açıklama',
+      notePlaceholder: 'İsteğe bağlı kısa açıklama',
+      installments: 'Açık taksitlere mahsup',
+      installmentsHint: 'En eski vadeden başlayarak önerildi; tutarları değiştirebilirsiniz.',
+      noInstallments: 'Bu öğrencinin açık taksidi yok; tahsilat bakiyede avans olarak kalır.',
+      installmentOpen: 'açık',
+      allocation: 'Mahsup',
+      advance: 'avans olarak kalacak.',
+      save: 'Tahsilatı kaydet',
+      saving: 'Kaydediliyor…',
+      saved: 'Tahsilat kaydedildi.',
+      errors: {
+        student: 'Tahsilat yapılacak öğrenciyi seçin.',
+        amount: 'Sıfırdan büyük, geçerli bir tutar yazın.',
+        date: 'Tahsilat tarihini seçin.',
+        receiptNo: 'Makbuz numarasını yazın.',
+        allocation: 'Mahsup toplamı tahsilat tutarını aşamaz.',
+      },
+    },
+  },
+
   definitions: {
     tabs: {
       subjects: 'Branşlar',

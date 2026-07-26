@@ -24,7 +24,7 @@ use crate::repo::{last_id, Record};
 // price_rule (§1.10)
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PriceRuleInput {
     /// Fiyatı değiştirilen tarife. Eski satır kapanır, yeni satır eklenir (ADR-006).
@@ -1122,6 +1122,262 @@ pub fn payments_of(conn: &Connection, student_id: i64) -> AppResult<Vec<Payment>
         out.push(row?);
     }
     Ok(out)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PaymentAllocationInput {
+    pub installment_id: i64,
+    pub amount: i64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PaymentInput {
+    pub student_id: i64,
+    pub paid_on: String,
+    pub amount: i64,
+    pub method: String,
+    pub receipt_no: String,
+    pub note: Option<String>,
+    pub allocations: Vec<PaymentAllocationInput>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PaymentReport {
+    pub payment_id: i64,
+    pub ledger_entry_id: i64,
+    pub allocated_kurus: i64,
+    pub advance_kurus: i64,
+}
+
+/// Makbuz sayacını modal açılırken atomik olarak rezerve eder (K-19). Kullanıcı öneki
+/// elle değiştirebilir; kaydetme anındaki son söz yine `ux_receipt` indeksindedir.
+pub fn reserve_receipt_no(conn: &Connection) -> AppResult<String> {
+    crate::repo::in_transaction(conn, |conn| {
+        let prefix = crate::repo::setting::value_or(conn, "receipt_prefix", "")?;
+        let mut next = crate::repo::setting::value_i64(conn, "receipt_next_no")?.unwrap_or(1);
+        if next < 1 {
+            next = 1;
+        }
+        loop {
+            let receipt_no = format!("{prefix}{next}");
+            let used: bool = conn.query_row(
+                "SELECT EXISTS(SELECT 1 FROM payment WHERE receipt_no = ?1)",
+                [&receipt_no],
+                |row| row.get(0),
+            )?;
+            next = next.checked_add(1).ok_or_else(|| {
+                AppError::new(
+                    "receipt_counter_overflow",
+                    "Makbuz sayacı artırılamadı. Makbuz önekini kontrol edip yeniden deneyin.",
+                )
+            })?;
+            crate::repo::setting::update_existing(conn, "receipt_next_no", &next.to_string())?;
+            if !used {
+                return Ok(receipt_no);
+            }
+        }
+    })
+}
+
+/// Açık taksitlere en eski vadeden başlayarak otomatik mahsup önerisi (R4.6). Vade
+/// filtresi yoktur; henüz vadesi gelmemiş açık taksitler de kapsanır.
+pub fn suggest_payment_allocations(
+    conn: &Connection,
+    student_id: i64,
+    amount: i64,
+) -> AppResult<Vec<PaymentAllocationInput>> {
+    if amount <= 0 {
+        return Ok(Vec::new());
+    }
+    let mut remaining = amount;
+    let mut result = Vec::new();
+    for installment in crate::repo::views::open_installments(conn, student_id)? {
+        if remaining == 0 {
+            break;
+        }
+        let allocated = remaining.min(installment.open_kurus);
+        if allocated > 0 {
+            result.push(PaymentAllocationInput {
+                installment_id: installment.id,
+                amount: allocated,
+            });
+            remaining -= allocated;
+        }
+    }
+    Ok(result)
+}
+
+/// Tahsilat, defter alacağı ve seçilen mahsuplar tek transaction'da yazılır. Artan tutar
+/// herhangi bir taksite bağlanmaz; öğrencinin avansı olarak bakiyede kalır.
+pub fn record_payment(conn: &Connection, input: &PaymentInput) -> AppResult<PaymentReport> {
+    validate_payment_input(input)?;
+    crate::repo::in_transaction(conn, |conn| {
+        let _: crate::model::Student = crate::repo::require(conn, input.student_id)?;
+        validate_payment_allocations(conn, input)?;
+        let payment_id = insert_payment(
+            conn,
+            &Payment {
+                id: None,
+                student_id: input.student_id,
+                paid_on: input.paid_on.clone(),
+                amount: input.amount,
+                method: input.method.clone(),
+                receipt_no: Some(input.receipt_no.trim().to_string()),
+                note: input.note.clone(),
+                created_at: None,
+                updated_at: None,
+                deleted_at: None,
+            },
+        )?;
+        let ledger_entry_id = insert_ledger_entry(
+            conn,
+            &LedgerEntry {
+                id: None,
+                student_id: input.student_id,
+                entry_date: input.paid_on.clone(),
+                kind: "payment".into(),
+                amount: input.amount,
+                attendance_id: None,
+                installment_id: None,
+                payment_id: Some(payment_id),
+                reverses_id: None,
+                memo: input.note.clone().or_else(|| Some("Tahsilat".into())),
+                created_at: None,
+                updated_at: None,
+                deleted_at: None,
+            },
+        )?;
+        let mut allocated_kurus = 0_i64;
+        for allocation in &input.allocations {
+            insert_payment_allocation(
+                conn,
+                &PaymentAllocation {
+                    id: None,
+                    payment_id,
+                    installment_id: allocation.installment_id,
+                    amount: allocation.amount,
+                    created_at: None,
+                    updated_at: None,
+                    deleted_at: None,
+                },
+            )?;
+            allocated_kurus = allocated_kurus
+                .checked_add(allocation.amount)
+                .ok_or_else(|| {
+                    AppError::new(
+                        "payment.allocationTotal",
+                        "Mahsup toplamı hesaplanamadı. Taksit tutarlarını kontrol edin.",
+                    )
+                })?;
+        }
+        Ok(PaymentReport {
+            payment_id,
+            ledger_entry_id,
+            allocated_kurus,
+            advance_kurus: input.amount - allocated_kurus,
+        })
+    })
+}
+
+/// Tahsilat iptali: ödeme satırına dokunmadan defter ters kaydı ve mahsup arşivi.
+pub fn cancel_payment(conn: &Connection, payment_id: i64, cancelled_on: &str) -> AppResult<i64> {
+    parse_day(cancelled_on, "payment.cancelledOn")?;
+    crate::repo::in_transaction(conn, |conn| {
+        let _: Payment = crate::repo::require(conn, payment_id)?;
+        let entry_id: i64 = conn
+            .query_row(
+                "SELECT l.id FROM ledger_entry l \
+                 WHERE l.payment_id = ?1 AND l.kind = 'payment' AND l.deleted_at IS NULL",
+                [payment_id],
+                |row| row.get(0),
+            )
+            .map_err(|_| {
+                AppError::new(
+                    "payment_ledger_not_found",
+                    "Bu tahsilatın defter kaydı bulunamadı. Listeyi yenileyip yeniden deneyin.",
+                )
+            })?;
+        let already_reversed: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM ledger_entry WHERE reverses_id = ?1)",
+            [entry_id],
+            |row| row.get(0),
+        )?;
+        if already_reversed {
+            return Err(AppError::new(
+                "payment_already_cancelled",
+                "Bu tahsilat daha önce iptal edilmiş. Listeyi yenileyin.",
+            ));
+        }
+        let reversal_id = insert_reversal(conn, entry_id, cancelled_on, Some("Tahsilat iptali"))?;
+        archive_allocations_of_payment(conn, payment_id)?;
+        Ok(reversal_id)
+    })
+}
+
+fn validate_payment_input(input: &PaymentInput) -> AppResult<()> {
+    parse_day(&input.paid_on, "payment.paidOn")?;
+    if input.amount <= 0 {
+        return Err(AppError::new(
+            "payment.amount",
+            "Tahsilat tutarı sıfırdan büyük olmalı. Tutarı kontrol edin.",
+        ));
+    }
+    if !matches!(input.method.as_str(), "cash" | "card" | "transfer") {
+        return Err(AppError::new(
+            "payment.method",
+            "Ödeme yöntemini Nakit, Kart veya Havale olarak seçin.",
+        ));
+    }
+    if input.receipt_no.trim().is_empty() {
+        return Err(AppError::new(
+            "payment.receiptNo",
+            "Makbuz numarası boş bırakılamaz. Önerilen numarayı kullanın veya yeni bir numara yazın.",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_payment_allocations(conn: &Connection, input: &PaymentInput) -> AppResult<()> {
+    let mut total = 0_i64;
+    let mut seen = std::collections::HashSet::new();
+    for allocation in &input.allocations {
+        if allocation.amount <= 0 || !seen.insert(allocation.installment_id) {
+            return Err(AppError::new(
+                "payment.allocations",
+                "Her taksit yalnızca bir kez ve sıfırdan büyük tutarla mahsup edilebilir. Mahsup listesini kontrol edin.",
+            ));
+        }
+        let open: Option<i64> = conn
+            .query_row(
+                "SELECT open_kurus FROM v_installment_open \
+                 WHERE id = ?1 AND student_id = ?2",
+                params![allocation.installment_id, input.student_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        if open.is_none_or(|open| allocation.amount > open) {
+            return Err(AppError::new(
+                "payment.allocationOpen",
+                "Mahsup tutarı taksidin açık tutarını aşıyor. Listeyi yenileyip tutarı düzeltin.",
+            ));
+        }
+        total = total.checked_add(allocation.amount).ok_or_else(|| {
+            AppError::new(
+                "payment.allocationTotal",
+                "Mahsup toplamı hesaplanamadı. Taksit tutarlarını kontrol edin.",
+            )
+        })?;
+    }
+    if total > input.amount {
+        return Err(AppError::new(
+            "payment.allocationTotal",
+            "Mahsup toplamı tahsilat tutarını aşamaz. Taksit tutarlarını azaltın.",
+        ));
+    }
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
