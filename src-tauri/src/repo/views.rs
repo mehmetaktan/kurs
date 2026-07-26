@@ -232,7 +232,7 @@ pub fn package_remaining(
 }
 
 /// Bir öğrencinin **aktif** paketleri. "Aktif paket" bir sorgudur, bir sütun değildir:
-/// `remaining > 0 AND (valid_until IS NULL OR valid_until >= :today)`.
+/// `sold_on <= :today AND remaining > 0 AND (valid_until IS NULL OR valid_until >= :today)`.
 /// En eski satış önce — tükenmeye yakın paket önce kullanılır.
 pub fn active_packages(
     conn: &Connection,
@@ -244,6 +244,7 @@ pub fn active_packages(
          FROM v_package_remaining r \
          JOIN package p ON p.id = r.package_id \
          WHERE r.student_id = ?1 \
+           AND p.sold_on <= ?2 \
            AND r.remaining > 0 \
            AND (r.valid_until IS NULL OR r.valid_until >= ?2) \
          ORDER BY p.sold_on, p.id",

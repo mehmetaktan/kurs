@@ -1703,10 +1703,17 @@ fn csv_cell(value: &str) -> String {
     }
 }
 
-/// Paketsiz öğrencinin işlenen dersini borçlandırır. Mazeret politikası ayardan okunur;
-/// telafi dersi ikinci kez ücretlenmez. Daha önce ters kaydedilmiş bir ücret varsa yeni
-/// başlık açmak yerine ters kaydın tersini yazar (`VERI-MODELI §4`).
-pub fn charge_session(conn: &Connection, attendance_id: i64) -> AppResult<Option<i64>> {
+/// Paketsiz öğrencinin işlenen dersini borçlandırır. Aktif paketi olan öğrencide deftere
+/// dokunmaz; ders hakkını `consume_package_credit` düşürür (ADR-015/ADR-044). Mazeret
+/// politikası ayardan okunur; telafi dersi ikinci kez ücretlenmez. Daha önce ters
+/// kaydedilmiş bir ücret varsa yeni başlık açmak yerine ters kaydın tersini yazar
+/// (`VERI-MODELI §4`). `today`, tüketim yoluyla aynı güncel paket tanımını kullanmak
+/// için çağıranın `local_now` kaynağından gelir (ADR-040).
+pub fn charge_session(
+    conn: &Connection,
+    attendance_id: i64,
+    today: &str,
+) -> AppResult<Option<i64>> {
     let (student_id, session_date, status, is_makeup, subject_name): (
         i64,
         String,
@@ -1752,6 +1759,15 @@ pub fn charge_session(conn: &Connection, attendance_id: i64) -> AppResult<Option
                 Some("Yoklama düzeltmesi"),
             )?))
         };
+    }
+    // Bu yoklama daha önce bir paketten işlendi ise son hakkın tüketilip paketin artık
+    // "aktif" görünmemesi onu ders başı ücrete çeviremez. Canlı uç +1 olsa bile geçmiş
+    // paket sınıflandırması bağlayıcıdır; düzeltmede yeni halkayı tüketim yolu yazar.
+    if usage_tail(conn, attendance_id)?.is_some() {
+        return Ok(None);
+    }
+    if !crate::repo::views::active_packages(conn, student_id, today)?.is_empty() {
+        return Ok(None);
     }
     let unit_price = resolve_unit_price(conn, attendance_id)?;
     let entry_id = insert_ledger_entry(

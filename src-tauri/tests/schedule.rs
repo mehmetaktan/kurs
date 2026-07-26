@@ -370,6 +370,64 @@ fn birebir_seansta_ucret_snapshotu_kayittan_gelir() {
 }
 
 #[test]
+fn paketli_birebir_seansta_ucret_snapshotu_bos_kalir() {
+    let conn = common::conn();
+    let subject_id = common::subject(&conn, "Matematik");
+    let student_id = common::student(&conn, "Paketli Öğrenci");
+    repo::academic::insert_enrollment(
+        &conn,
+        &Enrollment {
+            id: None,
+            student_id,
+            study_group_id: None,
+            subject_id,
+            teacher_id: Some(1),
+            price_rule_id: None,
+            pricing_model: "package".into(),
+            unit_price: 25_000,
+            start_on: "2026-01-01".into(),
+            end_on: None,
+            status: "active".into(),
+            created_at: None,
+            updated_at: None,
+            deleted_at: None,
+        },
+    )
+    .expect("paketli kayıt açılmalı");
+
+    let series_id = repo::academic::insert_session_series(
+        &conn,
+        &SessionSeries {
+            id: None,
+            study_group_id: None,
+            student_id: Some(student_id),
+            subject_id,
+            teacher_id: Some(1),
+            weekday: SALI,
+            start_time: "16:00".into(),
+            duration_min: 60,
+            starts_on: TODAY.into(),
+            ends_on: Some("2026-04-07".into()),
+            created_at: None,
+            updated_at: None,
+            deleted_at: None,
+        },
+    )
+    .expect("şablon eklenmeli");
+
+    schedule::generate_sessions(&conn, today()).expect("üretim çalışmalı");
+
+    let price: Option<i64> = conn
+        .query_row(
+            "SELECT unit_price FROM session WHERE series_id = ?1 LIMIT 1",
+            [series_id],
+            |row| row.get(0),
+        )
+        .expect("seans okunmalı");
+    assert_eq!(price, None, "paketli kayıt ders başı snapshot üretmez");
+}
+
+#[test]
 fn gece_yarisini_asan_ders_ertesi_gune_taser() {
     let day = NaiveDate::from_ymd_opt(2026, 3, 31).unwrap();
     let (start, end) = schedule::slot_bounds(day, "23:30", 60).expect("hesaplanmalı");

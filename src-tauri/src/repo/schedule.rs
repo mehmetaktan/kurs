@@ -184,6 +184,7 @@ fn solo_unit_price(
     let mut stmt = conn.prepare(
         "SELECT unit_price FROM enrollment \
          WHERE student_id = ?1 AND subject_id = ?2 AND study_group_id IS NULL \
+           AND pricing_model = 'per_session' \
            AND deleted_at IS NULL \
            AND start_on <= ?3 AND (end_on IS NULL OR ?3 <= end_on) \
          ORDER BY id LIMIT 1",

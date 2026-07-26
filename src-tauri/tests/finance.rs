@@ -1,6 +1,6 @@
 mod common;
 
-use kurs_takip_lib::model::{Attendance, Guardian, PriceRule, Session, StudentGuardian};
+use kurs_takip_lib::model::{Attendance, Guardian, Package, PriceRule, Session, StudentGuardian};
 use kurs_takip_lib::repo;
 use kurs_takip_lib::repo::finance::{
     InstallmentInput, PackageCloseMode, PackageSaleInput, PaymentAllocationInput, PaymentInput,
@@ -448,17 +448,239 @@ fn ders_ucreti_idempotenttir_ve_duzeltme_ters_kayit_zinciriyle_yurur() {
         false,
     );
 
-    repo::finance::charge_session(&conn, attendance_id).unwrap();
-    repo::finance::charge_session(&conn, attendance_id).unwrap();
+    repo::finance::charge_session(&conn, attendance_id, common::TODAY).unwrap();
+    repo::finance::charge_session(&conn, attendance_id, common::TODAY).unwrap();
     assert_eq!(balance(&conn, student_id), -25_000);
     repo::finance::reverse_session_charge(&conn, attendance_id, "2026-03-11").unwrap();
     assert_eq!(balance(&conn, student_id), 0);
-    repo::finance::charge_session(&conn, attendance_id).unwrap();
+    repo::finance::charge_session(&conn, attendance_id, common::TODAY).unwrap();
     assert_eq!(balance(&conn, student_id), -25_000);
     let rows: i64 = conn
         .query_row("SELECT COUNT(*) FROM ledger_entry", [], |row| row.get(0))
         .unwrap();
     assert_eq!(rows, 3);
+    common::assert_ledger_invariant(&conn);
+}
+
+#[test]
+fn paketli_islenen_ders_yalnizca_hak_dusurur_deftere_satir_yazmaz() {
+    let conn = common::conn();
+    let subject_id = common::subject(&conn, "Matematik");
+    let student_id = common::student(&conn, "Paketli Öğrenci");
+    let package_id = repo::finance::insert_package(
+        &conn,
+        &Package {
+            id: None,
+            student_id,
+            enrollment_id: None,
+            price_rule_id: None,
+            lesson_count: 1,
+            unit_price: 25_000,
+            total_price: 25_000,
+            sold_on: "2026-03-01".into(),
+            valid_until: None,
+            status: "active".into(),
+            created_at: None,
+            updated_at: None,
+            deleted_at: None,
+        },
+    )
+    .unwrap();
+    let (_, attendance_id) = solo_attendance(
+        &conn,
+        student_id,
+        subject_id,
+        "2026-03-10",
+        "present",
+        // Faz 5A'dan kalmış hatalı snapshot olsa bile `charge_session` savunmalı.
+        Some(25_000),
+        false,
+    );
+
+    // Tüketimden önce aktif paket savunması da çağırandan bağımsız çalışır.
+    assert_eq!(
+        repo::finance::charge_session(&conn, attendance_id, common::TODAY).unwrap(),
+        None
+    );
+    repo::finance::consume_package_credit(&conn, attendance_id, common::TODAY).unwrap();
+    assert_eq!(common::remaining(&conn, package_id), 0);
+    // Son hak 1 → 0 olduktan sonra paket artık aktif görünmese de ders borca çevrilmez.
+    assert_eq!(
+        repo::finance::charge_session(&conn, attendance_id, common::TODAY).unwrap(),
+        None
+    );
+
+    let (usage_rows, ledger_rows): (i64, i64) = conn
+        .query_row(
+            "SELECT (SELECT COUNT(*) FROM package_usage WHERE attendance_id = ?1), \
+                    (SELECT COUNT(*) FROM ledger_entry WHERE attendance_id = ?1)",
+            [attendance_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(usage_rows, 1);
+    assert_eq!(ledger_rows, 0);
+}
+
+#[test]
+fn paketsiz_islenen_ders_yalnizca_deftere_borc_yazar_hak_dusurmez() {
+    let conn = common::conn();
+    let subject_id = common::subject(&conn, "Fizik");
+    let student_id = common::student(&conn, "Ders Başı Öğrenci");
+    common::enrollment(&conn, student_id, None, subject_id, "2026-01-01", None).unwrap();
+    let (_, attendance_id) = solo_attendance(
+        &conn,
+        student_id,
+        subject_id,
+        "2026-03-10",
+        "present",
+        None,
+        false,
+    );
+
+    let err = repo::finance::consume_package_credit(&conn, attendance_id, common::TODAY)
+        .expect_err("paketsiz öğrenci tüketim yoluna giremez");
+    assert_eq!(err.code, "no_active_package");
+    assert!(
+        repo::finance::charge_session(&conn, attendance_id, common::TODAY)
+            .unwrap()
+            .is_some()
+    );
+
+    assert_eq!(balance(&conn, student_id), -25_000);
+    let (usage_rows, ledger_rows): (i64, i64) = conn
+        .query_row(
+            "SELECT (SELECT COUNT(*) FROM package_usage WHERE attendance_id = ?1), \
+                    (SELECT COUNT(*) FROM ledger_entry WHERE attendance_id = ?1)",
+            [attendance_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(usage_rows, 0);
+    assert_eq!(ledger_rows, 1);
+}
+
+#[test]
+fn bugun_suresi_dolmus_paket_gecmis_ders_borcunu_bastirmaz() {
+    let conn = common::conn();
+    let subject_id = common::subject(&conn, "Kimya");
+    let student_id = common::student(&conn, "Süresi Dolan Paketli Öğrenci");
+    repo::finance::insert_package(
+        &conn,
+        &Package {
+            id: None,
+            student_id,
+            enrollment_id: None,
+            price_rule_id: None,
+            lesson_count: 1,
+            unit_price: 25_000,
+            total_price: 25_000,
+            sold_on: "2026-03-01".into(),
+            valid_until: Some("2026-03-10".into()),
+            status: "active".into(),
+            created_at: None,
+            updated_at: None,
+            deleted_at: None,
+        },
+    )
+    .unwrap();
+    let (_, attendance_id) = solo_attendance(
+        &conn,
+        student_id,
+        subject_id,
+        "2026-03-10",
+        "present",
+        Some(25_000),
+        false,
+    );
+
+    let err = repo::finance::consume_package_credit(&conn, attendance_id, common::TODAY)
+        .expect_err("süresi dolmuş paket tüketilemez");
+    assert_eq!(err.code, "no_active_package");
+    assert!(
+        repo::finance::charge_session(&conn, attendance_id, common::TODAY)
+            .unwrap()
+            .is_some()
+    );
+    let ledger_rows: i64 = conn
+        .query_row("SELECT COUNT(*) FROM ledger_entry", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(ledger_rows, 1);
+    assert_eq!(balance(&conn, student_id), -25_000);
+}
+
+#[test]
+fn bugunden_sonra_satilan_paket_gecmis_ders_borcunu_bastirmaz() {
+    let conn = common::conn();
+    let subject_id = common::subject(&conn, "Biyoloji");
+    let student_id = common::student(&conn, "Sonradan Paket Alan Öğrenci");
+    common::enrollment(&conn, student_id, None, subject_id, "2026-01-01", None).unwrap();
+    repo::finance::insert_package(
+        &conn,
+        &Package {
+            id: None,
+            student_id,
+            enrollment_id: None,
+            price_rule_id: None,
+            lesson_count: 8,
+            unit_price: 25_000,
+            total_price: 200_000,
+            sold_on: "2026-04-01".into(),
+            valid_until: None,
+            status: "active".into(),
+            created_at: None,
+            updated_at: None,
+            deleted_at: None,
+        },
+    )
+    .unwrap();
+    let (_, attendance_id) = solo_attendance(
+        &conn,
+        student_id,
+        subject_id,
+        "2026-03-10",
+        "present",
+        None,
+        false,
+    );
+
+    let err = repo::finance::consume_package_credit(&conn, attendance_id, common::TODAY)
+        .expect_err("henüz satılmamış paket tüketilemez");
+    assert_eq!(err.code, "no_active_package");
+    assert!(
+        repo::finance::charge_session(&conn, attendance_id, common::TODAY)
+            .unwrap()
+            .is_some()
+    );
+    assert_eq!(balance(&conn, student_id), -25_000);
+}
+
+#[test]
+fn mevcut_ders_ucreti_zinciri_aktif_paketten_once_gelir() {
+    let conn = common::conn();
+    let subject_id = common::subject(&conn, "Geometri");
+    let student_id = common::student(&conn, "Düzeltmeli Öğrenci");
+    common::enrollment(&conn, student_id, None, subject_id, "2026-01-01", None).unwrap();
+    let (_, attendance_id) = solo_attendance(
+        &conn,
+        student_id,
+        subject_id,
+        "2026-03-10",
+        "present",
+        None,
+        false,
+    );
+    repo::finance::charge_session(&conn, attendance_id, common::TODAY).unwrap();
+    repo::finance::reverse_session_charge(&conn, attendance_id, "2026-03-11").unwrap();
+    common::package(&conn, student_id);
+
+    repo::finance::charge_session(&conn, attendance_id, common::TODAY).unwrap();
+
+    assert_eq!(balance(&conn, student_id), -25_000);
+    let rows: i64 = conn
+        .query_row("SELECT COUNT(*) FROM ledger_entry", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(rows, 3, "düzeltme ters kaydın tersini yazmalı");
     common::assert_ledger_invariant(&conn);
 }
 
@@ -486,8 +708,14 @@ fn mazeretli_ve_telafi_dersi_ikinci_borc_yazmaz() {
         true,
     );
 
-    assert_eq!(repo::finance::charge_session(&conn, excused).unwrap(), None);
-    assert_eq!(repo::finance::charge_session(&conn, makeup).unwrap(), None);
+    assert_eq!(
+        repo::finance::charge_session(&conn, excused, common::TODAY).unwrap(),
+        None
+    );
+    assert_eq!(
+        repo::finance::charge_session(&conn, makeup, common::TODAY).unwrap(),
+        None
+    );
     let rows: i64 = conn
         .query_row("SELECT COUNT(*) FROM ledger_entry", [], |row| row.get(0))
         .unwrap();
@@ -509,7 +737,7 @@ fn seans_iptali_ders_ucretini_ve_yoklamayi_bir_kez_tersine_cevirir() {
         None,
         false,
     );
-    repo::finance::charge_session(&conn, attendance_id).unwrap();
+    repo::finance::charge_session(&conn, attendance_id, common::TODAY).unwrap();
 
     repo::schedule::cancel_session(&conn, session_id, Some("Kurs iptali")).unwrap();
     repo::schedule::cancel_session(&conn, session_id, Some("Kurs iptali")).unwrap();
