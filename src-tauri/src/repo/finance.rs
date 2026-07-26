@@ -303,8 +303,8 @@ fn resolve_session_unit_price(
 /// yalnızca öğrencinin **paket mi, ders başı mı** olduğu tek finans kaynağından çözülür.
 ///
 /// Hedef ve mevcut ders hakkı alanları adettir; borç alanları kuruştur. Bu fonksiyon
-/// salt okunurdur. Faz 6 §2 aynı üretim yazma yolunu (`consume_package_credit` /
-/// `charge_session`) mevcut `save_attendance` transaction'ına bağlayacaktır.
+/// salt okunurdur. Üretim yazımı aynı kararı `repo::attendance::save_attendance`
+/// transaction'ında bu modülün yön fonksiyonlarıyla uygular.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AttendanceFinancialPreview {
     /// Seçilen durum tüketim doğurursa hedefte tüketilmiş olacak paket hakkı.
@@ -1864,13 +1864,15 @@ fn csv_cell(value: &str) -> String {
 /// dokunmaz; ders hakkını `consume_package_credit` düşürür (ADR-015/ADR-044). Mazeret
 /// politikası ayardan okunur; telafi dersi ikinci kez ücretlenmez. Daha önce ters
 /// kaydedilmiş bir ücret varsa yeni başlık açmak yerine ters kaydın tersini yazar
-/// (`VERI-MODELI §4`). `today`, tüketim yoluyla aynı güncel paket tanımını kullanmak
-/// için çağıranın `local_now` kaynağından gelir (ADR-040).
+/// (`VERI-MODELI §4`). `today`, hem tüketim yoluyla aynı güncel paket tanımını
+/// kullanmak hem de düzeltme halkasını gerçek işlem gününe yazmak için çağıranın
+/// `local_now` kaynağından gelir (ADR-040).
 pub fn charge_session(
     conn: &Connection,
     attendance_id: i64,
     today: &str,
 ) -> AppResult<Option<i64>> {
+    parse_day(today, "session.today")?;
     let (student_id, session_date, status, is_makeup, subject_name): (
         i64,
         String,
@@ -1912,7 +1914,7 @@ pub fn charge_session(
             Ok(Some(insert_reversal(
                 conn,
                 tail_id,
-                &session_date,
+                today,
                 Some("Yoklama düzeltmesi"),
             )?))
         };

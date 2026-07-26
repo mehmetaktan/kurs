@@ -1,8 +1,8 @@
 //! Faz 6 — yoklama panelinin birleşik veri ve tek kaydetme yolu.
 //!
-//! Bu modül şimdilik yalnızca `attendance` durum/not satırlarını aynı transaction'da
-//! yazar. §2 mevcut finans fonksiyonlarını **bu transaction'ın içine** bağlayacak;
-//! ikinci bir kaydetme veya tüketim yolu açılmayacak.
+//! Yoklama satırları, seansın tamamlanması ve para/ders hakkı etkileri aynı
+//! transaction'da yazılır. Finans hareketleri yalnızca `repo::finance` içindeki
+//! yön belirten tek ücret/tüketim yolundan geçer.
 
 use std::collections::{HashMap, HashSet};
 
@@ -101,6 +101,8 @@ struct SessionContext {
     starts_at: String,
     ends_at: String,
     kind: String,
+    status: String,
+    is_makeup: bool,
 }
 
 #[derive(Debug)]
@@ -122,18 +124,7 @@ pub fn attendance_detail(
     parse_day(today, "attendance.today")?;
     let session = session_context(conn, session_id)?;
     let participants = participant_rows(conn, &session)?;
-    let policy = AttendancePolicy {
-        excused_consumes_lesson: crate::repo::setting::value_bool(
-            conn,
-            "absence_excused_consumes_lesson",
-            false,
-        )?,
-        unexcused_consumes_lesson: crate::repo::setting::value_bool(
-            conn,
-            "absence_unexcused_consumes_lesson",
-            true,
-        )?,
-    };
+    let policy = attendance_policy(conn)?;
 
     let mut rows = Vec::with_capacity(participants.len());
     for participant in participants {
@@ -193,16 +184,25 @@ fn status_effects(
 /// Yoklama panelinin **tek** üretim kaydetme yolu.
 ///
 /// Katılımcı kümesi ders tarihinden yeniden çözülür; arayüzden eksik/fazla öğrenci
-/// gelirse hiçbir satır yazılmaz. Finans etkileri §2'de bu transaction'a eklenecek.
+/// gelirse hiçbir satır yazılmaz. `marked_at`, arayüzün `local_now` komutundan aldığı
+/// tek yerel duvar saatidir; aktif paket günü de bu doğrulanmış değerden türetilir.
 pub fn save_attendance(
     conn: &Connection,
     input: &SaveAttendanceInput,
 ) -> AppResult<SaveAttendanceReport> {
-    parse_marked_at(&input.marked_at)?;
+    let marked_at = parse_marked_at(&input.marked_at)?;
+    let today = marked_at.date().format("%Y-%m-%d").to_string();
     repo::in_transaction(conn, |conn| {
         let session = session_context(conn, input.session_id)?;
+        if session.status == "cancelled" {
+            return Err(AppError::new(
+                "attendance.sessionCancelled",
+                "İptal edilmiş derse yoklama kaydedilemez. Bugün listesini yenileyip başka bir ders seçin.",
+            ));
+        }
         let expected = eligible_student_ids(conn, &session)?;
         validate_marks(&input.marks, &expected)?;
+        let policy = attendance_policy(conn)?;
 
         let existing: HashMap<i64, Attendance> =
             crate::repo::academic::attendance_of_session(conn, input.session_id)?
@@ -223,12 +223,30 @@ pub fn save_attendance(
                 updated_at: None,
                 deleted_at: None,
             };
-            if let Some(attendance_id) = row.id {
+            let attendance_id = if let Some(attendance_id) = row.id {
                 crate::repo::academic::update_attendance(conn, attendance_id, &row)?;
+                attendance_id
             } else {
-                crate::repo::academic::insert_attendance(conn, &row)?;
-            }
+                crate::repo::academic::insert_attendance(conn, &row)?
+            };
+
+            apply_financial_direction(
+                conn,
+                attendance_id,
+                &mark.status,
+                &policy,
+                session.is_makeup,
+                &today,
+            )?;
         }
+
+        // Yoklama kaydı tamamlandığı anda ders de işlenmiştir. Durum, zaman damgası
+        // ve bütün para/hak hareketleri aynı transaction'da kalır.
+        conn.execute(
+            "UPDATE session SET status = 'done', attendance_taken_at = ?2, updated_at = ?2 \
+             WHERE id = ?1 AND deleted_at IS NULL",
+            params![input.session_id, input.marked_at],
+        )?;
 
         Ok(SaveAttendanceReport {
             saved: input.marks.len() as i64,
@@ -236,10 +254,62 @@ pub fn save_attendance(
     })
 }
 
+fn attendance_policy(conn: &Connection) -> AppResult<AttendancePolicy> {
+    Ok(AttendancePolicy {
+        excused_consumes_lesson: crate::repo::setting::value_bool(
+            conn,
+            "absence_excused_consumes_lesson",
+            false,
+        )?,
+        unexcused_consumes_lesson: crate::repo::setting::value_bool(
+            conn,
+            "absence_unexcused_consumes_lesson",
+            true,
+        )?,
+    })
+}
+
+fn apply_financial_direction(
+    conn: &Connection,
+    attendance_id: i64,
+    status: &str,
+    policy: &AttendancePolicy,
+    is_makeup: bool,
+    today: &str,
+) -> AppResult<()> {
+    // Telafi, asıl yoklamanın para/hak sonucunu ikinci kez üretmez (ADR-016).
+    if is_makeup {
+        return Ok(());
+    }
+
+    let consumes = match status {
+        "present" => true,
+        "excused" => policy.excused_consumes_lesson,
+        "unexcused" => policy.unexcused_consumes_lesson,
+        "cancelled" => false,
+        _ => false, // `validate_marks` bunu çağrıdan önce reddeder.
+    };
+
+    if consumes {
+        // Sınıflandırmanın tek sahibi finans katmanıdır: mevcut bir ders ücreti
+        // zinciri varsa onu canlandırır; paketliyse `None` ile tüketim yoluna yönlendirir.
+        if crate::repo::finance::charge_session(conn, attendance_id, today)?.is_none() {
+            crate::repo::finance::consume_package_credit(conn, attendance_id, today)?;
+        }
+    } else {
+        // Hangi sayaçta başlık olduğunu burada yeniden çözmeyiz. İki yön fonksiyonu
+        // da yok/zaten geri alınmış durumda idempotent olarak hiçbir şey yapmaz.
+        crate::repo::finance::reverse_session_charge(conn, attendance_id, today)?;
+        crate::repo::finance::restore_package_credit(conn, attendance_id)?;
+    }
+    Ok(())
+}
+
 fn session_context(conn: &Connection, session_id: i64) -> AppResult<SessionContext> {
     conn.query_row(
         "SELECT se.id, se.study_group_id, se.student_id, se.session_date, \
-                COALESCE(g.name, st.full_name), sub.name, se.starts_at, se.ends_at, se.kind \
+                COALESCE(g.name, st.full_name), sub.name, se.starts_at, se.ends_at, se.kind, \
+                se.status, se.is_makeup \
          FROM session se \
          JOIN subject sub ON sub.id = se.subject_id \
          LEFT JOIN study_group g ON g.id = se.study_group_id \
@@ -257,6 +327,8 @@ fn session_context(conn: &Connection, session_id: i64) -> AppResult<SessionConte
                 starts_at: row.get(6)?,
                 ends_at: row.get(7)?,
                 kind: row.get(8)?,
+                status: row.get(9)?,
+                is_makeup: row.get(10)?,
             })
         },
     )
@@ -384,13 +456,11 @@ fn parse_day(value: &str, code: &str) -> AppResult<()> {
         })
 }
 
-fn parse_marked_at(value: &str) -> AppResult<()> {
-    NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M")
-        .map(|_| ())
-        .map_err(|_| {
-            AppError::new(
-                "attendance.markedAt",
-                "Yoklama saati okunamadı. Paneli kapatıp yeniden açın.",
-            )
-        })
+fn parse_marked_at(value: &str) -> AppResult<NaiveDateTime> {
+    NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M").map_err(|_| {
+        AppError::new(
+            "attendance.markedAt",
+            "Yoklama saati okunamadı. Paneli kapatıp yeniden açın.",
+        )
+    })
 }

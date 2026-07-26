@@ -212,7 +212,7 @@ pub fn run() {
             // Faz 5B — Bugün ekranı, ders ekle/düzenle, şablondan oluştur
             commands::local_now,
             commands::day_sessions,
-            // Faz 6 §1 — yoklama paneli; §2 aynı kaydetme yoluna finansı bağlayacak
+            // Faz 6 §1–§2 — yoklama paneli ve atomik finans/hak kaydetme yolu
             commands::attendance_detail,
             commands::save_attendance,
             commands::has_schedule,

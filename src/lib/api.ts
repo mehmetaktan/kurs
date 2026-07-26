@@ -949,7 +949,7 @@ export function fetchAttendanceDetail(
   return call<AttendanceDetail>('attendance_detail', { sessionId, today })
 }
 
-/** §2 finans etkilerini bu aynı komut/transaction yoluna bağlayacak. */
+/** Yoklama, seans durumu ve para/ders hakkı etkileri Rust'ta tek transaction'dır. */
 export function saveAttendance(input: SaveAttendanceInput): Promise<SaveAttendanceReport> {
   return call<SaveAttendanceReport>('save_attendance', { input })
 }

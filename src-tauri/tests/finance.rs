@@ -455,6 +455,18 @@ fn ders_ucreti_idempotenttir_ve_duzeltme_ters_kayit_zinciriyle_yurur() {
     assert_eq!(balance(&conn, student_id), 0);
     repo::finance::charge_session(&conn, attendance_id, common::TODAY).unwrap();
     assert_eq!(balance(&conn, student_id), -25_000);
+    let entry_dates: Vec<String> = conn
+        .prepare("SELECT entry_date FROM ledger_entry ORDER BY id")
+        .unwrap()
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .collect::<rusqlite::Result<_>>()
+        .unwrap();
+    assert_eq!(
+        entry_dates,
+        ["2026-03-10", "2026-03-11", common::TODAY],
+        "tersin tersi ders gününe değil düzeltme gününe yazılmalı"
+    );
     let rows: i64 = conn
         .query_row("SELECT COUNT(*) FROM ledger_entry", [], |row| row.get(0))
         .unwrap();
