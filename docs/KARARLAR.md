@@ -1316,13 +1316,18 @@ süzme, Türkçe eşleşme, klavye gezinmesi, `Esc` davranışı.
 
 ---
 
-## ADR-042 — Para fazının ikinci dikişi dış bir ajana (Codex) devrediliyor
+## ADR-042 — Para fazının kalanı dış bir ajana (Codex) devrediliyor
 
-**Karar.** `/faz-07`'nin **§5–§9'u** (tahsilat, borçlu listesi, cari ekstre, makbuz PDF,
-öğrenci detayının para bölümü) dış bir kodlama ajanına — Codex'e — verilir. Öncesi
-(**§1 tarife · §2 paket/taksit satışı · §3 deftere yansıma**) bu akışta yazılır. Dikiş
-yeri yeni değil: `/faz-07`'nin başında **zaten tanımlıydı**, yalnızca üstünde çalışan
-değişiyor. Çalışma dalı **`main`** (ürün sahibinin kararı).
+**Karar.** `/faz-07`'nin **kalan bölümlerinin tamamı — §1'den §10'a** — dış bir kodlama
+ajanına, Codex'e verilir: fiyat tarifesi, paket/taksit satışı, deftere yansıma, tahsilat,
+borçlu listesi, cari ekstre, makbuz PDF, öğrenci detayının para bölümü ve testleri.
+Çalışma dalı **`main`** (ürün sahibinin kararı).
+
+> **Kapsam aynı gün genişletildi.** Bu ADR ilk yazıldığında devir §5–§9 ile sınırlıydı;
+> defterin temeli (§1–§3) bu akışta kalacaktı. Ürün sahibi araya bir oturum girmesini
+> istemedi: **Codex ile devam ediliyor, faz bölünmüyor.** Sınırlar (migration yok, belge
+> yok, takvim yok, tek defter yolu) değişmedi — yalnızca devredilen bölüm büyüdü, ve
+> denetimin ağırlığı arttı: artık §1–§3 de diff'ten okunacak.
 
 Devrin sınırları — **dosya bazında**:
 
@@ -1332,35 +1337,41 @@ Devrin sınırları — **dosya bazında**:
 | `src/i18n/tr.ts`'e yeni metinler | `docs/**` ve `.claude/commands/**` |
 | `src/ui/`'ya gerekiyorsa yeni komponent | `src/pages/takvim/**` (ADR-034, donduruldu) |
 
-**Migration yazmaz.** §5–§9 şema değişikliği gerektirmiyor; doğrulandı: `payment`,
-`payment_allocation`, `ledger_entry`, `installment` tabloları ile `v_student_debt`,
-`v_installment_open`, `v_student_balance` view'ları duruyor ve **makbuz numarası
-tekilliği `ux_receipt` ile zaten zorlanıyor** (§8'in istediği tekillik). Bir sütuna
-ihtiyaç duyarsa **durur ve sorar** (`CLAUDE.md > Veri`).
+**Migration yazmaz.** §1–§9 şema değişikliği gerektirmiyor; doğrulandı: `price_rule`,
+`package`, `installment`, `payment`, `payment_allocation`, `ledger_entry` tabloları ile
+`v_student_debt`, `v_installment_open`, `v_student_balance`, `v_package_remaining`
+view'ları duruyor ve **makbuz numarası tekilliği `ux_receipt` ile zaten zorlanıyor**
+(§8'in istediği tekillik). Şema Faz 2'de kapandı, son değişiklik ADR-036'nın
+`003_*.sql`'iydi. Bir sütuna ihtiyaç duyarsa **durur ve sorar** (`CLAUDE.md > Veri`).
 
 **ADR yazmaz, plan değiştirmez.** Kilitli kararlar (ADR-014, ADR-015, ADR-018, ADR-035,
 ADR-040) uygulanır, tartışılmaz. Belge yüzeyi yöneticide kalır — bu ADR'nin kendisi de
 o kuralın örneği.
 
 **İkinci bir defter yazma yolu açmaz.** `ledger_entry` satırı yalnızca
-`repo/finance.rs`'in mevcut fonksiyonları üzerinden yazılır; §3'te kurulan tahakkuk
-yolunun kopyası çıkarılmaz. İki yol iki bakiye demektir.
+`repo/finance.rs`'in mevcut fonksiyonları (`insert_ledger_entry`, `insert_reversal`)
+üzerinden yazılır. §3'te kurulan tahakkuk yolu, §5'in tahsilat satırı ve iptalin ters
+kaydı **aynı yolu kullanır**; ikinci bir yol iki bakiye demektir.
 
 **Gerekçe.** Devrin sebebi kapasite değil, **aracın denenmesi**: ürün sahibi Codex'i
-gerçek bir iş üzerinde ölçmek istiyor. §5–§9 bunun için doğru dilim, çünkü (a) plandaki
-dikiş zaten orada, (b) altındaki repo katmanı — `insert_payment`,
-`insert_payment_allocation`, `insert_ledger_entry`, `views::student_debts` — **yazılmış
-ve testli**, yani iş büyük ölçüde yüzey, (c) buradaki hata *görünür* bir yerde çıkar
-(makbuz, borçlu listesi), defterin temelinde sessizce çoğalmaz. Defterin temeli (§1–§3)
-bilerek devredilmiyor.
+gerçek bir iş üzerinde ölçmek istiyor ve bunun için fazın bölünmesini istemiyor —
+araya giren her oturum ölçümü de böler. Devri taşınabilir kılan şey, altındaki repo
+katmanının **yazılmış ve testli** olması: `insert_price_rule`, `insert_package`,
+`insert_installment`, `due_unaccrued_installments`, `insert_payment`,
+`insert_payment_allocation`, `insert_ledger_entry`, `views::student_debts`,
+`consume_package_credit`. Codex'in işi büyük ölçüde **komut yüzeyi, ekran ve iş akışı**;
+tablo katmanını yeniden icat etmesi gerekmiyor ve gerekmemeli.
 
-**Bedeli — `main` üzerinde çalışmanın takası.** Ayrı dal, kötü sonucu atmayı serbest
-bırakırdı; `main` bunu `git revert`'e indiriyor. Karşılığında Codex'in commit'leri
-**küçük ve bölümlü** tutulur (§5 · §6 · §7 · §8 ayrı commit), ki bir bölüm geri alınırken
-ötekiler ayakta kalsın. `npm run check` her commit öncesi yeşil olmalı.
+**Bedeli — `main` üzerinde ve tek elden çalışmanın takası.** Ayrı dal, kötü sonucu atmayı
+serbest bırakırdı; `main` bunu `git revert`'e indiriyor. Kapsam da büyüdüğü için tek
+güvence **bölümlü commit** kaldı: §1 · §2 · §3 · §5 · §6 · §7 · §8 ayrı commit'ler, her
+birinden önce `npm run check` yeşil. Böylece §3 sağlamken §7 geri alınabilir. Tek büyük
+commit gelirse denetimin elinde revert'ten başka araç kalmaz — bu, devrin **en somut
+riski** ve prompt'ta açıkça yazılı.
 
-**Sonuç.** Sıra: bu akış §1–§3'ü yazar → Codex §5–§9'u yazar → **para fazı denetimi**
-(ADR-033'ün plandaki tek zorunlu denetimi) **ikisini birden** kapsar ve Codex'in çıktısı
-orada diff olarak okunur. Denetim ayrı bir onay makamı değil, zaten planda duruyordu.
+**Sonuç.** Sıra: Codex `/faz-07`'nin §1–§10'unu yazar → **para fazı denetimi** (ADR-033'ün
+plandaki tek zorunlu denetimi) çıktının tamamını diff olarak okur → `/faz-06`. Denetim
+ayrı bir onay makamı değil, zaten planda duruyordu; devir onun kapsamını genişletti.
 
 **Durum.** Kabul edildi (2026-07-26, yönetici oturumu, ürün sahibinin kararı).
+Aynı oturumda kapsam §5–§9'dan **§1–§10'a** genişletildi — gerekçe yukarıdaki kutuda.

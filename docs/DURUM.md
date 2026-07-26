@@ -1,8 +1,9 @@
 # Durum
 
-**Son güncelleme:** 2026-07-26 · yönetici oturumu — para fazının ikinci dikişi Codex'e devredildi (ADR-042)
-**Sıradaki iş:** `/faz-07` **aynı komutla devam** — §1 fiyat tarifesi, **§3'te dur**
-**Kalan plan:** `/faz-07` (para, sürüyor) → `/faz-06` (yoklama) → `/faz-10` (teslim)
+**Son güncelleme:** 2026-07-26 · yönetici oturumu — para fazının kalanı Codex'e devredildi (ADR-042)
+**Sıradaki iş:** **Codex** `/faz-07` §1–§10'u yazar (`docs/CODEX-DEVIR.md`'deki prompt);
+Claude Code'un işi dönüşteki **para fazı denetimi**
+**Kalan plan:** `/faz-07` (para, Codex'te) → `/faz-06` (yoklama) → `/faz-10` (teslim)
 
 > Bu dosya **son durumu** tutar, oturum arşivi değildir. Geçmiş `git log`'da, gerekçeler
 > `docs/KARARLAR.md`'de.
@@ -58,29 +59,24 @@ K1 ve K2 ✅):
 
 ---
 
-## Sıradaki oturum — `/faz-07` (aynı komut), kapsam **§1–§3**
+## Para fazının kalanı Codex'te — ADR-042
 
-Sıra: **§1 fiyat tarifesi** → §2 paket/taksit satışı (ADR-035 kapatma dalları) →
-§3 vade tahakkuku (`accrue_due_installments` → `ops.rs > on_startup`) → **dur, `/kapat`**.
+`/faz-07`'nin **§1'den §10'a** kadarı dış bir kodlama ajanına verildi: fiyat tarifesi ·
+paket/taksit satışı · deftere yansıma · tahsilat · borçlu listesi · cari ekstre · makbuz
+PDF · öğrenci detayının para bölümü. Sebep kapasite değil, **aracın gerçek bir iş
+üzerinde denenmesi** — bu yüzden faz bölünmedi, araya oturum sokulmadı.
 
-§4 **bitti**: migration, kanıt testleri ve tüketim fonksiyonu yazıldı. Kalan tek işi
-Faz 6'nın onu çağırması.
+Çalışma dalı `main`. Sınırlar: migration yok, `docs/**` ve ADR yok, takvim yok
+(ADR-034), `ledger_entry`'ye ikinci yazma yolu yok. Prompt ve dönüşteki denetim listesi
+**`docs/CODEX-DEVIR.md`**'de; kurallar ayrıca kökteki **`AGENTS.md`**'de (Codex
+`CLAUDE.md`'yi kendiliğinden okumaz).
 
-### İkinci dikiş Codex'te — ADR-042
+**Claude Code'un bu fazdaki işi:** Codex tıkanır veya bir kararı zorlarsa yönetici
+oturumunda cevaplamak, ve faz bitince **para fazı denetimini** yapmak — ADR-033'ün
+plandaki tek zorunlu denetimi, artık `/faz-07`'nin tamamını kapsıyor.
 
-**§5–§9** (tahsilat · borçlu listesi · cari ekstre · makbuz PDF · öğrenci detayının para
-bölümü) dış bir kodlama ajanına verildi. Sebep kapasite değil, **aracın gerçek bir iş
-üzerinde denenmesi**; dilim öyle seçildi ki defterin *temeli* (§1–§3) bu akışta kalsın.
-Çalışma dalı `main`, karşılığında commit'ler bölümlü (§5 · §6 · §7 · §8 ayrı).
-Sınırlar — migration yok, `docs/**` ve ADR yok, takvim yok, ikinci defter yolu yok —
-ADR-042'de ve `/faz-07`'nin §5 başlığının üstünde.
-
-**§1–§3 oturumunun devir borcu:** bittiğinde buraya *§5'in güvenebileceği yüzey* tablosu
-yazılır — fonksiyon/komut adı → ne yapar → testi nerede. Codex'in okuyacağı devir notu o
-tablodur; olmadan tahsilat kendi defter yolunu yazar.
-
-Denetim ayrıca açılmıyor: para fazı sonrasındaki **zorunlu denetim** (ADR-033) §1–§3 ile
-§5–§9'u birlikte okuyacak.
+§0 ve §4 **bitti**, Codex'in kapsamı dışında. §4'ün kalan tek işi Faz 6'nın
+`consume_package_credit`'i çağırması.
 
 ### Sahiplik kontrolü (ADR-039)
 
@@ -91,18 +87,20 @@ süzüyor.
 *Yapamadığı ne?* **Para takibi** (bu fazın kalanı), yoklama (Faz 6), yedekleme ve özet
 ekranı (Faz 10). Üçü de plandaki bir faza ait — **plan eksik değil.**
 
-### Bu oturumun en büyük riski
+### Bu fazın en büyük riski
 
 **Para mantığının testini kısmak.** Kalan iş iki fazın birleşimi ve projenin en pahalı
 yanlış olan yeri: defter, tahakkuk, mahsup. Risk "yetişmez" değil, *yetiştirmeye çalışıp
-testi ertelemek*. Dikişten bölünmek serbest, testi ertelemek değil (`CLAUDE.md > Para`).
+testi ertelemek*. Testsiz fonksiyon bırakılmaz (`CLAUDE.md > Para`).
 
 İkinci risk: **§2'nin ADR-035 dalları.** Paket kapatmanın iki yolu (avans bırak / iade et)
 `ledger_entry`'ye append-only satır yazıyor ve kalan tutar paketin `unit_price`
 **snapshot'ından** hesaplanıyor — indirim yeniden hesaplanmaz. Bu satır yanlış yazılırsa
 hata her ekstrede çoğalır.
 
-Tıkanınca uydurma yok: buraya yaz ve **tek soruyla** sor (ADR-033).
+**Devre özgü üçüncü risk: tek yığın commit.** `main` üzerinde çalışılıyor, geri alma yolu
+`git revert`. Bölümler ayrı commit'lenmezse denetimde çıkan bir hata için tek seçenek
+fazın tamamını geri almak olur. Prompt bunu yazıyor; denetimde ilk bakılacaklardan biri.
 
 ---
 

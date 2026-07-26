@@ -13,7 +13,7 @@ açılmıyor (ADR-033).
 
 | Sıra | Faz | Komut | Ne çıkar |
 |---|---|---|---|
-| **1** | **Para** — fiyat tarifesi, paket/taksit, tahsilat, borçlu listesi, ekstre, makbuz PDF (eski 7 + 8) · **sürüyor: §0 ✅ ve §4 ✅, sırada §1–§3; §5–§9 Codex'te (ADR-042)** | `/faz-07` | Program ilk kez **para takip ediyor**. §0'da önce **öğretmen ve işletme ayarları** (ADR-037) |
+| **1** | **Para** — fiyat tarifesi, paket/taksit, tahsilat, borçlu listesi, ekstre, makbuz PDF (eski 7 + 8) · **§0 ✅ ve §4 ✅; kalanı (§1–§10) Codex'te — ADR-042** | `/faz-07` | Program ilk kez **para takip ediyor**. §0'da önce **öğretmen ve işletme ayarları** (ADR-037) |
 | **2** | **Yoklama & Telafi** — yoklama girişi, devamsızlık, telafi dersi, **paket tüketiminin bağlanması** | `/faz-06` | Ders sonrası rutini kapanır; ADR-015'in ders hakkı sayacı ekrana bağlanır |
 | **3** | **Teslim** — özet ekranı (kırpılmış Faz 9), yedekleme, hata dayanıklılığı, kurulum, kılavuz | `/faz-10` | Kurs sahibinin kullandığı hâl |
 
@@ -26,10 +26,11 @@ Aynı komutla devam edilir, arada denetim veya karar oturumu **yok**.
 > yedi kanıt dizisi ve tüketim fonksiyonu (ADR-040) yazıldı. Sıradaki oturum §1'den
 > (fiyat tarifesi) devam eder ve **§3'te durur.**
 >
-> **İkinci dikiş (§5–§9) dış bir ajana — Codex'e — devredildi: ADR-042.** Tahsilat,
-> borçlu listesi, ekstre ve makbuz PDF `main` üzerinde orada yazılacak; defterin temeli
-> (§1–§3) bu akışta kalıyor. Para fazı sonrasındaki **zorunlu denetim ikisini birden**
-> okur — devir yeni bir denetim oturumu doğurmaz.
+> **Kalanın tamamı (§1–§10) dış bir ajana — Codex'e — devredildi: ADR-042.** Tarife,
+> paket/taksit, defter, tahsilat, borçlu listesi, ekstre ve makbuz PDF `main` üzerinde
+> orada yazılıyor. Claude Code bu fazda kod yazmıyor; işi Codex tıkandığında cevaplamak
+> ve faz bitince **para fazı denetimini** yapmak. Devir yeni bir denetim oturumu
+> doğurmaz — plandaki zorunlu denetimin kapsamını genişletir.
 
 ### Sıra 1'in §0'ı neden var
 
