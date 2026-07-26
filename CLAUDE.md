@@ -66,7 +66,7 @@ komutla ikinci oturumda devam edilir. Dikiş yeri faz komutunda yazılıdır.
 | `docs/TASARIM-SISTEMI.md` | Renk, tipografi, spacing, komponentler (Faz 1) |
 | `docs/DENETIM-FAZ1.md` | Faz 1 denetimi — 25 bulgu, kanıtları ve düzeltmeleri |
 | `docs/DENETIM-PARA.md` | Para fazı denetimi — planın tek zorunlu denetimi (ADR-033), üç bulgu |
-| `docs/CODEX-DEVIR.md` | `/faz-07 §5–§9`'un dış ajana devri (ADR-042): prompt + denetim listesi |
+| `docs/CODEX-DEVIR.md` | Dış ajana (Codex) devir (ADR-042): **sıradaki prompt** + dönüşteki denetim listesi |
 | `AGENTS.md` (kökte) | **Dış kodlama ajanlarının** giriş kapısı — Codex `CLAUDE.md`'yi okumaz, bunu okur |
 
 ## Stack
@@ -88,7 +88,7 @@ kilitli: `.npmrc`.** CI aynı dosyaları okur — yerelde çalışan sürüm CI'
 > Aynı sınıftan bir tuzak Node'da da var, o yüzden sürüm oraya da tam yazılır: her Node
 > yayını farklı bir npm getirir.
 
-## Klasör yapısı (para fazı §0)
+## Klasör yapısı
 
 ```
 kurs/
@@ -108,12 +108,14 @@ kurs/
 │   │   ├── dersler/           Faz 5B: SessionForm (E3) · SessionActions · TemplateModal (E6)
 │   │   ├── ogrenciler/        Faz 4: liste · detay · form · veli · filters · validate
 │   │   ├── gruplar/           Faz 5A: liste · detay · form · filters
+│   │   ├── odemeler/          Para fazı: PaymentsPage (borçlu) · PaymentModal (tahsilat) ·
+│   │   │                      StatementPanel (cari ekstre) · debtors.ts
 │   │   ├── takvim/            Faz 5C: CalendarPage · WeekGrid · MonthGrid · MoveDialog ·
 │   │   │                      calendarGrid.ts (geometri) · drag.ts (ADR-030) · filters.ts
 │   │   │                      DONDURULDU (ADR-034) — üstüne iş yazılmaz; değişim
 │   │   │                      gerekirse yalnızca bu klasör değişir, Rust yerinde kalır
 │   │   └── tanimlar/          branşlar · tatil günleri · renk paleti (Faz 5A) ·
-│   │                          öğretmenler · genel ayarlar (para fazı §0, ADR-037)
+│   │                          öğretmenler · genel ayarlar (ADR-037) · fiyat tarifesi
 │   ├── dev/                   /dev/komponentler · /dev/durum — ÜRETİME GİRMEZ.
 │   │                          Metinleri KENDİ sözlüğünde (showcase.tr.ts · status.tr.ts):
 │   │                          tr.ts her ekrandan import ediliyor, oraya yazılan dize
@@ -135,12 +137,14 @@ kurs/
     │   │                      finance · views · ops
     │   ├── model.rs           tablo satır tipleri
     │   ├── money.rs           kuruş biçimleme (ADR-003)
+    │   ├── receipt.rs         makbuz PDF — printpdf + gömülü Noto Sans (ADR-043)
     │   ├── text.rs            Türkçe küçültme, search_name (K9)
     │   ├── clock.rs           yerel tarih — SQLite saati OKUNMAZ (§0)
     │   ├── error.rs           tek hata tipi + Türkçe mesajlar (PRD §8)
     │   └── seed.rs            demo verisi — yalnızca `seed` özelliğiyle
+    ├── assets/                NotoSans-Receipt.ttf.b64 + OFL lisansı (ADR-043)
     └── tests/                 crud · seals · views · roster · schedule · identity ·
-                                seed_data
+                                seed_data · finance (para — 23 test)
 ```
 
 Repository katmanı `search_name` ve `phone_digits`'i **kendisi üretir**; çağıran boş
