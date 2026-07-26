@@ -5,6 +5,7 @@ import {
   exportStatementCsv,
   fetchLocalNow,
   fetchStatementRows,
+  openReceiptPdf,
   type AppError,
   type StatementRow,
 } from '../../lib/api'
@@ -59,6 +60,10 @@ export function StatementPanel({ studentId }: { studentId: number }) {
     try { await cancelPayment(paymentId); toast(tr.payments.statement.cancelDone); await load() }
     catch (caught) { setError(caught as AppError) }
   }
+  const openReceipt = async (paymentId: number) => {
+    try { await openReceiptPdf(paymentId); toast(tr.payments.receipt.opened) }
+    catch (caught) { setError(caught as AppError) }
+  }
 
   const columns: readonly Column<StatementRow>[] = [
     { key: 'date', header: tr.payments.statement.columns.date, width: '105px', render: (row) => formatDate(row.entryDate) },
@@ -66,7 +71,7 @@ export function StatementPanel({ studentId }: { studentId: number }) {
     { key: 'debit', header: tr.payments.statement.columns.debit, width: '110px', align: 'end', render: (row) => row.debitKurus > 0 ? formatLira(row.debitKurus) : '—' },
     { key: 'credit', header: tr.payments.statement.columns.credit, width: '110px', align: 'end', render: (row) => row.creditKurus > 0 ? formatLira(row.creditKurus) : '—' },
     { key: 'balance', header: tr.payments.statement.columns.balance, width: '115px', align: 'end', render: (row) => <strong>{formatLira(row.balanceKurus)}</strong> },
-    { key: 'action', header: tr.payments.statement.columns.action, width: '86px', render: (row) => row.kind === 'payment' && !row.paymentCancelled ? <Button size="small" variant="danger" onClick={() => setCancelling(row)}>{tr.payments.statement.cancel}</Button> : null },
+    { key: 'action', header: tr.payments.statement.columns.action, width: '172px', render: (row) => row.kind === 'payment' && row.paymentId ? <div className={styles.rowActions}><Button size="small" onClick={() => void openReceipt(row.paymentId!)}>{tr.payments.statement.receipt}</Button>{!row.paymentCancelled && <Button size="small" variant="danger" onClick={() => setCancelling(row)}>{tr.payments.statement.cancel}</Button>}</div> : null },
   ]
   const paged = paginate(rows ?? [], page)
 

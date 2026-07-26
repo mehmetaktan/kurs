@@ -10,6 +10,7 @@ const api = vi.hoisted(() => ({
   fetchOpenInstallments: vi.fn(),
   suggestPaymentAllocations: vi.fn(),
   recordPayment: vi.fn(),
+  openReceiptPdf: vi.fn(),
 }))
 
 vi.mock('../../lib/api', async (original) => ({ ...(await original()), ...api }))
@@ -51,6 +52,7 @@ beforeEach(() => {
       : []),
   )
   api.recordPayment.mockResolvedValue({ paymentId: 9, ledgerEntryId: 10, allocatedKurus: 200_000, advanceKurus: 50_000 })
+  api.openReceiptPdf.mockResolvedValue('/data/receipts/makbuz-9.pdf')
 })
 
 const draw = () => render(
@@ -87,5 +89,7 @@ describe('tahsilat modalı', () => {
         { installmentId: 2, amount: 100_000 },
       ],
     }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Makbuzu aç / yazdır' }))
+    await waitFor(() => expect(api.openReceiptPdf).toHaveBeenCalledWith(9))
   })
 })

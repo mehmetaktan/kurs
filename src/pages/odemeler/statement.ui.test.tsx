@@ -4,7 +4,7 @@ import { ToastProvider } from '../../ui'
 import { StatementPanel } from './StatementPanel'
 
 const api = vi.hoisted(() => ({
-  fetchLocalNow: vi.fn(), fetchStatementRows: vi.fn(), exportStatementCsv: vi.fn(), cancelPayment: vi.fn(),
+  fetchLocalNow: vi.fn(), fetchStatementRows: vi.fn(), exportStatementCsv: vi.fn(), cancelPayment: vi.fn(), openReceiptPdf: vi.fn(),
 }))
 vi.mock('../../lib/api', async (original) => ({ ...(await original()), ...api }))
 vi.mock('./PaymentModal', () => ({ PaymentModal: () => null }))
@@ -18,6 +18,7 @@ beforeEach(() => {
   ])
   api.exportStatementCsv.mockResolvedValue('/data/exports/cari-ekstre.csv')
   api.cancelPayment.mockResolvedValue(3)
+  api.openReceiptPdf.mockResolvedValue('/data/receipts/makbuz-9.pdf')
 })
 
 const draw = () => render(<ToastProvider><StatementPanel studentId={7} /></ToastProvider>)
@@ -40,5 +41,12 @@ describe('cari ekstre', () => {
     expect(api.cancelPayment).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: /^Tahsilatı iptal et/ }))
     await vi.waitFor(() => expect(api.cancelPayment).toHaveBeenCalledWith(9))
+  })
+
+  it('aktif veya iptal makbuzunu PDF olarak açar', async () => {
+    draw()
+    await screen.findByText('Mart taksiti')
+    fireEvent.click(screen.getByRole('button', { name: 'Makbuz' }))
+    await vi.waitFor(() => expect(api.openReceiptPdf).toHaveBeenCalledWith(9))
   })
 })

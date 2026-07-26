@@ -248,6 +248,60 @@ pub fn export_statement_csv(
     Ok(path.display().to_string())
 }
 
+/// Tahsilatın yazdırılabilir, gömülü Türkçe fontlu PDF makbuzunu uygulama veri
+/// klasörünün `receipts` altına yazar. Yol `Path::join` ile kurulur (Windows).
+#[tauri::command]
+pub fn generate_receipt_pdf(state: State<'_, AppState>, payment_id: i64) -> AppResult<String> {
+    let data = state.with_conn(|conn| repo::finance::receipt_data(conn, payment_id))?;
+    let bytes = crate::receipt::build_pdf(&data, crate::brand::institution())?;
+    let parent = state.db_path.parent().ok_or_else(|| {
+        crate::error::AppError::new(
+            "receipt_path",
+            "Makbuz klasörü bulunamadı. Programı kapatıp yeniden açın.",
+        )
+    })?;
+    let receipt_dir = parent.join("receipts");
+    std::fs::create_dir_all(&receipt_dir).map_err(|err| {
+        eprintln!("[kurs] makbuz klasörü oluşturulamadı: {err}");
+        crate::error::AppError::new(
+            "receipt_directory",
+            "Makbuz klasörü oluşturulamadı. Disk alanını ve klasör izinlerini kontrol edin.",
+        )
+    })?;
+    let receipt_part: String = data
+        .receipt_no
+        .chars()
+        .map(|ch| {
+            if ch.is_alphanumeric() || ch == '-' || ch == '_' {
+                ch
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    let stamp = clock::now_local().replace(['-', ':', ' '], "");
+    let stem = format!("makbuz-{}-{}-{stamp}", data.payment_id, receipt_part);
+    let mut path = receipt_dir.join(format!("{stem}.pdf"));
+    let mut suffix = 2_i64;
+    while path.exists() {
+        path = receipt_dir.join(format!("{stem}-{suffix}.pdf"));
+        suffix = suffix.checked_add(1).ok_or_else(|| {
+            crate::error::AppError::new(
+                "receipt_name",
+                "Makbuz dosyası adlandırılamadı. Eski makbuzları başka klasöre taşıyın.",
+            )
+        })?;
+    }
+    std::fs::write(&path, bytes).map_err(|err| {
+        eprintln!("[kurs] makbuz PDF'i yazılamadı: {err}");
+        crate::error::AppError::new(
+            "receipt_write",
+            "Makbuz kaydedilemedi. Disk alanını ve klasör izinlerini kontrol edin.",
+        )
+    })?;
+    Ok(path.display().to_string())
+}
+
 // ---------------------------------------------------------------------------
 // Faz 4 — öğrenci ve veli
 // ---------------------------------------------------------------------------

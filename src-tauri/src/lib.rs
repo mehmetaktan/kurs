@@ -12,6 +12,7 @@ pub mod db;
 pub mod error;
 pub mod model;
 pub mod money;
+pub mod receipt;
 pub mod repo;
 pub mod text;
 
@@ -134,6 +135,7 @@ fn log_startup(conn: &Connection, db_path: &Path, applied_now: &[i64]) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             // Yol string birleştirmeyle kurulmaz → Tauri path API (CLAUDE.md > Windows).
             // Veritabanı app_data_dir altında (%APPDATA%), proje klasöründe değil (ADR-008).
@@ -168,6 +170,8 @@ pub fn run() {
             commands::cancel_payment,
             commands::statement_rows,
             commands::export_statement_csv,
+            // Para fazı §8 — gömülü fontlu makbuz PDF'i
+            commands::generate_receipt_pdf,
             // Faz 4 — öğrenci ve veli
             commands::student_list,
             commands::student_detail,

@@ -1659,6 +1659,39 @@ pub fn statement_csv(rows: &[StatementRow]) -> Vec<u8> {
     csv.into_bytes()
 }
 
+/// Makbuzun değişmez tahsilat kaydı ile öğrenci/birincil veli bilgilerini birlikte
+/// okuyan projeksiyonu. İptal ödeme satırından değil, defterdeki ters kayıttan gelir.
+pub fn receipt_data(conn: &Connection, payment_id: i64) -> AppResult<crate::receipt::ReceiptData> {
+    Ok(conn.query_row(
+        "SELECT p.id, COALESCE(p.receipt_no, ''), p.paid_on, p.amount, p.method, p.note, \
+                s.full_name, \
+                (SELECT g.full_name FROM student_guardian sg \
+                 JOIN guardian g ON g.id = sg.guardian_id AND g.deleted_at IS NULL \
+                 WHERE sg.student_id = s.id AND sg.deleted_at IS NULL \
+                 ORDER BY sg.is_primary DESC, sg.id LIMIT 1), \
+                EXISTS(SELECT 1 FROM ledger_entry original \
+                       JOIN ledger_entry reversal ON reversal.reverses_id = original.id \
+                       WHERE original.payment_id = p.id AND original.kind = 'payment' \
+                         AND original.deleted_at IS NULL AND reversal.deleted_at IS NULL) \
+         FROM payment p JOIN student s ON s.id = p.student_id \
+         WHERE p.id = ?1",
+        [payment_id],
+        |row| {
+            Ok(crate::receipt::ReceiptData {
+                payment_id: row.get(0)?,
+                receipt_no: row.get(1)?,
+                paid_on: row.get(2)?,
+                amount: row.get(3)?,
+                method: row.get(4)?,
+                note: row.get(5)?,
+                student_name: row.get(6)?,
+                guardian_name: row.get(7)?,
+                cancelled: row.get(8)?,
+            })
+        },
+    )?)
+}
+
 fn csv_cell(value: &str) -> String {
     if value
         .chars()

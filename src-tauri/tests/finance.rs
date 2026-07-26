@@ -1,6 +1,6 @@
 mod common;
 
-use kurs_takip_lib::model::{Attendance, PriceRule, Session};
+use kurs_takip_lib::model::{Attendance, Guardian, PriceRule, Session, StudentGuardian};
 use kurs_takip_lib::repo;
 use kurs_takip_lib::repo::finance::{
     InstallmentInput, PackageCloseMode, PackageSaleInput, PaymentAllocationInput, PaymentInput,
@@ -735,4 +735,57 @@ fn cari_ekstre_csvsi_bomlu_turkce_ve_excel_icin_kacisli() {
     assert!(text.contains("Açıklama;Borç;Alacak;Bakiye"));
     assert!(text.contains("\"Öğrenci; \"\"İpek\"\" tahsilatı\""));
     assert!(text.contains("1.250,50"));
+}
+
+#[test]
+fn makbuz_verisi_birincil_veliyi_ve_iptal_damgasini_defterden_okur() {
+    let conn = common::conn();
+    let student_id = payable_student(&conn, "İpek Şahin");
+    let guardian_id = repo::people::insert_guardian(
+        &conn,
+        &Guardian {
+            id: None,
+            full_name: "Çağla Şahin".into(),
+            phone: Some("0532 111 22 33".into()),
+            phone_digits: None,
+            email: None,
+            last_reminded_at: None,
+            created_at: None,
+            updated_at: None,
+            deleted_at: None,
+        },
+    )
+    .unwrap();
+    repo::people::insert_student_guardian(
+        &conn,
+        &StudentGuardian {
+            id: None,
+            student_id,
+            guardian_id,
+            relation: Some("Anne".into()),
+            is_primary: true,
+            created_at: None,
+            updated_at: None,
+            deleted_at: None,
+        },
+    )
+    .unwrap();
+    let report = repo::finance::record_payment(
+        &conn,
+        &payment_input(student_id, 50_000, "2026-14", Vec::new()),
+    )
+    .unwrap();
+
+    let active = repo::finance::receipt_data(&conn, report.payment_id).unwrap();
+    assert_eq!(active.student_name, "İpek Şahin");
+    assert_eq!(active.guardian_name.as_deref(), Some("Çağla Şahin"));
+    assert_eq!(active.amount, 50_000);
+    assert!(!active.cancelled);
+
+    repo::finance::cancel_payment(&conn, report.payment_id, "2026-04-02").unwrap();
+    assert!(
+        repo::finance::receipt_data(&conn, report.payment_id)
+            .unwrap()
+            .cancelled
+    );
 }

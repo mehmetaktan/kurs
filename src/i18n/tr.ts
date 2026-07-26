@@ -393,6 +393,11 @@ export const tr = {
   // Faz 5A — Tanımlar (EKRANLAR.md E7 branşlar, E8 tatil günleri).
   payments: {
     takePayment: 'Tahsilat al',
+    receipt: {
+      print: 'Makbuzu aç / yazdır',
+      opened: 'Makbuz PDF olarak açıldı.',
+      openError: 'Makbuz açılamadı. Bilgisayarınızda bir PDF okuyucu bulunduğunu kontrol edip yeniden deneyin.',
+    },
     introTitle: 'Tahsilat kaydı hazır',
     introBody: 'Öğrenciyi seçip tahsilatı kaydedin. Borçlu listesi bu ekranın sonraki bölümünde gösterilecek.',
     searchPlaceholder: 'Öğrenci adı veya veli telefonu ara',
@@ -453,6 +458,7 @@ export const tr = {
       cancelConfirm: 'Tahsilatı iptal et',
       cancelHint: 'Makbuz iptal olarak kalır; ödeme kaydı silinmez.',
       cancelDone: 'Tahsilat iptal edildi.',
+      receipt: 'Makbuz',
       empty: 'Bu tarih aralığında cari hareket yok',
       emptyBody: 'Tarih aralığını genişletin veya yeni bir tahsilat kaydedin.',
     },
@@ -477,6 +483,9 @@ export const tr = {
       save: 'Tahsilatı kaydet',
       saving: 'Kaydediliyor…',
       saved: 'Tahsilat kaydedildi.',
+      savedTitle: 'Tahsilat başarıyla kaydedildi',
+      savedBody: 'Makbuzu şimdi açıp yazdırabilir veya pencereyi kapatabilirsiniz.',
+      close: 'Kapat',
       errors: {
         student: 'Tahsilat yapılacak öğrenciyi seçin.',
         amount: 'Sıfırdan büyük, geçerli bir tutar yazın.',

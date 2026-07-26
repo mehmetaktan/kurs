@@ -4,6 +4,7 @@ import {
   fetchLocalNow,
   fetchOpenInstallments,
   fetchStudentList,
+  openReceiptPdf,
   recordPayment,
   reserveReceiptNo,
   suggestPaymentAllocations,
@@ -54,6 +55,8 @@ export function PaymentModal({ open, initialStudentId = null, onClose, onSaved }
   const [error, setError] = useState<AppError | null>(null)
   const [fieldError, setFieldError] = useState<'student' | 'amount' | 'date' | 'receiptNo' | 'allocation' | null>(null)
   const [saving, setSaving] = useState(false)
+  const [savedReport, setSavedReport] = useState<PaymentReport | null>(null)
+  const [openingReceipt, setOpeningReceipt] = useState(false)
   const savingRef = useRef(false)
   const toast = useToast()
 
@@ -71,6 +74,8 @@ export function PaymentModal({ open, initialStudentId = null, onClose, onSaved }
     setFieldError(null)
     savingRef.current = false
     setSaving(false)
+    setSavedReport(null)
+    setOpeningReceipt(false)
     void Promise.all([fetchStudentList({}), reserveReceiptNo(), fetchLocalNow()])
       .then(([rows, receipt, now]) => {
         if (!live) return
@@ -144,7 +149,7 @@ export function PaymentModal({ open, initialStudentId = null, onClose, onSaved }
       })
       toast(tr.payments.modal.saved)
       onSaved?.(report)
-      onClose()
+      setSavedReport(report)
     } catch (caught) {
       setError(caught as AppError)
       savingRef.current = false
@@ -152,10 +157,37 @@ export function PaymentModal({ open, initialStudentId = null, onClose, onSaved }
     }
   }
 
+  const openReceipt = async () => {
+    if (!savedReport || openingReceipt) return
+    setOpeningReceipt(true)
+    setError(null)
+    try {
+      await openReceiptPdf(savedReport.paymentId)
+      toast(tr.payments.receipt.opened)
+    } catch (caught) {
+      setError(caught as AppError)
+    } finally {
+      setOpeningReceipt(false)
+    }
+  }
+
   const ready = students !== null && paidOn !== null && receiptNo !== ''
   return (
     <Modal open={open} title={tr.payments.modal.title} onClose={onClose} dismissLabel={false}>
       {!ready && !error ? <LoadingState inline /> : (
+        savedReport ? (
+          <div className={styles.paymentSuccess}>
+            <strong>{tr.payments.modal.savedTitle}</strong>
+            <p>{tr.payments.modal.savedBody}</p>
+            {error && <ErrorState inline message={error.message} />}
+            <div className={styles.modalActions}>
+              <Button onClick={onClose}>{tr.payments.modal.close}</Button>
+              <Button variant="primary" disabled={openingReceipt} onClick={() => void openReceipt()}>
+                {tr.payments.receipt.print}
+              </Button>
+            </div>
+          </div>
+        ) : (
         <div className={styles.paymentForm}>
           {error && <ErrorState inline message={error.message} />}
           <SearchSelect
@@ -240,6 +272,7 @@ export function PaymentModal({ open, initialStudentId = null, onClose, onSaved }
             </Button>
           </div>
         </div>
+        )
       )}
     </Modal>
   )

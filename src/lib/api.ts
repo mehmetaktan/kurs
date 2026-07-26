@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
+import { openPath } from '@tauri-apps/plugin-opener'
 import { tr } from '../i18n/tr'
 
 /**
@@ -278,6 +279,16 @@ export function fetchStatementRows(query: StatementQuery): Promise<StatementRow[
 
 export function exportStatementCsv(query: StatementQuery): Promise<string> {
   return call<string>('export_statement_csv', { query })
+}
+
+export async function openReceiptPdf(paymentId: number): Promise<string> {
+  const path = await call<string>('generate_receipt_pdf', { paymentId })
+  try {
+    await openPath(path)
+    return path
+  } catch {
+    throw { code: 'receipt_open', message: tr.payments.receipt.openError } satisfies AppError
+  }
 }
 
 // ─── Faz 4 — öğrenci ve veli ──────────────────────────────────────────────────

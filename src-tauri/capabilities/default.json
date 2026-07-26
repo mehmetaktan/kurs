@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Ana pencerenin varsayılan yetkileri. Faz 2'de yalnızca komut çağırma gerekiyor; dosya sistemi, kabuk ve ağ yetkisi bilerek verilmedi — ihtiyaç doğan fazda tek tek eklenir.",
+  "description": "Ana pencerenin varsayılan yetkileri. Makbuz PDF'i sistemin varsayılan görüntüleyicisinde açılabilir; genel dosya sistemi, kabuk ve ağ yetkisi verilmez.",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "opener:allow-open-path"]
 }
