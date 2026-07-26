@@ -1313,3 +1313,54 @@ kullanır (uzun öğrenci listesi), ödeme yöntemi `Select` kalır. Komponentin
 süzme, Türkçe eşleşme, klavye gezinmesi, `Esc` davranışı.
 
 **Durum.** Kabul edildi (2026-07-26, `/faz-07 §0e`). `KULLANILABILIRLIK.md > K1` kapandı.
+
+---
+
+## ADR-042 — Para fazının ikinci dikişi dış bir ajana (Codex) devrediliyor
+
+**Karar.** `/faz-07`'nin **§5–§9'u** (tahsilat, borçlu listesi, cari ekstre, makbuz PDF,
+öğrenci detayının para bölümü) dış bir kodlama ajanına — Codex'e — verilir. Öncesi
+(**§1 tarife · §2 paket/taksit satışı · §3 deftere yansıma**) bu akışta yazılır. Dikiş
+yeri yeni değil: `/faz-07`'nin başında **zaten tanımlıydı**, yalnızca üstünde çalışan
+değişiyor. Çalışma dalı **`main`** (ürün sahibinin kararı).
+
+Devrin sınırları — **dosya bazında**:
+
+| Codex'e açık | Codex'e kapalı |
+|---|---|
+| `src/` ve `src-tauri/src/` içinde §5–§9'un kodu **ve testleri** | `src-tauri/migrations/**` — şema kapalı |
+| `src/i18n/tr.ts`'e yeni metinler | `docs/**` ve `.claude/commands/**` |
+| `src/ui/`'ya gerekiyorsa yeni komponent | `src/pages/takvim/**` (ADR-034, donduruldu) |
+
+**Migration yazmaz.** §5–§9 şema değişikliği gerektirmiyor; doğrulandı: `payment`,
+`payment_allocation`, `ledger_entry`, `installment` tabloları ile `v_student_debt`,
+`v_installment_open`, `v_student_balance` view'ları duruyor ve **makbuz numarası
+tekilliği `ux_receipt` ile zaten zorlanıyor** (§8'in istediği tekillik). Bir sütuna
+ihtiyaç duyarsa **durur ve sorar** (`CLAUDE.md > Veri`).
+
+**ADR yazmaz, plan değiştirmez.** Kilitli kararlar (ADR-014, ADR-015, ADR-018, ADR-035,
+ADR-040) uygulanır, tartışılmaz. Belge yüzeyi yöneticide kalır — bu ADR'nin kendisi de
+o kuralın örneği.
+
+**İkinci bir defter yazma yolu açmaz.** `ledger_entry` satırı yalnızca
+`repo/finance.rs`'in mevcut fonksiyonları üzerinden yazılır; §3'te kurulan tahakkuk
+yolunun kopyası çıkarılmaz. İki yol iki bakiye demektir.
+
+**Gerekçe.** Devrin sebebi kapasite değil, **aracın denenmesi**: ürün sahibi Codex'i
+gerçek bir iş üzerinde ölçmek istiyor. §5–§9 bunun için doğru dilim, çünkü (a) plandaki
+dikiş zaten orada, (b) altındaki repo katmanı — `insert_payment`,
+`insert_payment_allocation`, `insert_ledger_entry`, `views::student_debts` — **yazılmış
+ve testli**, yani iş büyük ölçüde yüzey, (c) buradaki hata *görünür* bir yerde çıkar
+(makbuz, borçlu listesi), defterin temelinde sessizce çoğalmaz. Defterin temeli (§1–§3)
+bilerek devredilmiyor.
+
+**Bedeli — `main` üzerinde çalışmanın takası.** Ayrı dal, kötü sonucu atmayı serbest
+bırakırdı; `main` bunu `git revert`'e indiriyor. Karşılığında Codex'in commit'leri
+**küçük ve bölümlü** tutulur (§5 · §6 · §7 · §8 ayrı commit), ki bir bölüm geri alınırken
+ötekiler ayakta kalsın. `npm run check` her commit öncesi yeşil olmalı.
+
+**Sonuç.** Sıra: bu akış §1–§3'ü yazar → Codex §5–§9'u yazar → **para fazı denetimi**
+(ADR-033'ün plandaki tek zorunlu denetimi) **ikisini birden** kapsar ve Codex'in çıktısı
+orada diff olarak okunur. Denetim ayrı bir onay makamı değil, zaten planda duruyordu.
+
+**Durum.** Kabul edildi (2026-07-26, yönetici oturumu, ürün sahibinin kararı).

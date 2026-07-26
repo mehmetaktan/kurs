@@ -1,7 +1,7 @@
 # Durum
 
-**Son güncelleme:** 2026-07-26 · `/faz-07` birinci oturum — §0 bitti, para işi başladı
-**Sıradaki iş:** `/faz-07` **aynı komutla devam** — §1 fiyat tarifesi
+**Son güncelleme:** 2026-07-26 · yönetici oturumu — para fazının ikinci dikişi Codex'e devredildi (ADR-042)
+**Sıradaki iş:** `/faz-07` **aynı komutla devam** — §1 fiyat tarifesi, **§3'te dur**
 **Kalan plan:** `/faz-07` (para, sürüyor) → `/faz-06` (yoklama) → `/faz-10` (teslim)
 
 > Bu dosya **son durumu** tutar, oturum arşivi değildir. Geçmiş `git log`'da, gerekçeler
@@ -58,14 +58,29 @@ K1 ve K2 ✅):
 
 ---
 
-## Sıradaki oturum — `/faz-07` (aynı komut)
+## Sıradaki oturum — `/faz-07` (aynı komut), kapsam **§1–§3**
 
 Sıra: **§1 fiyat tarifesi** → §2 paket/taksit satışı (ADR-035 kapatma dalları) →
-§3 vade tahakkuku (`accrue_due_installments` → `ops.rs > on_startup`) → *(dikiş §5)* →
-tahsilat → borçlu listesi → ekstre → makbuz PDF.
+§3 vade tahakkuku (`accrue_due_installments` → `ops.rs > on_startup`) → **dur, `/kapat`**.
 
 §4 **bitti**: migration, kanıt testleri ve tüketim fonksiyonu yazıldı. Kalan tek işi
 Faz 6'nın onu çağırması.
+
+### İkinci dikiş Codex'te — ADR-042
+
+**§5–§9** (tahsilat · borçlu listesi · cari ekstre · makbuz PDF · öğrenci detayının para
+bölümü) dış bir kodlama ajanına verildi. Sebep kapasite değil, **aracın gerçek bir iş
+üzerinde denenmesi**; dilim öyle seçildi ki defterin *temeli* (§1–§3) bu akışta kalsın.
+Çalışma dalı `main`, karşılığında commit'ler bölümlü (§5 · §6 · §7 · §8 ayrı).
+Sınırlar — migration yok, `docs/**` ve ADR yok, takvim yok, ikinci defter yolu yok —
+ADR-042'de ve `/faz-07`'nin §5 başlığının üstünde.
+
+**§1–§3 oturumunun devir borcu:** bittiğinde buraya *§5'in güvenebileceği yüzey* tablosu
+yazılır — fonksiyon/komut adı → ne yapar → testi nerede. Codex'in okuyacağı devir notu o
+tablodur; olmadan tahsilat kendi defter yolunu yazar.
+
+Denetim ayrıca açılmıyor: para fazı sonrasındaki **zorunlu denetim** (ADR-033) §1–§3 ile
+§5–§9'u birlikte okuyacak.
 
 ### Sahiplik kontrolü (ADR-039)
 

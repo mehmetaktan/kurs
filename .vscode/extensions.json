@@ -1,0 +1,16 @@
+{
+  // .vscode altında GİT'E GİREN tek dosya bu (.gitignore §Editör).
+  // Hiçbiri zorunlu değil — proje eklentisiz de derlenir, test edilir, paketlenir.
+  "recommendations": [
+    // Rust'ta tamamlama, hata altçizgisi ve "Run Test" düğmeleri.
+    "rust-lang.rust-analyzer",
+    // launch.json'daki "Rust: testlerde kesme noktası" yapılandırması bunu ister.
+    "vadimcr.vscode-lldb",
+    // Tauri yapılandırma dosyaları için şema ve komutlar.
+    "tauri-apps.tauri-vscode",
+    // eslint.config.js'i editörde uygular; `npm run lint`'i beklemeden görürsün.
+    "dbaeumer.vscode-eslint",
+    // Test gezgininde vitest testlerini tek tek çalıştırma.
+    "vitest.explorer"
+  ]
+}

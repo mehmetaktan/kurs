@@ -24,6 +24,8 @@ description: Faz Para — fiyat tarifesi, paket, tahsilat, ekstre ve makbuz (esk
 `docs/PRD.md`, `docs/KARARLAR.md` — özellikle ADR-003, ADR-004, ADR-006, **ADR-014**,
 **ADR-015**, ADR-016, **ADR-018**, ADR-025, ADR-026, ADR-027, **ADR-035**,
 **ADR-037** (çok öğretmenli — ADR-011 düştü), **ADR-038** (takvimin dar istisnası).
+**ADR-040** (en eski aktif paket + yön belirten tüketim) ve **ADR-041** (uzun listede
+`SearchSelect`) de bu oturumun tamamlanmış §4/§0 sözleşmeleridir; yeniden karar verme.
 
 **Para mantığının temeli burada kuruluyor. Burada yapılan hata her ekstrede, her raporda
 çoğalır.** Buna karşılık: **ölçüm veya araştırma oturumu açılmaz** (ADR-033). Bir yerde
@@ -42,6 +44,27 @@ devam et ve varsayımı bu komuta yaz.
 `/kapat` çalıştır, **aynı komutla** sonraki oturumda devam et. Arada denetim veya karar
 oturumu **açılmaz**. §0 tek başına bir oturumdan küçüktür; para işinin başıyla birlikte
 sığarsa ilk dikişte durma.
+
+> ### ⛔ Bu oturumun kapsamı: **§1, §2, §3 — ve orada dur** (ADR-042)
+>
+> **§5–§9 dış bir ajana (Codex) devredildi.** İkinci dikişe varınca *devam etme*:
+> §1–§3 bittiğinde `npm run check` yeşilse `/kapat` çalıştır. Tahsilat ekranı, borçlu
+> listesi, ekstre ve makbuz PDF **senin işin değil.**
+>
+> Bu, "yetişmezse böl" değil, **kararlaştırılmış bir devir**. Devrin sınırları, Codex'in
+> nelere dokunamayacağı ve `main` üzerinde çalışmanın takası ADR-042'de.
+>
+> §10'un test listesinden **sana düşenler**: kuruş aritmetiği (float yok), tarife
+> değişimi geçmişi bozmuyor, `accrue_due_installments` idempotent, ADR-035'in iki dalı
+> (avans / iade), aynı anda iki aktif pakette en eskisinden düşme, `bakiye =
+> SUM(ledger_entry)`. Mahsup, makbuz ve tahsilat iptali maddeleri Codex'e ait.
+>
+> **§5'e devrederken bırakman gereken şey — sözleşme.** Codex'in `ledger_entry`'ye
+> ikinci bir yazma yolu açmaması ADR-042'nin kuralı, ama bunu mümkün kılmak senin işin:
+> §3'te tahakkuku yazan fonksiyonların adları ve imzaları **§5'in de kullanacağı hâlde**
+> bırakılır (tahsilatın alacak satırı, iptalin ters kaydı). Bittiğinde `docs/DURUM.md`'ye
+> **§5'in güvenebileceği yüzeyi tek tabloda yaz**: fonksiyon/komut adı → ne yapar →
+> testi nerede. Codex'in okuyacağı devir notu bu tablodur.
 
 ---
 
@@ -157,8 +180,8 @@ listesinden seçim yaptıracak.
 - Satış özeti kaydetmeden önce gösterilir (R5.10):
   *"8 ders · 2.000 TL · 2 taksit — ilk vade 01.03."*
 - Ders hakkı ve bakiye **iki ayrı sayaç** olarak gösterilir, karıştırılmaz (R5.11)
-- Aynı öğrencide birden fazla aktif paket olabilir — **en eskisinden** düşülür (R5.12).
-  Bunu ADR olarak yaz.
+- Aynı öğrencide birden fazla aktif paket olabilir — **en eskisinden** düşülür (R5.12,
+  **ADR-040; karar verilmiş ve tüketim fonksiyonunda uygulanmıştır**). Yeniden ADR yazma.
 - **Paketi kapatma akışı — ADR-035, kilitli.** Öğrenci ayrıldığında iki seçenek sunulur:
   **Avans bırak** (kullanılmayan hakların tutarı alacak olarak kalır) veya **İade et**
   (iade hareketi yazılır, bakiye kapanır). İkisi de `ledger_entry`'ye append-only satır
@@ -214,7 +237,34 @@ Tüketimi tetikleyen şey **yoklama** (ADR-015) ve yoklama ekranı `/faz-06`'da.
 
 ---
 
-## 5. Tahsilat alma — *(dikiş yeri: buradan öncesi bir oturuma sığar)*
+---
+
+> ## 📌 Buradan aşağısı Codex'in — ADR-042
+>
+> **§5–§9 dış ajana devredildi.** Bu satırın altındaki maddeler `main` üzerinde Codex
+> tarafından yazılacak; para fazı denetimi (ADR-033) bu bölümü diff olarak okuyacak.
+>
+> **Codex bunları yapmaz:** migration yazmaz (§5–§9 şema değişikliği gerektirmiyor;
+> `payment`, `payment_allocation`, `ledger_entry`, `installment` ve `v_student_debt`,
+> `v_installment_open`, `v_student_balance` hazır, makbuz tekilliği `ux_receipt`'te —
+> sütuna ihtiyaç duyarsa **durur ve sorar**) · `docs/**` ve `.claude/commands/**`
+> dosyalarına dokunmaz, **ADR yazmaz** · `src/pages/takvim/**`'e girmez (ADR-034) ·
+> `ledger_entry`'ye ikinci bir yazma yolu açmaz — §3'ün bıraktığı fonksiyonları çağırır.
+>
+> **Codex bunlara uyar:** `CLAUDE.md`'nin bütün değişmez kuralları — kuruş `i64`,
+> frontend'de SQL yok, hard delete yok, metinler `src/i18n/tr.ts`'te, tarih/saat
+> `local_now`'dan (ADR-029). Para ile ilgili **her fonksiyonun testi olur** (§10).
+> Komponent seçimi ADR-041'in tablosuna göre: öğrenci seçimi `SearchSelect`, ödeme
+> yöntemi `Select`.
+>
+> **Bölümlü commit:** §5 · §6 · §7 · §8 ayrı commit'ler, her birinden önce
+> `npm run check` yeşil. Sebebi ADR-042'de: `main` üzerinde çalışıldığı için geri alma
+> yolu `git revert` ve bölüm bölüm geri alınabilmesi gerekiyor.
+>
+> Devir notu — §5'in güvenebileceği fonksiyon/komut yüzeyi — `docs/DURUM.md`'de,
+> §1–§3 oturumu tarafından tablo hâlinde bırakılır.
+
+## 5. Tahsilat alma — *(dikiş yeri: devir buradan başlıyor)*
 
 - Öğrenci seç (**§0e'nin aranabilir seçimi**), tutar, tarih, yöntem (Nakit / Havale / Kart),
   açıklama
@@ -307,5 +357,8 @@ Para ile ilgili yazdığın her fonksiyonun testi olacak. Testsiz fonksiyon bır
 ---
 
 Bitince test çıktısını ve örnek bir makbuz PDF'ini göster, sonra `/kapat`.
+(Bu satır **§5–§9'un sonu** içindir — devir gereği Codex'te. Bu akış §3'ün sonunda
+`/kapat` çalıştırır ve devir tablosunu `docs/DURUM.md`'ye bırakır.)
 
-**Denetim oturumu bu fazdan sonra yapılır** — plandaki tek denetim bu (ADR-033).
+**Denetim oturumu bu fazdan sonra yapılır** — plandaki tek denetim bu (ADR-033) ve
+**Codex'in yazdığı §5–§9'u da kapsar** (ADR-042).
