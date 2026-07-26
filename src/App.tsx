@@ -6,9 +6,17 @@ import { GroupDetailPage } from './pages/gruplar/GroupDetailPage'
 import { GroupsPage } from './pages/gruplar/GroupsPage'
 import { StudentDetailPage } from './pages/ogrenciler/StudentDetailPage'
 import { StudentsPage } from './pages/ogrenciler/StudentsPage'
+import { CalendarPage } from './pages/takvim/CalendarPage'
 import { DefinitionsPage } from './pages/tanimlar/DefinitionsPage'
 import { AppShell } from './shell/AppShell'
-import { DEFINITIONS_PATH, DEV_ROUTES, GROUPS_PATH, PAGES, STUDENTS_PATH } from './shell/routes'
+import {
+  CALENDAR_PATH,
+  DEFINITIONS_PATH,
+  DEV_ROUTES,
+  GROUPS_PATH,
+  PAGES,
+  STUDENTS_PATH,
+} from './shell/routes'
 import { LoadingState, ToastProvider } from './ui'
 
 /**
@@ -43,6 +51,7 @@ function RoutedPage({ path }: { path: string }) {
   // Sıra bağlayıcı: SABİT yollar parametreli yollardan ÖNCE. Ters sırada
   // `/ogrenciler/yeni` gibi bir adres `:id = 'yeni'` olarak eşleşirdi (router.ts).
   if (path === '/') return <TodayPage />
+  if (matchRoute(CALENDAR_PATH, path)) return <CalendarPage />
   if (matchRoute(STUDENTS_PATH, path)) return <StudentsPage />
   if (matchRoute(GROUPS_PATH, path)) return <GroupsPage />
   if (matchRoute(DEFINITIONS_PATH, path)) return <DefinitionsPage />

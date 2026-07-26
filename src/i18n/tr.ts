@@ -758,26 +758,6 @@ export const tr = {
     },
   },
 
-  status: {
-    heading: 'Sistem durumu',
-    subtitle: 'Veritabanı bağlantısı ve uygulanan güncellemeler.',
-    loading: 'Veritabanı hazırlanıyor…',
-    dbPath: 'Veritabanı dosyası',
-    sqliteVersion: 'SQLite sürümü',
-    journalMode: 'Günlük kipi',
-    foreignKeys: 'Yabancı anahtar denetimi',
-    migrations: 'Uygulanan güncellemeler',
-    institution: 'Kurum',
-    teacher: 'Öğretmen',
-    studentCount: 'Kayıtlı öğrenci',
-    sessionCount: 'Planlanmış ders',
-    ledgerCount: 'Defter hareketi',
-    on: 'açık',
-    off: 'kapalı',
-    healthy: 'Veritabanı bağlantısı çalışıyor.',
-    seedHint: 'Demo verisi yüklemek için: npm run seed',
-  },
-
   errors: {
     // Kullanıcı teknik değil: mesaj Türkçe ve EYLEM önerir, ham hata kodu göstermez.
     title: 'Bir sorun çıktı',
@@ -798,9 +778,74 @@ export const tr = {
     separator: ' · ',
   },
 
+  // Takvim ekranı (EKRANLAR §2). Gün/ay ADLARI burada değil, `dates` altında: biri
+  // ekranın metni, öteki uygulamanın her yerinde kullanılan sözlük.
+  calendar: {
+    views: { month: 'Ay', week: 'Hafta', day: 'Gün' },
+    today: 'Bugün',
+    prev: 'Önceki',
+    next: 'Sonraki',
+    newSession: '＋ Ders ekle',
+    fromTemplate: 'Şablondan oluştur',
+    closed: 'Tatil',
+    now: 'şimdi',
+    // Blok içindeki ikinci satır: grupta "4/6", birebirde tek kelime.
+    solo: 'Birebir',
+    makeup: 'Telafi',
+    cancelled: 'İptal',
+    attendanceMissing: 'Yoklama',
+    // Ay ızgarasının hücre altyazısı: "3 ders".
+    lessonCount: 'ders',
+    more: 'daha',
+    // Saati okunamayan satır ızgaraya çizilemiyor ama SAKLANMIYOR da: veritabanında
+    // olup ekranda olmayan bir ders, kullanıcıya "o gün boş" dedirtir. Satırın adı
+    // düğme olarak yazılıyor; tıklayınca ders açılıp saati düzeltilebiliyor.
+    unreadable: 'dersin saati okunamadı ve takvime çizilemedi. Açıp saatini düzeltin:',
+    legend: {
+      heading: 'Açıklama',
+      group: 'Grup dersi',
+      solo: 'Birebir',
+      makeup: 'Telafi / tek seferlik',
+      attendanceMissing: 'Yoklama girilmedi',
+      done: 'İşlenmiş ders',
+      cancelled: 'İptal edilmiş',
+      closed: 'Tatil / kapalı gün',
+    },
+    // Dördü ayrı (EKRANLAR §149) — tek bir "kayıt yok" hepsini anlatmıyor.
+    empty: {
+      noSchedule: 'Bu hafta için program tanımlı değil',
+      noScheduleBody:
+        'Haftalık ders programı henüz kurulmamış. Bir ders ekleyin ya da geçmiş bir haftayı şablona çevirin.',
+      allClosed: 'Bu hafta tamamen tatil',
+      allClosedBody: 'Haftanın her günü kapalı. Tanımlar → Tatil günleri\'nden değiştirebilirsiniz.',
+      noResults: 'Bu filtreyle ders yok',
+      noResultsBody: 'Seçili branşlarda bu hafta ders bulunmuyor.',
+      clearFilter: 'Filtreyi temizle',
+      dayEmpty: 'Bu gün için ders yok',
+      dayClosed: 'Bu gün kapalı',
+    },
+    // Sürükle-bırak sonrası kapsam sorusu (R3.8). En dar olan başta, hiçbiri seçili değil.
+    move: {
+      title: 'Dersi taşı',
+      // "Matematik · Grup A dersi Perşembe 18:00'e taşınacak."
+      lead: 'dersi',
+      leadSuffix: 'saatine taşınacak.',
+      only: 'Sadece bu ders',
+      onlyHint: 'Yalnızca bu hafta taşınır; haftalık program eski gün ve saatinde kalır.',
+      following: 'Bu ve sonraki dersler',
+      followingHint:
+        'Haftalık program bu tarihten itibaren yeni gün ve saate geçer. Geçmiş dersler yerinde kalır.',
+      confirm: 'Taşı',
+      done: 'Ders taşındı.',
+      doneFollowing: 'ders yeni gün ve saate taşındı.',
+      undo: 'Geri al',
+      undone: 'Taşıma geri alındı.',
+    },
+  },
+
   // `Date.prototype.toLocaleDateString('tr')` kullanılmıyor: WebView2'de ICU verisi
   // eksik kurulmuş bir Windows'ta İngilizce gün adı döner. Listeler burada sabit.
-  calendar: {
+  dates: {
     // Pazar 0 — `Date.prototype.getDay()` ile aynı sıra.
     weekdays: [
       'Pazar',

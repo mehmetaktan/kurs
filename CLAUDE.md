@@ -67,7 +67,7 @@ kilitli: `.npmrc`.** CI aynı dosyaları okur — yerelde çalışan sürüm CI'
 > Aynı sınıftan bir tuzak Node'da da var, o yüzden sürüm oraya da tam yazılır: her Node
 > yayını farklı bir npm getirir.
 
-## Klasör yapısı (Faz 5B)
+## Klasör yapısı (Faz 5C)
 
 ```
 kurs/
@@ -85,8 +85,13 @@ kurs/
 │   │   ├── dersler/           Faz 5B: SessionForm (E3) · SessionActions · TemplateModal (E6)
 │   │   ├── ogrenciler/        Faz 4: liste · detay · form · veli · filters · validate
 │   │   ├── gruplar/           Faz 5A: liste · detay · form · filters
+│   │   ├── takvim/            Faz 5C: CalendarPage · WeekGrid · MonthGrid · MoveDialog ·
+│   │   │                      calendarGrid.ts (geometri) · drag.ts (ADR-030) · filters.ts
 │   │   └── tanimlar/          Faz 5A: branşlar · tatil günleri · renk paleti
-│   ├── dev/                   /dev/komponentler · /dev/durum — ÜRETİME GİRMEZ
+│   ├── dev/                   /dev/komponentler · /dev/durum — ÜRETİME GİRMEZ.
+│   │                          Metinleri KENDİ sözlüğünde (showcase.tr.ts · status.tr.ts):
+│   │                          tr.ts her ekrandan import ediliyor, oraya yazılan dize
+│   │                          komponent elense bile pakete girer — kapı bunu yakaladı
 │   ├── test/setup.ts          vitest + jsdom temizliği
 │   └── lib/                   api.ts · format.ts (kuruş, tarih, telefon) ·
 │                              sortTr.ts (ADR-020) · paginate.ts (ADR-025) ·
@@ -118,8 +123,9 @@ bırakır. `ledger_entry`'nin `update`/`archive` fonksiyonu **yoktur** — appen
 (bakiye, kalan ders, veli, işlenen ders). İkisi ayrı durur ki tablo katmanı ekrana
 bağlanmasın. Aynı ayrım akademik tarafta da var: `repo/academic.rs` tablolar,
 **`repo/schedule.rs`** projeksiyon + zaman mantığı: seans üretim motoru, grup satırı,
-**gün/aralık ders satırı** (`day_rows` · `session_rows_between`) ve seans yazma
-(`save_session`, şablondan oluşturma).
+**gün/aralık ders satırı** (`day_rows` · `session_rows_between`), **kapalı gün aralığı**
+(`closed_days_in_range`) ve seans yazma (`save_session`, `reschedule_sessions`,
+şablondan oluşturma).
 
 `repo/ops.rs > on_startup(today)` her açılışta çalışır ve eksik seansları üretir
 (`VERI-MODELI §1.14`). Hata uygulamayı açmayı engellemez. Faz 7/8'in vade tahakkuku da

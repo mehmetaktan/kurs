@@ -253,6 +253,37 @@ pub fn is_closed_day(conn: &Connection, day: NaiveDate) -> AppResult<bool> {
     repo::academic::is_closed(conn, &clock::date_string(day))
 }
 
+/// Aralıktaki kapalı günlerin listesi (`'YYYY-MM-DD'`), takvimin taralı sütunları için.
+///
+/// `is_closed_day`'i gün gün çağırmak da aynı cevabı verirdi ama her çağrı
+/// `weekly_closed_days` ayarını yeniden okuyor; aylık ızgara 42 gün demek. Asıl sebep
+/// bu değil: **kapalı gün bilgisi ızgaranın tek bir anlık görüntüsü olmalı.** Ayrı ayrı
+/// sorulsaydı iki gün arasında ayar değişince hafta yarısı eski, yarısı yeni kurala göre
+/// çizilirdi.
+pub fn closed_days_in_range(
+    conn: &Connection,
+    from: NaiveDate,
+    to: NaiveDate,
+) -> AppResult<Vec<String>> {
+    if to < from {
+        return Ok(Vec::new());
+    }
+    let weekly = weekly_closed_days(conn)?;
+    let holidays = closed_days_between(conn, from, to)?;
+
+    let mut out = Vec::new();
+    let mut day = from;
+    while day <= to {
+        let key = clock::date_string(day);
+        if weekly.contains(&(day.weekday().number_from_monday() as i64)) || holidays.contains(&key)
+        {
+            out.push(key);
+        }
+        day = next_day(day)?;
+    }
+    Ok(out)
+}
+
 // ---------------------------------------------------------------------------
 // Tarih / saat yardımcıları — hepsi saf, hiçbiri SQLite saatini okumaz (§0)
 // ---------------------------------------------------------------------------
@@ -515,6 +546,10 @@ pub fn cancel_session(conn: &Connection, session_id: i64, reason: Option<&str>) 
 ///
 /// **Yoklaması alınmış ders taşınamaz** (R3.13): taşınsaydı yoklama başka bir güne ait
 /// olurdu ve devam oranı ile ders geçmişi sessizce yanlış bir tarihe kayardı.
+///
+/// **Tatile taşınamaz** (K-2): kural `save_session`'da zaten vardı, erteleme yolunda
+/// yoktu — aynı dersi ekleyemediğiniz güne sürükleyerek taşıyabilmek bir boşluktu.
+/// Takvim hedef göstergesini de çıkarmıyor ama son söz burada.
 pub fn reschedule_session(
     conn: &Connection,
     session_id: i64,
@@ -531,6 +566,7 @@ pub fn reschedule_session(
     }
 
     let day = parse_date(&starts_at[..10.min(starts_at.len())])?;
+    reject_closed_day(conn, day)?;
     let time = &starts_at[10.min(starts_at.len())..];
     let (starts, ends) = slot_bounds(day, time.trim(), duration_min)?;
 
@@ -539,6 +575,137 @@ pub fn reschedule_session(
         params![session_id, starts, ends, clock::now_local()],
     )?;
     Ok(())
+}
+
+/// K-2'nin tek cümlesi — hem ekleme hem taşıma yolundan çağrılıyor ki kullanıcı iki
+/// farklı yerde iki farklı metin görmesin.
+fn reject_closed_day(conn: &Connection, day: NaiveDate) -> AppResult<()> {
+    if is_closed_day(conn, day)? {
+        return Err(AppError::new(
+            "session.day",
+            "Bu gün tatil olarak işaretli, o güne ders eklenemez. \
+             Başka bir gün seçin ya da Tanımlar → Tatil günleri'nden tatili kaldırın.",
+        ));
+    }
+    Ok(())
+}
+
+/// Taşımanın kapsamı — sürükle-bırakın **ardından** sorulan soru (R3.8).
+///
+/// `SessionScope`'un üçüncü değeri (`All`) burada bilerek yok: "tüm seri" demek geçmiş
+/// dersleri de taşımak olurdu ve onların yoklaması alınmış olabilir (R3.13). Silmede
+/// üç seçenek anlamlı, taşımada iki.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RescheduleScope {
+    /// Yalnızca bu ders taşınır; şablon olduğu gibi kalır.
+    #[default]
+    Only,
+    /// Şablon bu tarihten itibaren yeni gün/saate geçer; geçmiş dersler yerinde kalır.
+    Following,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RescheduleReport {
+    /// "Bu ve sonraki dersler"de açılan **yeni** şablon. Tek derste `None`.
+    pub series_id: Option<i64>,
+    /// Yeni gün/saate yazılan ders sayısı — bildirimde okunuyor.
+    pub moved: i64,
+}
+
+/// Ders taşır; kapsamı çağıran belirler (R3.8).
+///
+/// **"Bu ve sonraki dersler" neden şablonu güncellemiyor da yenisini açıyor.** Şablonun
+/// `weekday`'ini yerinde değiştirmek, o şablonun **geçmiş** seanslarını da yeni günün
+/// serisine bağlı bırakırdı: "salı 16:00" diye üretilmiş, yoklaması alınmış dersler
+/// birden "perşembe 18:00" şablonuna ait görünürdü. `delete_sessions(Following)` bu
+/// sorunu zaten çözmüş: seri pivot günün öncesinde **kapanır**, geçmiş ona bağlı kalır.
+/// Buradaki tek fark, kapanan serinin yerine yenisinin açılması.
+///
+/// **Sürüklenen dersin kendisi her zaman yazılır.** Üretim geçmişe seans yazmıyor
+/// (§1.14) — bu doğru bir kural ama kullanıcı geçen haftanın dersini sürüklediğinde
+/// bıraktığı yerde hiçbir şey görmemesi demek olurdu. Pivot seans elle yazılıyor,
+/// gerisini motor üretiyor; `slot_exists` ikisinin çakışmasını engelliyor.
+pub fn reschedule_sessions(
+    conn: &Connection,
+    session_id: i64,
+    starts_at: &str,
+    duration_min: i64,
+    scope: RescheduleScope,
+    today: NaiveDate,
+) -> AppResult<RescheduleReport> {
+    let session: crate::model::Session = repo::require(conn, session_id)?;
+
+    let series_id = match (scope, session.series_id) {
+        // Şablonsuz ders "sonraki dersler"i olmayan bir derstir; kapsam tek derse iner.
+        // `delete_sessions`'daki `(_, None)` kolunun aynısı.
+        (RescheduleScope::Only, _) | (_, None) => {
+            reschedule_session(conn, session_id, starts_at, duration_min)?;
+            return Ok(RescheduleReport {
+                series_id: None,
+                moved: 1,
+            });
+        }
+        (RescheduleScope::Following, Some(series_id)) => series_id,
+    };
+
+    if session.attendance_taken_at.is_some() {
+        return Err(AppError::new(
+            "session_locked",
+            "Bu dersin yoklaması alınmış; ders taşınamaz. \
+             Önce yoklamayı geri alın ya da yeni bir telafi dersi planlayın.",
+        ));
+    }
+
+    let day = parse_date(&starts_at[..10.min(starts_at.len())])?;
+    reject_closed_day(conn, day)?;
+    let time = starts_at[10.min(starts_at.len())..].trim().to_string();
+    let (starts, ends) = slot_bounds(day, &time, duration_min)?;
+
+    repo::in_transaction(conn, |conn| {
+        // Eski şablon ÖNCE okunur: `close_series_before` `ends_on`'u değiştiriyor.
+        let old: SessionSeries = repo::require(conn, series_id)?;
+        let pivot = session_day(&session);
+
+        close_series_before(conn, series_id, &pivot)?;
+        archive_unprocessed(conn, series_id, Some(&pivot))?;
+
+        let fresh = SessionSeries {
+            id: None,
+            study_group_id: old.study_group_id,
+            student_id: old.student_id,
+            subject_id: old.subject_id,
+            teacher_id: old.teacher_id,
+            weekday: day.weekday().number_from_monday() as i64,
+            start_time: time.clone(),
+            duration_min,
+            starts_on: clock::date_string(day),
+            ends_on: old.ends_on.clone(),
+            created_at: None,
+            updated_at: None,
+            deleted_at: None,
+        };
+        let new_series_id = repo::academic::insert_session_series(conn, &fresh)?;
+
+        if !slot_exists(conn, new_series_id, &starts)? {
+            insert_from_series(conn, &fresh, new_series_id, &starts, &ends)?;
+        }
+        generate_sessions(conn, today)?;
+
+        // `GenerateReport.created` bütün şablonların toplamı; bildirimde yazılacak sayı
+        // **bu** şablonunki. Sayarak alıyoruz ki "3 ders taşındı" gerçekten 3 olsun.
+        let moved: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM session WHERE series_id = ?1 AND deleted_at IS NULL",
+            params![new_series_id],
+            |row| row.get(0),
+        )?;
+
+        Ok(RescheduleReport {
+            series_id: Some(new_series_id),
+            moved,
+        })
+    })
 }
 
 // ===========================================================================

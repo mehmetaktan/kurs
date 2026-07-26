@@ -138,6 +138,24 @@
   max-width: var(--measure-content-max);
 }
 
+/*
+ * `PageContent fill` — kaydırmayı çocuk devralır (Takvim).
+ * Alt dolgu kalkıyor: ızgara kendi kabında kaydırdığı için altta boşluk bırakmak,
+ * ekranın alt şeridini görünmez bir kenar boşluğuna vermek olurdu.
+ */
+.contentFill {
+  display: flex;
+  overflow: hidden;
+  padding-bottom: var(--space-5-5);
+}
+
+.contentInnerFill {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .statusBar {
   display: flex;
   flex-shrink: 0;

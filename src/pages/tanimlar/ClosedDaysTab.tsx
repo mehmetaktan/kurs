@@ -32,18 +32,18 @@ const DRAFT_ID = 0
  * Haftanın günleri, **şemanın numaralandırmasıyla**: 1 = Pazartesi … 7 = Pazar
  * (`session_series.weekday`, `setting.weekly_closed_days`).
  *
- * `tr.calendar.weekdays` Pazar'dan başlıyor çünkü `Date.prototype.getDay()` öyle;
+ * `tr.dates.weekdays` Pazar'dan başlıyor çünkü `Date.prototype.getDay()` öyle;
  * buradaki sıra ondan farklı ve bu **bilinçli** — iki numaralandırmayı tek listeye
  * sıkıştırmak, birinin diğerine dönüştürüldüğü yeri gizler.
  */
 export const WEEKDAYS: readonly { value: number; label: string }[] = [
-  { value: 1, label: tr.calendar.weekdays[1] },
-  { value: 2, label: tr.calendar.weekdays[2] },
-  { value: 3, label: tr.calendar.weekdays[3] },
-  { value: 4, label: tr.calendar.weekdays[4] },
-  { value: 5, label: tr.calendar.weekdays[5] },
-  { value: 6, label: tr.calendar.weekdays[6] },
-  { value: 7, label: tr.calendar.weekdays[0] },
+  { value: 1, label: tr.dates.weekdays[1] },
+  { value: 2, label: tr.dates.weekdays[2] },
+  { value: 3, label: tr.dates.weekdays[3] },
+  { value: 4, label: tr.dates.weekdays[4] },
+  { value: 5, label: tr.dates.weekdays[5] },
+  { value: 6, label: tr.dates.weekdays[6] },
+  { value: 7, label: tr.dates.weekdays[0] },
 ]
 
 /** EKRANLAR.md E8 — Tanımlar → Tatil / kapalı günler. Takvim buradan besleniyor. */

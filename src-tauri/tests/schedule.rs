@@ -1635,3 +1635,225 @@ fn zaten_sablonu_olan_ders_atlanir() {
     assert_eq!(report.skipped, 1, "atlama sessiz değil, sayılıyor");
     assert_eq!(repo::list_live::<SessionSeries>(&conn).unwrap().len(), 2);
 }
+
+// ===========================================================================
+// Faz 5C — takvimin okuduğu aralık ve taşımanın kapsamı (R3.8)
+// ===========================================================================
+
+#[test]
+fn kapali_gun_listesi_araligi_gun_gun_tarar() {
+    let conn = common::conn();
+    closed_day(&conn, "2026-04-23", "23 Nisan");
+    set_weekly_closed(&conn, "7");
+
+    // 2026-04-20 Pazartesi … 2026-04-26 Pazar — bir tam hafta.
+    let days = schedule::closed_days_in_range(&conn, day("2026-04-20"), day("2026-04-26")).unwrap();
+
+    assert_eq!(
+        days,
+        vec!["2026-04-23".to_string(), "2026-04-26".to_string()],
+        "tatil ve haftalık kapalı gün TEK listede, tarih sırasıyla"
+    );
+}
+
+#[test]
+fn kapali_gun_listesi_ters_aralikta_bos_doner() {
+    let conn = common::conn();
+    // Takvimde olmaz ama bir hesap hatası sonsuz döngüye dönmesin.
+    let days = schedule::closed_days_in_range(&conn, day("2026-04-26"), day("2026-04-20")).unwrap();
+    assert!(days.is_empty());
+}
+
+#[test]
+fn aralik_sorgusu_haftanin_butun_derslerini_getirir() {
+    let conn = common::conn();
+    let (subject_id, group_id, _) = tuesday_group(&conn);
+    schedule::generate_sessions(&conn, today()).expect("üretim");
+    // Haftanın içinde tek seferlik bir ders daha.
+    session_at(
+        &conn,
+        group_id,
+        subject_id,
+        "2026-04-09 18:00",
+        "2026-04-09 19:30",
+    );
+
+    let rows = schedule::session_rows_between(&conn, "2026-04-06", "2026-04-12").unwrap();
+
+    let times: Vec<&str> = rows.iter().map(|row| row.starts_at.as_str()).collect();
+    assert_eq!(times, vec!["2026-04-07 16:00", "2026-04-09 18:00"]);
+    assert_eq!(rows[0].subject_name, "Matematik");
+}
+
+#[test]
+fn tatile_ders_tasinamaz() {
+    let conn = common::conn();
+    let (subject_id, group_id, _) = tuesday_group(&conn);
+    closed_day(&conn, "2026-04-23", "23 Nisan");
+    let id = session_at(
+        &conn,
+        group_id,
+        subject_id,
+        "2026-04-21 16:00",
+        "2026-04-21 17:00",
+    );
+
+    // K-2 ekleme yolunda vardı, taşıma yolunda yoktu: sürükleyerek yapılabilen bir şey
+    // formdan yapılamıyordu.
+    let err = schedule::reschedule_session(&conn, id, "2026-04-23 16:00", 60)
+        .expect_err("K-2: tatile ders bırakılamaz");
+
+    assert_eq!(err.code, "session.day");
+}
+
+#[test]
+fn tek_ders_tasindiginda_sablon_degismez() {
+    let conn = common::conn();
+    let (_, _, series_id) = tuesday_group(&conn);
+    schedule::generate_sessions(&conn, today()).expect("üretim");
+    let id = session_id_at(&conn, series_id, "2026-04-07 16:00");
+
+    let report = schedule::reschedule_sessions(
+        &conn,
+        id,
+        "2026-04-09 18:00",
+        90,
+        schedule::RescheduleScope::Only,
+        today(),
+    )
+    .expect("taşıma çalışmalı");
+
+    assert_eq!(report.series_id, None, "yeni şablon açılmaz");
+    assert_eq!(report.moved, 1);
+
+    let template: (i64, String) = conn
+        .query_row(
+            "SELECT weekday, start_time FROM session_series WHERE id = ?1",
+            [series_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(template, (SALI, "16:00".to_string()), "şablon yerinde");
+}
+
+#[test]
+fn bu_ve_sonraki_dersler_sablonu_yeni_gune_tasir() {
+    let conn = common::conn();
+    let (_, _, series_id) = tuesday_group(&conn);
+    schedule::generate_sessions(&conn, today()).expect("üretim");
+    let pivot = session_id_at(&conn, series_id, "2026-04-07 16:00");
+
+    // Salı 16:00 → Perşembe 18:00, 7 Nisan'dan itibaren.
+    let report = schedule::reschedule_sessions(
+        &conn,
+        pivot,
+        "2026-04-09 18:00",
+        90,
+        schedule::RescheduleScope::Following,
+        today(),
+    )
+    .expect("taşıma çalışmalı");
+
+    let new_series_id = report.series_id.expect("yeni şablon açılmalı");
+    assert_ne!(new_series_id, series_id);
+
+    // Eski şablon pivotun bir gün öncesinde kapanır; GEÇMİŞ dersler ona bağlı kalır.
+    let old_end: Option<String> = conn
+        .query_row(
+            "SELECT ends_on FROM session_series WHERE id = ?1",
+            [series_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(old_end.as_deref(), Some("2026-04-06"));
+
+    let kalan = sessions_of(&conn, series_id);
+    assert_eq!(
+        kalan,
+        vec!["2026-03-31 16:00".to_string()],
+        "pivottan önceki tek ders yerinde, sonrakiler yeni şablona geçti"
+    );
+
+    let yeni = sessions_of(&conn, new_series_id);
+    assert_eq!(yeni.first().map(String::as_str), Some("2026-04-09 18:00"));
+    assert!(
+        yeni.iter().all(|stamp| stamp.ends_with("18:00")),
+        "hepsi yeni saatte: {yeni:?}"
+    );
+    assert_eq!(
+        report.moved as usize,
+        yeni.len(),
+        "sayı gerçekten sayılıyor"
+    );
+}
+
+#[test]
+fn sablonsuz_ders_sonraki_kapsaminda_tek_derse_iner() {
+    let conn = common::conn();
+    let (subject_id, group_id, _) = tuesday_group(&conn);
+    let id = session_at(
+        &conn,
+        group_id,
+        subject_id,
+        "2026-04-09 18:00",
+        "2026-04-09 19:00",
+    );
+
+    let report = schedule::reschedule_sessions(
+        &conn,
+        id,
+        "2026-04-10 18:00",
+        60,
+        schedule::RescheduleScope::Following,
+        today(),
+    )
+    .expect("şablonsuz ders taşınabilmeli");
+
+    assert_eq!(report.series_id, None, "olmayan şablon için şablon açılmaz");
+    assert_eq!(report.moved, 1);
+    assert_eq!(
+        repo::list_live::<SessionSeries>(&conn).unwrap().len(),
+        1,
+        "yalnızca kurulumdaki salı şablonu"
+    );
+}
+
+#[test]
+fn yoklamasi_alinmis_ders_kapsamli_tasimada_da_reddedilir() {
+    let conn = common::conn();
+    let (_, _, series_id) = tuesday_group(&conn);
+    schedule::generate_sessions(&conn, today()).expect("üretim");
+    let id = session_id_at(&conn, series_id, "2026-04-07 16:00");
+    conn.execute(
+        "UPDATE session SET attendance_taken_at = '2026-04-07 17:05' WHERE id = ?1",
+        [id],
+    )
+    .expect("yoklama damgası yazılmalı");
+
+    let err = schedule::reschedule_sessions(
+        &conn,
+        id,
+        "2026-04-09 18:00",
+        90,
+        schedule::RescheduleScope::Following,
+        today(),
+    )
+    .expect_err("R3.13: taşınmamalı");
+
+    assert_eq!(err.code, "session_locked");
+    assert_eq!(
+        repo::list_live::<SessionSeries>(&conn).unwrap().len(),
+        1,
+        "reddedilen taşıma şablona dokunmaz"
+    );
+}
+
+/// Şablonun belirli bir slotundaki seansın id'si.
+fn session_id_at(conn: &Connection, series_id: i64, starts_at: &str) -> i64 {
+    conn.query_row(
+        "SELECT id FROM session WHERE series_id = ?1 AND starts_at = ?2 AND deleted_at IS NULL",
+        rusqlite::params![series_id, starts_at],
+        |row| row.get(0),
+    )
+    .expect("seans bulunmalı")
+}

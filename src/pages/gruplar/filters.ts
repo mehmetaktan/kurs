@@ -96,7 +96,7 @@ export function weeklySummary(row: GroupRow): string {
   return row.weekly
     .map(
       (slot) =>
-        `${tr.calendar.weekdaysShortMonFirst[slot.weekday - 1]} ${formatTime(slot.startTime)}`,
+        `${tr.dates.weekdaysShortMonFirst[slot.weekday - 1]} ${formatTime(slot.startTime)}`,
     )
     .join(tr.units.separator)
 }

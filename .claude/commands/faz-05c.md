@@ -69,6 +69,21 @@ Bunun sonucu:
 - Yoğunluk anahtarı (`--calendar-slot-height`) çalışmaya devam eder; ızgara sabit piksel
   varsaymaz.
 
+### Aralık dışındaki ders GÖRÜNMEZ olamaz — denemenin kapatmadığı boşluk
+
+`EKRANLAR §122` ızgarayı 08:00–22:00 diye sabitliyor ama **uygulama ders saatini
+kısıtlamıyor**: `pages/dersler/validate.ts` yalnızca biçim ve süre bakıyor, saat aralığı
+kuralı ne orada ne Rust'ta var. Faz 5B'nin kendi ekran görüntüsünde **00:15'lik bir ders**
+duruyor. `src/dev/calendarGrid.ts` böyle bir derste `topSlots`'u **negatif** üretir
+(`(15 − 480) / 30 = −15.5`); blok ızgaranın üstünde, kırpılan alanda çizilir. Yani ders
+veritabanında **var**, takvimde **yok** — bu uygulamanın kabul edemeyeceği tek hata sınıfı,
+çünkü kullanıcı takvime bakıp "o gün boş" diyecek.
+
+Kapatılışı: `DAY_START_MIN` / `DAY_END_MIN` **sabit değil parametre** olur. Varsayılan
+08:00–22:00 kalır; görünen aralıktaki ders satırlarının en erkeni/en geci varsayılanın
+dışındaysa ızgara **tam saate yuvarlanarak genişler**. Kırpma veya "3 ders daha" rozeti
+yapılmaz — ikisi de bilgiyi saklar. Test §4'e yazıldı.
+
 ## 2. Sürükle-bırak
 
 - **Pointer Events ile kurulur** (`pointerdown` / `pointermove` / `setPointerCapture`) —
@@ -91,8 +106,20 @@ Bunun sonucu:
 Eksik olabilecek tek şey branş **rengi**; satırda yoksa `repo/schedule.rs`'e eklenir,
 yeni bir dosya açılmaz.
 
-`/faz-05c-karar`'da açılmış bir kalıntı varsa (ör. `Display.tsx`'teki `toLocaleUpperCase`
-kararı) burada kapanır.
+`/faz-05c-karar`'ın kalıntısı yok — `Display.tsx`'in `toLocaleUpperCase`'i o oturumda
+`upperTr`'ye geçti. Kapanacak iki şey **denemenin taşınmasıyla** ilgili:
+
+- **`toMinutes` ikinci bir zaman ayrıştırıcısı.** `src/dev/calendarGrid.ts` kendi
+  `toMinutes`'ını yazıyor; `lib/format.ts`'te doğrulayan ikizi zaten var
+  (`timeToMinutes`, bozuk girdide `null`). Denemede sorun değildi, ekranda değil: bozuk
+  bir saat metni `NaN` dilim üretir ve blok **sessizce kaybolur**. Taşırken `lib/format`
+  kullanılır, üçüncü bir ayrıştırıcı doğmaz.
+- **`/dev/takvim-denemesi` rotası taşındıktan sonra silinir** — `DEV_ROUTES.calendarSpike`,
+  `App.tsx`'teki `lazy()` dalı ve `src/dev/CalendarSpike.*` birlikte gider. Kalacaksa
+  `scripts/verify-bundle.mjs`'in `FORBIDDEN` listesine kendi işaretçisi eklenmeli: liste
+  bugün **yalnızca Showcase'e özgü** dizeler içeriyor (`Komponentler` · `showcaseTr` ·
+  `drawerRow`), yani yeni bir dev sayfası statik `import` edilse kapı bunu **görmez**.
+  Aynı boşluk `src/dev/Status.tsx` için de duruyor; hangisi kalırsa işaretçisi eklenir.
 
 ## 4. Testler
 
@@ -103,6 +130,9 @@ kararı) burada kapanır.
 - **Açılışta "şimdi"ye kaydırma**: verilen saat için hesaplanan kaydırma konumu — saf
   fonksiyon, jsdom'da test edilebilir kalsın
 - **Yoğunluk**: slot yüksekliği değişince blok konumlarının takip etmesi
+- **Aralık dışı ders**: 07:30 ve 23:00'lık iki ders verildiğinde ızgaranın genişlemesi ve
+  **hiçbir bloğun negatif/taşan konum almaması** (§1). Hepsi aralık içindeyken varsayılanın
+  08:00–22:00 kalması da aynı testte — genişleme kendiliğinden tetiklenmemeli
 
 ## 5. Doğrulanmayanların kapanması
 

@@ -667,3 +667,307 @@ gerektirirdi. Faz 6'nın telafi dersi taşıması ve ileride çıkacak her sür�
 kalıbı kullanır.
 
 **Durum.** Kabul edildi.
+
+---
+
+## ADR-031 — Takvim ızgarası elde yazılır; hazır takvim kütüphanesi kullanılmaz
+
+**Karar.** Faz 5C'nin hafta/gün ızgarası **elde yazılır**; incelenen üç hazır takvim
+kütüphanesinin üçü de eleme ölçütlerinden en az birinde kaldı.
+
+**Kararın belirleyici cümlesi tek bir ölçütte toplanıyor: sürükleme eşiği.** Boyut ve
+lisans genelde bu kararın tartışıldığı iki eksen; ikisini de **geçen** bir aday çıktı
+(FullCalendar: MIT ve +75.7 KB gzip, eşiğin altında; ölçüt 4'ü de geçti) ve yine de
+elendi. **Ölçüt 6'ya kadar gelebilen iki adayın ikisi de orada düştü**, her biri farklı
+bir yerinden — Bryntum o ölçüte hiç ulaşmadı, daha ucuz olan 1 ve 2'de elendi:
+
+| Aday | 5px eşiği nerede kırılıyor |
+|---|---|
+| FullCalendar | `interaction/index.js:1249` · `dragging.minDistance = ev.isTouch ? 0 : options.eventDragMinDistance` — **dokunmatik girdide eşik sıfıra çivili**, ayarlanamıyor |
+| react-big-calendar | `lib/Selection.js:59` · `var clickTolerance = 5` — modül kapsamında sabit, dışarıdan **verilemiyor**; üstelik karşılaştırma `\|dx\|≤5 && \|dy\|≤5` yani kare, PRD R3.7'nin istediği yarıçap değil (7px'lik çapraz hareket hâlâ tıklama sayılıyor) |
+
+Bu tesadüf değil, **ADR-030'un öngördüğü şeyin ta kendisi**: R3.7 sürüklemeyi 30 dakikaya
+kilitleyip 5 pikselin altını tıklama sayıyor, ve bu bir *görünüm* ayarı değil bir
+*davranış sözleşmesi*. Kütüphaneler eşiği ya kendi sabitlerinde tutuyor ya da girdi
+türüne göre kendileri değiştiriyor. Eşiği bizim aritmetiğimiz yapan tek yol, sürüklemeyi
+bizim yazmamız.
+
+---
+
+### 1. Eşikler ve ölçülen değerler
+
+Eşikler `/faz-05c-karar §0` gereği **ölçümden önce** yazıldı ve bu bölüm o tabloyu
+değiştirmeden yanına ölçümü koyuyor. Eşik ölçümden sonra yazılırsa karar değil, çıkan
+sonucun gerekçelendirmesi olur.
+
+Ölçümün dayandığı mevcut durum (adaylardan bağımsız): `dist` JS **327.98 KB ham /
+97.5 KB gzip**, CSS 43.63 KB / 7.69 KB gzip.
+
+| # | Ölçüt | **Eşik (önce yazıldı)** | Bryntum 7.3.4 | FullCalendar 6.1.21 | react-big-calendar 1.20.0 | **Elde** |
+|---|---|---|---|---|---|---|
+| 1 | Çevrimdışı | ağ çağrısı **0** | **Image beacon + 45 gün kill switch** ❌ | 1 `fetch` (JSON feed) ❌ | **0** ✅ | **0** ✅ |
+| 2 | Lisans | teslime izin: evet | **paket indirilemiyor (403)** ❌ | MIT ✅ | MIT ✅ | — ✅ |
+| 3 | Paket boyutu | gzip artışı **≤ 100 KB** | ölçülmedi | **+75.7 KB** ✅ | ~54.5 KB gzip (minifiye edilmemiş ESM) | **+0 KB** ✅ |
+| 4 | Tasarım uyumu | geçersiz kılma **≤ 30 satır**, `!important` **0** | ölçülmedi | **8 satır / 0 `!important`** ✅ | ölçülmedi¹ | **0 satır / 0 `!important`** ✅ |
+| 5 | Türkçe | geçersiz kılınamayan ICU çağrısı **0** | ölçülmedi | **3 yol** ❌ | **0** ✅ | **0** ✅ |
+| 6 | Sürükleme | HTML5 DnD **0**, eşik **tam 5px ayarlanabilir** | ölçülmedi | dokunmatikte **0'a çivili** ❌ | **modül sabiti, ayarlanamıyor** ❌ | ADR-030 doğrudan ✅ |
+| 7 | Kaydırma + yoğunluk | 28 × `--calendar-slot-height`, **sapma 0px** | ölçülmedi | **840px / 616px** ✅² | ölçülmedi¹ | **840px / 616px, sapma 0** ✅ |
+
+¹ `/faz-05c-karar §2`'nin kendi kuralı: *"Ucuz ölçütte elenen aday pahalı ölçüte hiç
+girmez."* Ölçüt 5 ve 6 paket kaynağında okunuyor, 4 ve 7 kurulum ve deneme istiyor.
+FullCalendar'ın denemesi elenme kararından önce başlamıştı ve tamamlandı; sayıları
+tabloda duruyor çünkü **kararın FullCalendar'ın zayıf olduğu yerlerde verilmediğini**
+onlar gösteriyor.
+
+² Yoğunluk yarısı ölçüldü ve tuttu: tek satırlık bir geçersiz kılma
+(`height: var(--calendar-slot-height)`) ile 840px → 616px. Kaydırma yarısı **ölçülemedi
+ve bu kütüphaneyle ilgili değil**: iki deneme de sayfayı kabuğun kaydırma alanına
+(`PageContent` → `.content { overflow: auto }`) sarmadan doğrudan `main`'e bağladı, o
+yüzden ikisi de kırpıldı. Kabukta hata yok; `/faz-05c`'ye not olarak yazıldı.
+
+**Ölçümün kendi sınırı da yazılsın:** tarayıcı aracının `resize_window`'u bu ortamda
+pencereyi fiilen küçültmedi (`innerHeight` 700 istendiğinde 956 kaldı). 700px koşulu iki
+tarafta da kabı sınırlayarak taklit edildi — CSS açısından eşdeğer, ama literal bir
+pencere küçültme testi **değil**. Gerçek doğrulama `/faz-05c`'nin sonundaki Windows
+testine kalıyor.
+
+**Elde yazılanın ölçüt 7 ölçümü gerçek tarayıcıda alındı:** rahat yoğunlukta ızgara
+**840px** (28 × 30), `data-density="tight"` yazıldığında **616px** (28 × 22), blok
+yükseklikleri de dilim cinsinden takip ediyor (90 dk = 90px → 66px). 700px'lik pencerede
+kırpılmıyor, kendi kabında kaydırıyor. Sapma her iki yoğunlukta da **0px** — çünkü
+ızgarada tek bir sabit piksel yok, her şey dilim sayısı × `--calendar-slot-height`.
+
+---
+
+### 2. Elenen adaylar
+
+**Bryntum Calendar 7.3.4 — ölçüt 2 ve 1.**
+
+Ölçüt 2'nin gerekçesi bir *tedarik* olgusudur, lisans şartı değil, ve ADR'ye böyle
+yazılması önemli: kullanıcının `~/.npmrc`'sindeki jeton `@bryntum/calendar` tarball'ına
+**403** veriyor — *"only has access for trial packages … It is not allowed to install
+licensed package"*. Elde edilebilen tek şey `@bryntum/calendar-trial` ve ölçüt 2'nin
+kendi cümlesi *"deneme jetonu lisans değildir"* diyor. **Ölçütün adını taşıdığı belge
+pakette hiç yok**: LICENSE/EULA dosyası bulunmuyor, `package.json` `"license":
+"Commercial"` diyor ve README bir URL veriyor. Yani "lisans teslime izin vermiyor"
+denemez — denenmemiştir; denebilecek olan şudur: **teslim edeceğimiz yayını hiç
+görmedik ve göremiyoruz.**
+
+Ölçüt 1'de bulunanlar, jeton bir gün lisansa dönse bile ayrıca tartışılmayı hak ediyor:
+
+- Lisans doğrulaması `https://bryntum.com/verify/` adresine **`new Image()` beacon'ıyla**
+  gidiyor ve dönen görüntünün genişliğine bakıp `blockTrial()` çağırabiliyor.
+- Ağ'a hiç çıkmasa da çalışan ikinci bir kapatma var: `isExpired` getter'ı
+  `blocked || Date.now() - trialStartTime > 45 gün`, tarih `localStorage`'da.
+- `postinstall.js` **her `npm install`/`npm ci`'de** `spawnSync('node', …)` ile başka bir
+  paketin `build.js`'ini proje kökünde çalıştırıyor. CI'da da çalışır.
+
+> **Bu ADR'nin en pahalı dersi ölçüt 1'in kendisiyle ilgili.** Ölçütün grep listesi
+> (`fetch` · `XMLHttpRequest` · `sendBeacon`) Bryntum'un ağ çıkışını **kaçırıyordu** —
+> çıkış bir `Image().src`. Liste karşıt doğrulamada genişletildi ve bundan sonra
+> **`new Image()` · `.src =` · `document.createElement('script')` · dinamik `import()` ·
+> `new Worker` · `new WebSocket` · `EventSource`** de taranır. Bir eleme ölçütü, aradığı
+> şeyin bilinen bütün taşıyıcılarını saymıyorsa ölçüt değil, ritüeldir.
+
+**FullCalendar 6.1.21 — ölçüt 5 ve 6.** Lisans (MIT) ve boyut (+75.7 KB gzip, eşik
++100 KB) ölçütlerini **geçti**; kararı bu ikisi vermedi.
+
+- **Ölçüt 5.** Çizim yolunda dışarıdan geçersiz kılınamayan üç ICU çağrısı kaldı:
+  `internal-common.js:6184` modül düzeyinde `createFormatter({weekday:'long'})` →
+  `:6210` gün başlığının `aria-label`'ı (`dayHeaderContent` yalnızca **iç içeriği**
+  değiştiriyor, öznitelik yine basılıyor); `:5460` gezinme bağlantısının
+  `aria-label`/`title`'ı; ve `index.js:96` `new Intl.NumberFormat` → hafta numarası
+  rakamları, hiçbir seçenekle değiştirilemiyor. Dördüncüsü ayrı bir sınıf:
+  `index.js:77` `codes[i].toLocaleLowerCase()` — **argümansız**, yani sistem yereline
+  bağlı; Türkçe bir Windows'ta `I` → `i` değil `ı` döner ve yerel kodu eşleşmesi bozulur.
+  Bu, projenin `normalizeTr`'de elle özel durum yazmasının tam olarak nedeni.
+  Varsayılan ayarlarla ekranda **gözle görünen** Türkçe olmayan metin kalmıyor
+  (`navLinks: false`); kalan ekran okuyucuya gidiyor. Yani "pratikte Türkçe kalır"
+  savunulabilir, "ölçüt 5'i geçti" savunulamaz — ölçüt ikili ve sayım 0 değil.
+- **Ölçüt 6.** İç sürükleme temiz: `dataTransfer` 0, `draggable` özniteliği 0, HTML5 DnD
+  yok — `ThirdPartyDraggable` bile `PointerDragging`'e iniyor. Eşik de gerçek bir pisagor
+  karşılaştırması (`distanceSq >= minDistance*minDistance`) ve `eventDragMinDistance`
+  varsayılanı zaten 5. **Ama** `index.js:1249` `dragging.minDistance = ev.isTouch ? 0 :
+  options.eventDragMinDistance`: dokunmatik girdide eşik sıfır, ayar yok. Dokunmatik
+  ekranlı bir Windows dizüstünde R3.7 yoktur.
+- İki yan bulgu: `@fullcalendar/core` bağımlılığı olarak **`preact ~10.12.1`** getiriyor —
+  React 19'un yanına ikinci bir VDOM çalışma zamanı paketleniyor. Ve kütüphanenin kendi
+  CSS'i `font-family: fcicons!important` içeriyor; ölçüt 4'ün `!important` sıfır
+  toleransı, kütüphane bir özelliği `!important` ile kilitlediğinde bizi de oraya sürükler.
+- **Ölçüt 4'ü de geçti ve bu kararı zorlaştıran bir sayı, kolaylaştıran değil:** gerçek
+  geçersiz kılma **8 satır** (dilim yüksekliği, 30 dk çizgi rengi, blok köşe yarıçapı,
+  blok iç dolgusu, başlık/cetvel dolgusu — hepsi FullCalendar'ın hiç `--fc-*` değişkeni
+  sunmadığı yerler), artı 13 satır `--fc-*` ataması ki o kütüphanenin **resmi tema
+  API'si**, dövüş değil. `!important` hiç gerekmedi. Yani "kütüphanenin CSS'iyle
+  boğuşulur" korkusu bu adayda **doğrulanmadı**; karar ölçüt 5 ve 6'da verildi.
+- Ölçüt 1'de tek `fetch` var (`internal-common.js:4643`, `requestJson`) ve yalnızca
+  JSON-feed olay kaynağı yapılandırılırsa çalışır — telemetri değil, lisans doğrulaması
+  değil. Eşik ikili yazıldığı için bu da bir başarısızlık olarak kaydedildi; ama karar
+  **buna dayanmıyor**, 5 ve 6'ya dayanıyor. Eşiği ölçümden sonra yumuşatmak §0
+  disiplinini bozardı, o yüzden yumuşatılmadı — sadece ağırlığı burada yazıldı.
+
+**react-big-calendar 1.20.0 — ölçüt 6.** Havuzda yoktu; **karşıt doğrulama sırasında
+çıktı** ve ölçüldü. Üç ölçütte en iyi aday: ağ çağrısı **0** (ölçüt 1'i lafzıyla geçen
+tek aday), gerçek bir MIT `LICENSE` dosyası, ve dist'te **`Intl.`/`toLocale` 0** — çünkü
+biçimlendirme enjekte edilebilir bir `localizer` sözleşmesinden geçiyor, yani
+`tr.calendar`'ı saran kendi localizer'ımızla çizim yolunda ICU sıfırlanabilirdi. HTML5
+DnD de yok (`dataTransfer` 0, `draggable=` 0, `'dragstart'` 0; eklentideki
+`onDropFromOutside`/`onDragOver` kütüphanenin **bize açtığı kanca adları**, kendi
+kullanımı değil). Elenmesinin tek sebebi eşiğin `var clickTolerance = 5` olarak modül
+kapsamında çivili olması, Chebyshev geometrisi ve `!isTouch` ile dokunmatikte tamamen
+kapanması. Ek yük olarak `dependencies` içinde moment + moment-timezone + luxon + dayjs +
+globalize + lodash + lodash-es birlikte duruyor; dist'e yalnızca kullanılan giriyor ama
+`npm ci` hepsini indirir.
+
+> **Havuz üçle sınırlıydı ve dördüncü aday bilerek kaydedildi.** `/faz-05c-karar §1`'in
+> üç aday sınırı oyalanmaya karşı bir disiplin; ölçülmüş bir bulguyu ADR'den saklamanın
+> gerekçesi değil. react-big-calendar tam da havuz kuralının kaçırabileceği şeyi
+> gösterdi: "en popüler kütüphane"yi temsilci seçmek, ölçütleri daha iyi geçen bir adayı
+> gölgede bırakabiliyor.
+
+---
+
+### 3. Elde yazmanın ölçülen tarafı ve kabul edilen bedeli
+
+Deneme `src/dev/` altında duruyor (`calendarGrid.ts` · `CalendarSpike.tsx` ·
+`CalendarSpike.module.css`) ve `/faz-05c`'nin ızgarasının başlangıcıdır — silinmez,
+`src/pages/takvim/`e taşınır.
+
+Ölçülenler: ızgara 840px/616px sapmasız, blok konumu ve yüksekliği dilim cinsinden,
+çakışan iki ders yan yana iki şeritte, taralı tatil sütunu, yapışkan gün başlığı, dar
+blokta meta satırının gizlenmesi (`EKRANLAR §140`) — hepsi yalnızca `tokens.css` ve
+`density.css` değişkenleriyle, **geçersiz kılınan tek satır CSS olmadan**. Şerit
+algoritması 40 satır ve **11 testi ilk koşuda geçti**; zincirleme çakışmada (A–B, B–C
+çakışıyor ama A–C çakışmıyor) A ile C'nin aynı şeridi paylaşmaması dahil.
+
+**Bedel kabul edildi ve küçümsenmiyor.** Karşıt doğrulamanın dürüst tahmini elde yazmak
+için **6–9 iş günü**, kütüphane bağlamak için 1–2 gün + CSS'iyle boğuşmak için ~1 gün.
+Pahalı olan üç parça:
+
+1. **Şerit yerleşiminin ince hâli.** Denemedeki sürüm eşit genişlikte şeritler veriyor;
+   olgun bir yerleşim bloğu sağdaki boş alana **genişletir** (FullCalendar bunu
+   `SegHierarchy` diye ayrı bir altsistemde taşıyor). `EKRANLAR §122` yalnızca şerit
+   istiyor, genişletme istemiyor — kapsam burada tutulacak.
+2. **Sürükleme sırasında kenarda kendiliğinden kaydırma.** Hiç kimsenin bütçelemediği
+   parça; FullCalendar'ın `AutoScroller`'ı bunun için var.
+3. **Windows kaydırma çubuğu geometrisi.** ADR-030'un bilinmeyenler tablosunda zaten
+   yazılı, ve **Windows makinemiz yok** — her deneme bir CI turu.
+
+Karşı tarafta üç şey bedeli düşürüyor ve bunlar da yazılmalı: Türkiye 2016'dan beri sabit
+UTC+3 ve yaz saati yok — takvim yazmanın klasik olarak en pahalı parçası bu projede
+**bedava**; veri projeksiyonu Rust'ta zaten bitti (`repo/schedule.rs > day_rows` ·
+`session_rows_between`), elde yazılacak olan **yalnızca çizim**; ve tek kişilik, teknik
+olmayan bir kullanıcıda klavye/erişilebilirlik yükü gerçekten daha hafif.
+
+**Asıl asimetri şu:** elde yazmanın bedeli önden ve görünür ödenir; kütüphanenin bedeli
+sonradan ve görünmez ödenir — her sürüm yükseltmesinde ölçüt 4 yeniden açılır ve o hesap
+hiçbir yere yazılmaz.
+
+---
+
+### 4. Kararı geri açacak şey
+
+Bu ADR yeniden tartışılır, eğer:
+
+1. **Sürükleme eşiğini fare ve dokunmatik için tek bir sayı olarak açan** bir aday
+   çıkarsa. Kararın bütün ağırlığı burada; bu değişirse tablo baştan kurulur.
+2. **FullCalendar** gün başlığı `aria-label`'ını ve hafta numarası biçimleyicisini
+   dışarıdan geçersiz kılınabilir yaparsa **ve** `isTouch ? 0` çivisini kaldırırsa
+   (ölçüt 5 ve 6'nın ikisi de kalkmalı; biri yetmez).
+3. **react-big-calendar** `clickTolerance`'ı bir prop'a çıkarır ve karşılaştırmayı
+   yarıçapa çevirirse. Diğer ölçütlerde zaten en iyi aday.
+4. **Bryntum** için gerçekten bir lisans satın alınırsa **ve** lisanslı yayın
+   denetlenebilir olursa — bugün onu hiç görmedik. `postinstall` betiği ve yerel süre
+   kapatması ayrıca değerlendirilir.
+5. Elde yazmanın gerçekleşen maliyeti yukarıdaki **6–9 iş gününü belirgin şekilde
+   aşarsa.** Bu durumda `docs/DURUM.md`'ye yazılır ve karar yeniden açılır; sessizce
+   sürüklenmez.
+
+Yeniden açılırsa **eşikler önce yazılır** kuralı aynen geçerlidir, ve ölçüt 1'in
+genişletilmiş taşıyıcı listesi (yukarıdaki kutu) kullanılır.
+
+**Durum.** Kabul edildi.
+
+---
+
+### ADR-031 · Yöntem kaydı — eşikler ölçümden ÖNCE yazıldı
+
+> **Bu blok karar verilmeden önce yazıldı ve sonrasında değiştirilmedi.**
+> `/faz-05c-karar §0` gereği: eşik ölçümden sonra yazılırsa karar değil, çıkan sonucun
+> gerekçelendirmesi olur. Aşağıdaki sayılar hiçbir adayın ölçüsüne bakılmadan belirlendi.
+> Ölçüm sonuçları ve eşiklerin nasıl tuttuğu yukarıda, ADR-031 §1'de.
+
+#### Eşikler
+
+Mevcut durum — eşiklerin dayandığı tek ölçüm, adaylardan bağımsız:
+
+| Ne | Değer |
+|---|---|
+| `dist` JS (ham / gzip) | **327.98 KB / 97.5 KB** — React + ReactDOM dahil, 10 ekranın tamamı |
+| `dist` CSS (ham / gzip) | 43.63 KB / 7.69 KB |
+
+| # | Ölçüt | **Eşik** | Eşiğin gerekçesi |
+|---|---|---|---|
+| 1 | Çevrimdışı | Yayınlanan paket kodunda `fetch(` · `XMLHttpRequest` · `sendBeacon` · lisans doğrulama çağrısı · telemetri: **0 tane** | ADR-001: sunucu yok, hesap yok, internet bağımlılığı yok. Bu ikili bir ölçüt; "az sayıda" diye bir şey yok |
+| 2 | Lisans | LICENSE **tam metni** Aktansoft'un ürünü müşteriye teslim etmesine izin veriyor mu: **evet/hayır**. Deneme jetonu lisans **değildir** | Ürünü teslim edemiyorsak diğer altı ölçütü ölçmenin anlamı yok |
+| 3 | Paket boyutu | `dist` JS gzip artışı **≤ 100 KB** (yani toplam ≤ 197.5 KB gzip) | Uygulamanın **tamamı** bugün 97.5 KB gzip. Tek bir ekranın kütüphanesi uygulamanın tamamı kadar kod getiriyorsa, o noktadan sonra "kütüphane uygulamanın kendisi" olur ve ADR-001'in kurulum boyutu gerekçesi maddi olarak aşınır. Eşik bilerek cömert: masaüstünde indirme maliyeti yok, asıl bedel açılışta ayrıştırma |
+| 4 | Tasarım uyumu | Kütüphanenin kendi CSS'ini geçersiz kılan satır sayısı **≤ 30**; `!important` **0 tolerans** | 30 satır bu projedeki bir komponent CSS modülünün ortalama boyutu (`Table.module.css` 71, `Today.module.css` 140 satır). Bunun üstü tek bir ekran için ikinci bir tasarım sistemi bakmak demek. `!important` eşiğe bakılmadan eler: özgüllük savaşı bir kez başlarsa her sürüm yükseltmesinde tekrar açılır |
+| 5 | Türkçe | Çizim yolunda **dışarıdan geçersiz kılınamayan** `toLocale*` / `Intl.DateTimeFormat` çağrısı: **0 tane** | ADR-030'un ICU satırı ve `tr.ts:801`: WebView2'de ICU verisi eksik kurulmuş olabilir. Gün/ay adları `tr.calendar`'dan gelmek zorunda |
+| 6 | Sürükleme API'si | Sürükleme uygulamasında `draggable=` · `dragstart` · `dataTransfer`: **0 tane**; sürükleme eşiği **tam 5px** olarak ayarlanabilmeli | **ADR-030.** R3.7'nin 5px kuralı HTML5 DnD üzerinde kırılgan olmaz, **kurulamaz** — `dragstart` eşiğini tarayıcı belirler |
+| 7 | Kaydırma + yoğunluk | 700px'lik pencerede ızgara kırpılmadan kaydırmalı; `data-density="tight"` yazıldığında ızgara toplam yüksekliği **28 × `--calendar-slot-height`** olmalı — 840px → 616px, **sapma 0px** | `DURUM.md > Faz 5B denetimi > B2`. Sabit piksel varsayan bir ızgara yoğunluk anahtarını sessizce kırar |
+
+**Aday başına zaman kutusu: 45 dakika.** Bir gün sütunu bunu geçiyorsa eleme gerekçesi
+zaten ortaya çıkmıştır (`/faz-05c-karar §3`); zorlamaya devam edilmez ve aşılan süre
+ölçüm tablosuna yazılır.
+
+**Ölçüt sırası maliyete göre:** önce 2 (LICENSE oku), sonra 1 · 5 · 6 (paket kaynağında
+tarama), en son 3 · 4 · 7 (kurulum + deneme gerektirir). Ucuz ölçütte elenen aday pahalı
+ölçüte hiç girmez.
+
+---
+
+## ADR-032 — "Bu ve sonraki dersler" şablonu güncellemez, yenisini açar
+
+**Karar.** Takvimde bir ders sürüklenip **"Bu ve sonraki dersler"** seçildiğinde, dersin
+bağlı olduğu `session_series` **yerinde güncellenmez.** Eski seri pivot günün bir gün
+öncesinde kapatılır (`ends_on`), o günden sonraki **işlenmemiş** seansları arşivlenir ve
+yeni gün/saat için **yeni bir seri** açılır. Sürüklenen dersin kendisi yeni seriye elle
+yazılır, gerisini üretim motoru doldurur.
+
+**Gerekçe.** Şablonun `weekday`/`start_time` alanlarını yerinde değiştirmek, o şablonun
+**geçmiş** seanslarını da yeni günün serisine bağlı bırakırdı: "salı 16:00" diye
+üretilmiş, yoklaması alınmış dersler birdenbire "perşembe 18:00" şablonuna ait görünürdü.
+`session.series_id` bir aidiyet kaydı; geçmişi geriye dönük yeniden yorumlamak
+`ADR-005`'in (hard delete yok) ve `ADR-006`'nın (fiyat snapshot'ı) aynı ailesinden bir
+ihlal olurdu.
+
+Desen zaten vardı: `delete_sessions(Following)` seriyi pivot öncesinde **kapatıyor** ve
+geçmiş ona bağlı kalıyor. Buradaki tek fark, kapanan serinin yerine yenisinin açılması.
+Bedeli açıkça yazılsın: **her "sonraki dersler" taşıması geride kapanmış bir seri satırı
+bırakır.** Bu bir sızıntı değil, defterin kendisi — hangi programın ne zamana kadar
+geçerli olduğunu okumanın tek yolu.
+
+**Sürüklenen dersin kendisi neden elle yazılıyor.** Üretim motoru geçmişe seans yazmıyor
+(`VERI-MODELI §1.14`, `generate_sessions` `max(starts_on, today)`) ve bu doğru bir kural.
+Ama kullanıcı geçen haftanın dersini sürüklediğinde bıraktığı yerde hiçbir şey görmemesi
+demek olurdu. Pivot seans `insert_from_series` ile doğrudan yazılıyor; `slot_exists`
+motorla çakışmasını engelliyor.
+
+**Kapsam iki değerli, üç değil.** `SessionScope` silmede `Only`/`Following`/`All` diyor;
+`RescheduleScope` yalnızca `Only`/`Following`. "Tüm seri"yi taşımak geçmiş dersleri de
+taşımak olurdu ve onların yoklaması alınmış olabilir (**R3.13** taşımayı zaten reddediyor).
+Silmede üç seçenek anlamlı, taşımada iki.
+
+**Geri alma yalnızca tek derste** (R3.12). "Sadece bu ders" taşımasının bildirimi
+**"Geri al"** düğmesi taşıyor: dersi eski damgasına yazmak tek bir `UPDATE`. "Bu ve
+sonraki dersler"in geri alınması ise kapanmış seriyi yeniden açmak ve arşivlenmiş
+seansları diriltmek olurdu; başarısızlık hâli sorunun kendisinden daha kötü. O kapsamda
+bildirim kaç dersin taşındığını söylüyor, geri alma sunmuyor — kullanıcının yolu dersi
+tekrar sürüklemek.
+
+**K-2 taşıma yolunda da geçerli.** `reschedule_session` artık tatil/kapalı günü
+reddediyor. Kural `save_session`'da vardı, ertelemede yoktu: **formdan eklenemeyen bir
+güne sürükleyerek taşınabiliyordu.** Takvim hedef göstergesini de çıkarmıyor (K-2'nin
+arayüz tarafı), ama son söz Rust'ta.
+
+**Durum.** Kabul edildi.

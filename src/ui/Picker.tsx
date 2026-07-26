@@ -213,7 +213,7 @@ function MonthGrid({ month, selected, today, onMonthChange, onPick }: MonthGridP
           {marks.prev}
         </Button>
         <span className={styles.monthLabel}>
-          {tr.calendar.months[monthIndex]} {year}
+          {tr.dates.months[monthIndex]} {year}
         </span>
         <Button variant="icon" onClick={() => shift(1)} aria-label={tr.actions.next}>
           {marks.next}
@@ -221,7 +221,7 @@ function MonthGrid({ month, selected, today, onMonthChange, onPick }: MonthGridP
       </div>
 
       <div className={styles.weekRow} aria-hidden="true">
-        {tr.calendar.weekdaysShortMonFirst.map((name) => (
+        {tr.dates.weekdaysShortMonFirst.map((name) => (
           <span key={name} className={styles.weekLabel}>
             {name}
           </span>

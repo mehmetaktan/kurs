@@ -198,6 +198,7 @@
   /* Katman sırası — tasarımdaki z-index değerleri */
   --z-sticky: 1;
   --z-calendar-header: 5;
+  --z-calendar-now: 6; /* "şimdi" çizgisi ve bırakma göstergesi — blokların ÜSTÜNDE */
   --z-drawer: 20;
   --z-modal: 30;
   --z-toast: 40;

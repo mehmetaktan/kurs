@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { tr } from '../i18n/tr'
 import { fetchAppStatus, type AppError, type AppStatus } from '../lib/api'
 import { PageContent } from '../shell/AppShell'
 import { PageHeader } from '../shell/PageHeader'
 import { Card, ErrorState, LoadingState } from '../ui'
 import styles from './Showcase.module.css'
+import { statusTr } from './status.tr'
 
 /**
  * `/dev/durum` — Faz 2'nin veritabanı teşhis paneli.
@@ -39,7 +39,7 @@ export default function Status() {
 
   return (
     <>
-      <PageHeader title={tr.status.heading} subtitle={tr.status.subtitle} />
+      <PageHeader title={statusTr.heading} subtitle={statusTr.subtitle} />
       <PageContent>
         {loading && <LoadingState />}
 
@@ -47,24 +47,24 @@ export default function Status() {
 
         {!loading && !error && status && (
           <Card>
-            <p className={styles.ok}>{tr.status.healthy}</p>
+            <p className={styles.ok}>{statusTr.healthy}</p>
             <dl className={styles.facts}>
-              <Fact label={tr.status.institution} value={status.institutionName} />
-              <Fact label={tr.status.teacher} value={status.teacherName} />
-              <Fact label={tr.status.studentCount} value={String(status.studentCount)} />
-              <Fact label={tr.status.sessionCount} value={String(status.sessionCount)} />
-              <Fact label={tr.status.ledgerCount} value={String(status.ledgerCount)} />
-              <Fact label={tr.status.sqliteVersion} value={status.sqliteVersion} />
-              <Fact label={tr.status.journalMode} value={status.journalMode} />
+              <Fact label={statusTr.institution} value={status.institutionName} />
+              <Fact label={statusTr.teacher} value={status.teacherName} />
+              <Fact label={statusTr.studentCount} value={String(status.studentCount)} />
+              <Fact label={statusTr.sessionCount} value={String(status.sessionCount)} />
+              <Fact label={statusTr.ledgerCount} value={String(status.ledgerCount)} />
+              <Fact label={statusTr.sqliteVersion} value={status.sqliteVersion} />
+              <Fact label={statusTr.journalMode} value={status.journalMode} />
               <Fact
-                label={tr.status.foreignKeys}
-                value={status.foreignKeys ? tr.status.on : tr.status.off}
+                label={statusTr.foreignKeys}
+                value={status.foreignKeys ? statusTr.on : statusTr.off}
               />
-              <Fact label={tr.status.migrations} value={status.appliedMigrations.join(', ')} />
-              <Fact label={tr.status.dbPath} value={status.dbPath} mono />
+              <Fact label={statusTr.migrations} value={status.appliedMigrations.join(', ')} />
+              <Fact label={statusTr.dbPath} value={status.dbPath} mono />
             </dl>
             {status.studentCount === 0 && (
-              <p className={styles.intro}>{tr.status.seedHint}</p>
+              <p className={styles.intro}>{statusTr.seedHint}</p>
             )}
           </Card>
         )}

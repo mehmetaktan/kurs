@@ -523,13 +523,32 @@ export function cancelSession(sessionId: number, reason: string | null = null): 
   return call<void>('cancel_session', { sessionId, reason })
 }
 
-/** Yoklaması alınmış ders taşınamaz (R3.13) — Rust reddeder. */
+/** Taşımanın kapsamı (R3.8). Silmeden farklı: `'all'` yok — geçmiş ders taşınmaz. */
+export type RescheduleScope = 'only' | 'following'
+
+export interface RescheduleReport {
+  /** `'following'` kapsamında açılan **yeni** şablon; tek derste `null`. */
+  seriesId: number | null
+  /** Yeni gün/saate yazılan ders sayısı — bildirimde okunuyor. */
+  moved: number
+}
+
+/**
+ * Ders taşır. **Yoklaması alınmış ders taşınamaz** (R3.13) ve **tatile bırakılamaz**
+ * (K-2) — ikisini de Rust reddeder.
+ */
 export function rescheduleSession(
   sessionId: number,
   startsAt: string,
   durationMin: number,
-): Promise<void> {
-  return call<void>('reschedule_session', { sessionId, startsAt, durationMin })
+  scope: RescheduleScope = 'only',
+): Promise<RescheduleReport> {
+  return call<RescheduleReport>('reschedule_session', {
+    sessionId,
+    startsAt,
+    durationMin,
+    scope,
+  })
 }
 
 // ─── Faz 5B — Bugün ekranı, ders ekle/düzenle, şablondan oluştur ──────────────
@@ -672,4 +691,24 @@ export function applyTemplate(
   applyFrom: string,
 ): Promise<ApplyTemplateReport> {
   return call<ApplyTemplateReport>('apply_template', { sourceDay, applyFrom })
+}
+
+// ─── Faz 5C — takvim ──────────────────────────────────────────────────────────
+
+/**
+ * Tarih aralığındaki dersler — haftalık/aylık ızgara. `fetchDaySessions` ile **aynı**
+ * projeksiyon; üye sayısı satırın kendi gününe göre hesaplandığı için aralık
+ * genişlemesi sonucu bozmuyor (5B bu fonksiyonu bilerek aralıklı yazdı).
+ */
+export function fetchRangeSessions(from: string, to: string): Promise<DaySessionRow[]> {
+  return call<DaySessionRow[]>('range_sessions', { from, to })
+}
+
+/**
+ * Aralıktaki kapalı günler (`'YYYY-MM-DD'`) — taralı sütun ve K-2'nin bırakma yasağı.
+ * Gün gün `fetchIsClosedDay` çağırmak yerine tek çağrı: ızgara kapalı günleri **tek bir
+ * anlık görüntü** olarak görmeli, yarısı eski yarısı yeni ayara göre değil.
+ */
+export function fetchClosedDaysInRange(from: string, to: string): Promise<string[]> {
+  return call<string[]>('closed_days', { from, to })
 }

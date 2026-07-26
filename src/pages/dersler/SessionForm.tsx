@@ -49,6 +49,13 @@ interface Props {
   today: string
   /** Dolu = düzenleme. Satır çağırandan gelir; ikinci bir komut açmaya gerek yok. */
   session?: DaySessionRow | null
+  /**
+   * Yeni ders için ön dolgu — takvimde **boş bir slota tıklandığında** o slotun günü ve
+   * saati (`EKRANLAR §142`). Düzenlemede yok sayılır: orada değerler dersin kendisinden
+   * geliyor ve ikinci bir kaynak ikisinin çelişmesine izin verirdi.
+   */
+  initialDay?: string
+  initialTime?: string
   onClose: () => void
   onSaved: () => void
 }
@@ -68,7 +75,15 @@ interface Props {
  * tanımlanmıyor.** Kullanıcı süreye dokunduktan sonra branş değişse bile yazdığı değer
  * korunuyor; aksi hâlde el yazısı sessizce geri alınırdı.
  */
-export function SessionForm({ open, today, session, onClose, onSaved }: Props) {
+export function SessionForm({
+  open,
+  today,
+  session,
+  initialDay,
+  initialTime,
+  onClose,
+  onSaved,
+}: Props) {
   const editing = session != null
 
   const [draft, setDraft] = useState<SessionDraft>(() => emptySessionDraft(today))
@@ -125,14 +140,18 @@ export function SessionForm({ open, today, session, onClose, onSaved }: Props) {
         })
       } else {
         const only = nextSubjects.length === 1 ? String(nextSubjects[0]!.id) : ''
-        setDraft({ ...emptySessionDraft(today), subjectId: only })
+        setDraft({
+          ...emptySessionDraft(initialDay ?? today),
+          subjectId: only,
+          startTime: initialTime ?? null,
+        })
       }
     } catch (err) {
       setError(err as AppError)
     } finally {
       setLoading(false)
     }
-  }, [editing, session, today])
+  }, [editing, session, today, initialDay, initialTime])
 
   useEffect(() => {
     if (open) void load()

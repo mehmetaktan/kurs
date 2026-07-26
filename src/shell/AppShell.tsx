@@ -79,11 +79,21 @@ export function AppShell({ currentPath, children }: AppShellProps) {
   )
 }
 
-/** Kaydırılan içerik alanı — `space-7` yatay dolgu, max 1320px. */
-export function PageContent({ children }: { children: ReactNode }) {
+/**
+ * Kaydırılan içerik alanı — `space-7` yatay dolgu, max 1320px.
+ *
+ * **`fill`: kaydırmayı çocuk devralır.** Takvim ızgarası kendi içinde kaydırmak zorunda
+ * (gün başlıkları `sticky` kalsın ve açılışta "şimdi"ye kayabilsin — ADR-030'un DPI
+ * maddesi). Sayfa kaydırıcısı açık kalsaydı iki kaydırıcı iç içe girerdi. Sarmalayıcıyı
+ * tamamen atlamak da yanlış: `/faz-05c-karar`'ın iki denemesi doğrudan `main`'e bağlandı
+ * ve **ikisi de kırpıldı**.
+ */
+export function PageContent({ children, fill = false }: { children: ReactNode; fill?: boolean }) {
   return (
-    <div className={styles.content}>
-      <div className={styles.contentInner}>{children}</div>
+    <div className={fill ? `${styles.content} ${styles.contentFill}` : styles.content}>
+      <div className={fill ? `${styles.contentInner} ${styles.contentInnerFill}` : styles.contentInner}>
+        {children}
+      </div>
     </div>
   )
 }

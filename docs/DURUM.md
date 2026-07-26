@@ -1,21 +1,253 @@
 # Durum
 
-**Son güncelleme:** 2026-07-26 · Faz 5B denetimi (yönetici oturumu)
-**Mevcut faz:** Faz 5B ✅ tamamlandı ve denetlendi → sırada **`/faz-05c-karar`**
-**Sonraki oturumda ilk iş:** Takvim kütüphanesi kararı artık **kendi oturumunda.**
-`/faz-05c-karar` ölçer ve `ADR-031`'i yazar; `/faz-05c` onu uygular. Aynı oturumda
-hem ölçüp hem ekran yazmak ikisinden birini yarım bırakıyordu.
+**Son güncelleme:** 2026-07-26 · Faz 5C (takvim ekranı)
+**Mevcut faz:** Faz 5C ✅ kod tamam, `npm run check` yeşil → sırada **push + CI + ilk
+Windows testi**
+**Sonraki oturumda ilk iş:** CI'ın `Test · windows-latest` işi yeşil mi ve artefakt
+kutusunda **sıfır olmayan boyutta** bir `.msi` var mı. Üç fazın kodu (5B + 5C-K + 5C) ilk
+kez Windows'ta derleniyor; kırılırsa hangi fazdan geldiği aramayla bulunacak.
 
-> **Yeni slash komutu eklendi** (`/faz-05c-karar`) — Claude Code yeniden başlatılmalı,
-> yoksa "Unknown command" gelir.
-
-> **Uygulama artık sabah açıldığında bir şey gösteriyor.** Bugün ekranı bağlandı: günün
-> dersleri saat sırasıyla, "şimdi" çizgisi, yoklama bekleyen ders amber şeritle. Ders
-> ekleme, erteleme, iptal ve silme arayüzü çalışıyor.
->
-> **Kalan tek büyük ekran takvim** (5C) ve projenin kalan tek ciddi riski de o.
+> **Faz 5 bitti.** Takvim elde yazıldı (ADR-031), sürükleme Pointer Events üzerinde
+> kuruldu (ADR-030), taşımanın kapsamı **ADR-032** ile netleşti. `npm run check` yeşil:
+> **481 test** (293 TypeScript + 188 Rust). Faz 5C-K'de 411'di; **+70 test.**
 
 ---
+
+## Faz 5C — takvim ekranı
+
+### Ne yazıldı
+
+| Katman | Dosya | İş |
+|---|---|---|
+| Saf geometri | `pages/takvim/calendarGrid.ts` | Aralık, şerit algoritması, saat cetveli, "şimdi" konumu, açılış kaydırması, tarih gezinmesi |
+| Saf sürükleme | `pages/takvim/drag.ts` | 5px eşiği (**yarıçap**), 30 dk kilidi, sütun/saat kenetlemesi, K-2 hedef denetimi |
+| Ekran | `CalendarPage.tsx` · `WeekGrid.tsx` · `MonthGrid.tsx` · `MoveDialog.tsx` · `filters.ts` | Ay/Hafta/Gün, branş çipleri, dört boş durum, sürükle-bırak, kapsam sorusu |
+| Rust | `repo/schedule.rs` + iki komut | `closed_days_in_range` · `reschedule_sessions` (R3.8) |
+
+Rust'a **iki fonksiyon** eklendi ve ikisi de gerekliydi (`faz-05c §3` "eksik olabilecek
+tek şey" diyordu, ikisi de o listede değildi):
+
+- **`closed_days_in_range`** — ızgara kapalı günleri **tek bir anlık görüntü** olarak
+  görmeli. Gün gün `is_closed_day` sorulsaydı iki gün arasında ayar değişince hafta
+  yarısı eski yarısı yeni kurala göre çizilirdi.
+- **`reschedule_sessions`** — R3.8'in kapsam sorusunun arka tarafı. Gerekçesi ve bıraktığı
+  iz **ADR-032**'de; özeti: şablon yerinde güncellenmiyor, eski seri kapanıp yenisi
+  açılıyor, çünkü `weekday`'i değiştirmek geçmiş dersleri yeni şablona ait göstermek olurdu.
+
+`session_rows_between` 5B'de aralıklı yazılmıştı ve takvim onu **ikinci bir sorgu
+yazmadan** kullandı — 5B'nin o kararı burada karşılığını verdi.
+
+### Gerçek veri iki hata yakaladı — ikisi de testten değil, ekrandan çıktı
+
+**1 · Şerit hesabı gün başına yapılmıyordu.** `placeBlocks` bütün haftayı tek çağrıda
+alıyordu ve algoritma **yalnızca zamanı görüyor**: Pazartesi 16:00 ile Çarşamba 16:00
+çakışan iki ders sayıldı, ikisi de yarım genişlikte çizildi ve çakışma konturu aldı.
+Uygulamayı `npm run seed` verisiyle ilk açışta ekran görüntüsünde görüldü. Denemenin tek
+sütunu bu hatayı **gösteremezdi** — `DURUM > Kalan riskler §3`'ün tam olarak uyardığı şey.
+Düzeltme çağıran tarafta (`WeekGrid` gün başına bir çağrı yapıyor); algoritmanın
+sözleşmesi artık testte yazılı.
+
+**2 · `/dev/durum` metinleri üretim paketine sızıyordu.** `/faz-05c §3`'ün 8. notu
+kapıya `/dev/durum` işaretçileri eklenmesini istiyordu; eklendi ve kapı **hemen kırmızı
+yandı**. Sebep sayfanın kendisi değil: `tr.status` bloğu `i18n/tr.ts` içindeydi ve o dosya
+her ekrandan statik `import` ediliyor, yani içindeki her dize pakete giriyor — komponent
+ölü dal elenmesiyle çıksa bile. Metinler `src/dev/status.tr.ts`'e taşındı (Showcase'in
+`showcase.tr.ts` deseninin aynısı) ve paket temizlendi. **Kapıya bir işaretçi eklemek
+bir bulgu üretti** — liste eksikken kapı "temiz" diyordu.
+
+### Fazın çözdüğü üç devir notu
+
+| Not | Ne yapıldı |
+|---|---|
+| **6 · aralık dışı ders görünmezdi** | `DAY_START_MIN`/`DAY_END_MIN` sabit değil; `gridRange` görünen derslere göre **tam saate yuvarlayarak genişliyor**. Hepsi aralık içindeyse varsayılan 08:00–22:00 aynen kalıyor. Gece yarısını aşan ders gün sonunda kırpılıyor, ertesi güne sarkmıyor |
+| **7 · `toMinutes` ikizi** | Üçüncü ayrıştırıcı doğmadı: `formatTime` + `timeToMinutes` zinciri kullanılıyor. Bozuk saat artık `NaN` dilim üretmiyor — satır `Layout.unreadable`'a düşüyor ve ekranda **uyarı olarak yazılıyor**, adı düğme; tıklayınca ders açılıp saati düzeltilebiliyor. Sessizce kaybolan ders yok |
+| **8 · kapı dev sayfasını görmüyordu** | `FORBIDDEN` listesi `/dev/durum` işaretçileriyle genişledi (yukarıdaki 2. bulgu buradan çıktı) ve `DEV_ROUTES` yorumu kuralı yazılı hâle getirdi: buraya eklenen her sayfanın kapıda kendine özgü bir işaretçisi olmak zorunda |
+
+Deneme rotası ve dosyaları **silindi** (`/dev/takvim-denemesi`, `CalendarSpike.*`,
+`dev/calendarGrid.*`); testleri `pages/takvim/calendarGrid.test.ts`'e taşındı ve
+büyüdü (11 → 30).
+
+### Bu fazda alınan üç küçük karar (ADR açılmadı — mevcut kuralların uygulaması)
+
+- **Kaydırmayı ızgaranın kendisi yapıyor, sayfa değil.** `PageContent`'e `fill` seçeneği
+  eklendi: kabuk kaydırıcısını kapatıp boyu çocuğa veriyor. Devir notu 4'ün iki ucu da
+  karşılandı — sarmalayıcı atlanmadı (iki deneme de o yüzden kırpılmıştı) ama gün
+  başlıkları `sticky` kalabiliyor ve açılışta ızgara "şimdi"ye kayabiliyor.
+- **Bildirim eylem taşıyabiliyor.** `ToastProvider` isteğe bağlı bir düğme alıyor ve
+  eylemli bildirim 2200 ms yerine 6000 ms duruyor: 2200 ms bir düğmeyi fark edip
+  tıklamaya yetmiyor. Bugün tek kullanıcısı R3.12'nin "Geri al"ı.
+- **`tr.calendar` ikiye ayrıldı.** Gün/ay adları `tr.dates`'e geçti, `tr.calendar` takvim
+  ekranının metni oldu. Aynı ad altında bir sözlük ile bir ekranın metni duruyordu.
+
+### Sürükleme (ADR-030) — nerede ne duruyor
+
+Eşik, 30 dk yuvarlaması ve kenetleme `drag.ts` içinde ve **DOM'suz**; ölçüm (`sütun
+genişliği`, `dilim yüksekliği`) `WeekGrid`'de ve **ekrandan okunuyor** — Segoe UI
+metrikleri ve DPI ölçeklemesi bilinmediği için sabit piksel yazılmadı. Dilim yüksekliği
+sütunun boyundan türetiliyor, böylece yoğunluk anahtarı sürüklemeyi de kendiliğinden
+takip ediyor; ikinci bir yerde `30px` yazılı değil.
+
+5px karşılaştırması **yarıçap** (Öklid), kare değil: `|dx|≤5 && |dy|≤5` kuralında 4px
+sağa + 4px aşağı (5.66px) hâlâ tıklama sayılırdı. `/faz-05c-karar` react-big-calendar'ı
+tam olarak bunun için elemişti; kendi uygulamamız o hatayı tekrarlamıyor ve testi var.
+
+### Doğrulananlar ve doğrulanmayanlar
+
+Gerçek uygulama `npm run seed` verisiyle açıldı ve ekran görüntüsüyle yakalandı:
+
+| Ne | Kanıt |
+|---|---|
+| Haftalık ızgara gerçek veriyle | 20.07–26.07 haftası; blok başlıkları, grup üye sayısı (`3`, `2`), birebir etiketi, branş rengi sol şeritte |
+| Kapalı gün | Pazar sütunu taralı + `Tatil` etiketi, başlığı soluk |
+| Branş çipleri | `Fizik 2 · İngilizce 1 · Matematik 5` — sayılar görünen haftadan |
+| ⚠️ **Şerit hatası** | Yukarıdaki 1. bulgu; düzeltme sonrası ekran görüntüsüyle **doğrulandı** |
+| Izgaranın kendi kaydırması | 08:00–20:00 arası kaydırıldı, gün başlıkları yerinde kaldı, açıklama şeridi altta sabit |
+
+**Sürükleme jesti, kapsam diyaloğu, E6 ve haftalık tekrar ekranda sürülemedi.** Sebep
+uygulama değil ortam: bu makinede **eşzamanlı çalışan ikinci bir otomasyon oturumu**
+işaretçiyi ve ön plandaki pencereyi sürekli devralıyordu; gönderdiğim tıklamalar onun
+tarayıcısına düştü. Israr etmek kullanıcının öteki işini bozacaktı, bırakıldı.
+
+Yerine **jsdom arayüz testleri** yazıldı (`pages/takvim/calendar.test.tsx`, 15 test):
+5px altı hareket dersi açıyor · şablona bağlı ders sürüklenince kapsam soruluyor ve
+**soru sorulmadan hiçbir şey yazılmıyor** · şablonsuz ders sorulmadan taşınıyor ve
+bildirim geri alınabiliyor · kapalı güne bırakılınca **hiçbir çağrı yapılmıyor** · dört
+boş durumun dördü ayrı ayrı · ay/gün görünümünün sorduğu aralık. Rust tarafında da
+`reschedule_sessions` kapsam kapsam testli (64 seans testi).
+
+> Bu, ekranda sürmenin yerine geçmez ve öyle sayılmıyor. **Sürükleme jestinin gerçek
+> ekranda çalıştığı hâlâ doğrulanmadı** — Faz 6 açılışında ilk iş bu olmalı, kurs
+> sahibinin Windows testi de aynı şeye bakacak.
+
+---
+
+## Faz 5C-K denetimi (yönetici) — 7/7 kilitli kontrol temiz, üç bulgu
+
+Kod yazılmadı. **Yedi kilitli kontrolün yedisi de temiz** (SQL · float para · saklanan
+bakiye · hard delete · çıplak Türkçe · platform API · ADR-029). §4'ün iki ikizi kaynaktan
+karşılaştırıldı ve tutuyor: `groupThousands` `money::format_kurus`'un döngüsünün aynısı
+(aynı `(len − i) % 3` koşulu), `normalizeTr` de `text::search_name`'in — `I`/`İ` elde,
+gerisi yerelden bağımsız. `upperTr`'nin Rust ikizi **yok ve gerekmiyor**: yalnızca ekran
+etiketi, veri anahtarı değil.
+
+Denetimin çıktısı aşağıdaki **6, 7 ve 8 numaralı devir notları**; üçü de `/faz-05c`
+komutuna madde olarak yazıldı (§1, §3 ve §4'ün test listesi). Ağırlığı taşıyan tek madde
+6: karar oturumu bunu göremezdi, çünkü deneme sabit üç blokla çalıştı — gerçek ders verisi
+ızgaraya hiç girmedi.
+
+Denetim **ADR açmadı**: üçü de mevcut kuralların uygulanması, yeni bir ilke değil.
+Aralığın genişlemesi `EKRANLAR §122`'nin ihlali değil, tanımsız bıraktığı durumun
+kapatılması.
+
+---
+
+## Faz 5C-K — takvim kütüphanesi kararı (ADR-031) + para biçimlemesi
+
+Bu oturumda **üretim kodu iki dosyada değişti** (§4 düzeltmesi); geri kalanı ölçüm,
+deneme ve belge. `npm run check` yeşil: **411 test** (231 TypeScript + 180 Rust).
+Faz 5B'de 388'di; **+23 test.**
+
+### Karar: elde yazılır
+
+| Aday | Nerede elendi |
+|---|---|
+| **Bryntum Calendar 7.3.4** | Ölçüt 2 — lisanslı tarball'a **403** (*"only has access for trial packages"*); elde edilebilen tek şey deneme ve **deneme lisans değil**. Ölçüt 1 — deneme paketi `bryntum.com/verify/`e `new Image()` beacon'ı atıyor, `localStorage`'da 45 günlük yerel kapatma var, `postinstall.js` her `npm install`'da proje kökünde `spawnSync('node', …)` çalıştırıyor |
+| **FullCalendar 6.1.21** | Ölçüt 5 — gün başlığının `aria-label`'ı ve hafta numarası dışarıdan **geçersiz kılınamayan** `Intl` çağrılarından geçiyor; ayrıca `index.js:77` argümansız `toLocaleLowerCase()` (Türkçe Windows'ta `I` → `ı`). Ölçüt 6 — `minDistance = ev.isTouch ? 0 : …` |
+| **react-big-calendar 1.20.0** | Havuzda yoktu, **karşıt doğrulamada çıktı.** Ölçüt 1, 2 ve 5'te en iyi aday (ağ çağrısı 0, MIT, `Intl` 0). Ölçüt 6 — `var clickTolerance = 5` modül sabiti, dışarıdan verilemiyor; karşılaştırma kare (Chebyshev), yarıçap değil |
+| **Elde** | Elenmedi. Izgara **840px / 616px, sapma 0px**; şerit algoritması 40 satır, **11 testi ilk koşuda geçti**; geçersiz kılınan CSS satırı **0** |
+
+### Bu oturumun iki metodolojik dersi
+
+**1 · Ölçüt 1'in grep listesi eksikti ve bunu ancak çürütme yakaladı.** Bryntum'un ağ
+çıkışı `fetch`/`XHR`/`sendBeacon` değil, bir **`Image().src`**. Ölçüt lafzıyla
+uygulansaydı Bryntum ölçüt 1'i *geçmiş* görünecekti. ADR-031 listeyi genişletti:
+`new Image()` · `.src =` · `createElement('script')` · dinamik `import()` · `new Worker` ·
+`new WebSocket` · `EventSource`. *Aradığı şeyin bilinen bütün taşıyıcılarını saymayan bir
+eleme ölçütü ölçüt değil, ritüeldir.*
+
+**2 · Üç adaylık havuz sınırı, ölçütleri daha iyi geçen bir adayı gölgede bırakabiliyor.**
+react-big-calendar üç ölçütte FullCalendar'dan iyi çıktı ve havuza "en popüler kütüphane"
+mantığıyla girmemişti. Ölçülüp ADR'ye yazıldı; sınır oyalanmaya karşı bir disiplin,
+bulguyu saklamanın gerekçesi değil.
+
+### §4 · Para biçimlemesi — B1 kapandı, iki ikiz artık aynı algoritmayı koşuyor
+
+| Ne | Önce | Sonra |
+|---|---|---|
+| `formatKurus` binlik ayıracı | `lira.toLocaleString('tr-TR')` | `money.rs`'teki döngünün **birebir aynısı** (`groupThousands`) |
+| `Avatar` baş harfleri | `toLocaleUpperCase('tr')` | yeni `upperTr` — `i→İ`, `ı→I` elle, gerisi `toUpperCase()` |
+| `normalizeTr` | `ch.toLocaleLowerCase('tr')` | `ch.toLowerCase()` — Rust ikizi `search_name` de `char::to_lowercase` kullanıyordu, **asıl ayrışan taraf TS'ti** |
+
+Artık `src/` içinde ekrana giden **tek bir `toLocale*` çağrısı yok**; ADR-030'un ICU
+satırı ("`toLocale*` çağrısı yapılmaz") bir hedef değil, **doğru bir cümle.**
+
+Testin kendisi de bir bulguya dönüştü: vitest Node'un tam ICU'suyla koşuyor, yani
+"yeşil test" `Intl`'e bel bağlamadığımızın kanıtı **değildi**. Yeni `ICU bağımsızlığı`
+bloğu `Number.prototype.toLocaleString` ile iki `String.prototype.toLocale*`'ı bilerek
+bozuyor ve çıktının değişmediğini gösteriyor. İçinde bir **kontrol grubu** de var
+(`taklit gerçekten ısırıyor`) — o olmasaydı, taklit hiç çalışmasa bile testler geçerdi.
+
+`ui/Picker.tsx`'in `new Date()` yedeğine dokunulmadı: ADR-029'un istisna listesinde adıyla
+yazılı, kapanmış karar.
+
+### Denemeden çıkan iki yan bulgu
+
+- **Import'ta büyük/küçük harf çakışması yakalandı.** `CalendarSpike.tsx` ile
+  `calendarSpike.ts` yalnızca harf büyüklüğünde ayrılıyordu; macOS sessizce yanlış dosyayı
+  çözdü, `tsc` TS1261 ile bağırdı. `CLAUDE.md > Windows`'un tam olarak uyardığı sınıf —
+  dosya `calendarGrid.ts` oldu. **CI'a gitmeden yerelde yakalandı.**
+- **Uygulama kabuğu tarayıcıda ölçülemiyor gibi görünmüştü;** neden vite'in eski modül
+  grafiğiydi (yeniden adlandırılan dosyayı arıyordu), projede hata yok. Izgara ölçümü
+  yine de **kabuktan bağımsız** bir sayfada alındı — yerleşim ölçerken Tauri'yi
+  denklemden çıkarmak doğru olan. Harness iki dosyaydı ve ölçüm sonrası silindi.
+- **Tarayıcı aracının pencere yeniden boyutlandırması bu ortamda çalışmıyor**
+  (`innerHeight` 700 istendiğinde 956 kaldı). 700px koşulu kabı sınırlayarak taklit
+  edildi; CSS açısından eşdeğer ama literal bir pencere testi değil. Gerçek doğrulama
+  `/faz-05c` sonundaki Windows testinde.
+
+### `/faz-05c`'ye devreden sekiz not
+
+> 6–8 karar oturumundan değil, onu izleyen **yönetici denetiminden** çıktı; üçü de
+> `/faz-05c` komutuna madde olarak yazıldı.
+
+1. **Sürükleme bizim.** Hiçbir aday Pointer Events kullanmıyor (`setPointerCapture`
+   üçünde de 0). ADR-030 baştan sona bizim uygulayacağımız bir şey.
+2. **Kenarda kendiliğinden kaydırma bütçelenmedi.** Sürüklerken işaretçi ızgaranın
+   kenarına gelince ızgaranın kayması ayrı bir iş (FullCalendar bunu `AutoScroller` diye
+   ayrı tutuyor). `/faz-05c` bunu ya kapsama alır ya açıkça dışarıda bırakır.
+3. **Şerit algoritması "genişletme" yapmıyor, gerekmiyor da.** Denemedeki sürüm eşit
+   genişlikte şeritler veriyor; olgun bir yerleşim bloğu sağdaki boşluğa genişletir.
+   `EKRANLAR §122` yalnızca şerit istiyor — kapsam orada tutulacak.
+4. **Takvim sayfası `PageContent`'e sarılmalı.** Kaydırma alanı orada
+   (`.content { overflow: auto }`); doğrudan `main`'e bağlanan bir sayfa kırpılır.
+   İki deneme de (elde ve FullCalendar) bu tuzağa düştü ve ikisi de kırpıldı — kabukta
+   hata yok, sarmalayıcı atlanmıştı. Denemenin kendi `.scroll` kabı **geçici**: gerçek
+   ekranda kaydırmayı `PageContent` yapacak, açılışta "şimdi" çizgisine kaydırma da onun
+   `scrollTop`'una yazılacak (`/faz-05c §4`'ün saf fonksiyon şartı burada karşılanır).
+5. **`Date` → `'YYYY-MM-DD'` çevirisinde `toISOString()` kullanılmayacak.** FullCalendar
+   denemesi bu hataya düştü ve bulgu bizim için de geçerli: `toISOString()` UTC'ye
+   çevirir, İstanbul (+03:00) gibi dilimlerde tarihi **bir gün geriye** kaydırır. Daha
+   kötüsü sessizdi — başlık karşılaştırması aynı hatayı yaptığı için ekran doğru
+   görünüyordu. `lib/format.ts > dateToIso` doğru olanı yapıyor (`getUTC*`, girdisi
+   `Date.UTC` ile kurulmuş); yeni yazılacak her yer ondan geçmeli, elde `Date` ayrıştırmamalı.
+6. **08:00–22:00 dışındaki ders takvimde görünmez olurdu.** `EKRANLAR §122` aralığı
+   sabitliyor ama **ders saatini hiçbir şey kısıtlamıyor** — ne `validate.ts` ne Rust; 5B'nin
+   kendi ekran görüntüsünde 00:15'lik bir ders var. Denemenin `topSlots`'u böyle bir derste
+   **negatif** çıkıyor (`(15−480)/30 = −15.5`) ve blok kırpılan alana düşüyor. Veritabanında
+   var, ekranda yok — kullanıcı takvime bakıp "o gün boş" der. `DAY_START_MIN`/`DAY_END_MIN`
+   parametreye çevrilir, varsayılan 08:00–22:00 kalır, aralık dışı ders varsa ızgara tam
+   saate yuvarlanarak **genişler** (`/faz-05c §1` + §4 testi).
+7. **`toMinutes` ikinci bir zaman ayrıştırıcısı.** `calendarGrid.ts` kendi sürümünü yazmış;
+   doğrulayan ikizi `lib/format.ts > timeToMinutes` zaten var ve bozuk girdide `null`
+   dönüyor. Denemede zararsızdı, ekranda değil: bozuk saat `NaN` dilim → blok sessizce
+   kaybolur.
+8. **Deneme rotası taşınınca silinmeli — kapı onu görmüyor.** `scripts/verify-bundle.mjs`'in
+   `FORBIDDEN` listesi yalnızca Showcase'e özgü dizeler içeriyor; `/dev/takvim-denemesi`
+   (ve zaten `/dev/durum`) statik `import` edilse **sızar ve kapı susar**. Rota kalacaksa
+   listeye kendi işaretçisi eklenir.
+
+---
+
 
 ## Faz 5B denetimi (yönetici) — üç bulgu + ADR-030
 
@@ -29,7 +261,7 @@ ADR-029 da tutuyor — `today` her ekrana prop olarak iniyor. `ui/Picker.tsx`'te
 `new Date()` yedeği denetimde işaretlendi ve **geri çekildi**: ADR-029 onu istisna
 listesinde zaten adıyla yazmış ve gerekçesini vermiş. Kapanmış karar, yeniden açılmadı.
 
-### B1 · Para biçimlemesi Windows'ta ikizinden ayrılabilir → `/faz-05c-karar §4`
+### B1 · Para biçimlemesi Windows'ta ikizinden ayrılabilir → ✅ **KAPANDI** (5C-K §4)
 
 `src/lib/format.ts` içinde `formatKurus` binlik ayıracını `lira.toLocaleString('tr-TR')`
 ile üretiyor; Rust ikizi `src-tauri/src/money.rs` aynı işi **elle** yapıyor. Projenin
@@ -187,7 +419,9 @@ Deneme için veritabanına elle eklenen seanslar sonrası `npm run seed -- --res
 | **Haftalık tekrarla ders ekleme** | Rust testi var (`haftalik_ders_sablon_acar_ve_seanslari_uretir`, 16 seans). Arayüzden denenmedi: bugün kapalı gündü ve K-2 doğru şekilde engelledi |
 | **Ertele diyaloğu** | Rust reddi testli (R3.13); modal ekranda açılmadı |
 
-Üçü de `/faz-05c §5`'e madde olarak yazıldı — takvim gelince tetikleyicileri doğuyor.
+Üçü de `/faz-05c §5`'e madde olarak yazıldı ve tetikleyicileri (takvim) 5C'de doğdu — ama
+**hâlâ ekranda sürülmediler**: 5C'nin doğrulama bölümündeki ortam sorunu üçünü de
+kapsıyor. Rust testleri ve jsdom testleri yerinde; eksik olan gerçek uygulama denemesi.
 
 ---
 
@@ -312,8 +546,30 @@ Dördü de somut ve ikisi (B1, B2) zaten bulguya dönüştü. Kilometre taşı y
 **ilk gerçek Windows testi 5C'nin sonunda**, Faz 10'a bırakılmıyor — kurs sahibine
 gönderilecek 5 maddelik listenin en az ikisi bu dördünü yoklayacak.
 
-**2 · Kararın kendisi: hazır kütüphane mi, elde mi.** Bu risk artık `/faz-05c`'nin içinde
-değil, **kendi oturumunda** — `/faz-05c-karar`. Komut yedi ölçüt ve her birinin **eleme
-koşulunu** yazıyor, ve eşiklerin **ölçümden önce** yazılmasını şart koşuyor: eşik sonradan
-yazılırsa karar değil, çıkan sonucun gerekçelendirmesi olur. Aday havuzu üçle sınırlı,
-"elde yazmak" da adaylardan biri ve aynı denemeden geçiyor.
+**2 · Kararın kendisi: hazır kütüphane mi, elde mi.** ✅ **KAPANDI — `ADR-031`.**
+Elde yazılır. Ölçüldü, tahmin edilmedi: yedi ölçütün eşikleri ölçümden **önce** yazıldı,
+üç kütüphane adayı paket kaynağından tarandı, ızgara gerçek tarayıcıda ölçüldü.
+
+Yerine geçen risk — **elde yazmanın maliyeti** — 5C ile ölçüldü: **tek oturum.** Dürüst
+tahmin 6–9 iş günüydü; ADR-031 §4 "belirgin şekilde aşılırsa karar yeniden açılır" diyordu,
+aşılmadı, karar kapalı kalıyor. Tahmini düşüren üç şey gerçekten düşürdü: Türkiye'de yaz
+saati yok (takvimin klasik olarak en pahalı parçası bedava), veri projeksiyonu Rust'ta
+zaten bitmişti, ve şerit algoritması denemede yazılıp testiyle geçmişti.
+
+**Kenarda kendiliğinden kaydırma kapsam dışı bırakıldı** (devir notu 2). Sürüklerken
+işaretçi ızgaranın kenarına gelince ızgaranın kayması yazılmadı; sürükleme ekranda
+görünen aralıkta çalışıyor. Gerekçe: 700px'lik bir pencerede bile ızgara 8 saatlik bir
+dilimi gösteriyor ve 30 dk'lık taşımaların hemen hepsi o dilimin içinde. Gerekirse
+`drag.ts`'e dokunmadan `WeekGrid`'e eklenir — aritmetik zaten ayrı duruyor.
+
+**3 · Denemenin gerçek veriyle karşılaşmamış olması.** ✅ **Karşılaştı ve iki hata
+çıkardı** (şerit hesabı gün başına değildi; dev sayfası metinleri pakete sızıyordu).
+Uyarı doğru çıktı ve doğru yerde durmuş: `npm run seed` verisiyle ilk açılış, hiçbir
+testin yakalayamadığı bir yerleşim hatasını ilk ekran görüntüsünde gösterdi. Sınıfın
+kalan üyeleri artık testli: aynı anda 6 çakışan ders, 15 dakikalık ders, gece yarısını
+aşan ders, aralık dışı ders, tamamen tatil olan hafta.
+
+**4 · Sürükleme jestinin gerçek ekranda çalıştığı doğrulanmadı.** Aritmetiği jsdom'da
+testli, ekranda sürülemedi — bu makinede eşzamanlı çalışan ikinci bir otomasyon oturumu
+işaretçiyi devraldığı için (ayrıntı yukarıda). **Faz 6'nın ilk işi bu olmalı**; kurs
+sahibine gönderilen Windows testinin maddelerinden biri de aynı şeye bakıyor.

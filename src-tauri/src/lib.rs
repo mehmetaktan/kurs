@@ -190,6 +190,9 @@ pub fn run() {
             commands::save_session,
             commands::template_preview,
             commands::apply_template,
+            // Faz 5C — takvim
+            commands::range_sessions,
+            commands::closed_days,
         ])
         .run(tauri::generate_context!())
         .expect("Tauri uygulaması başlatılamadı");

@@ -19,8 +19,8 @@ use crate::model::{
 use crate::repo::roster::{StudentDetail, StudentInput, StudentQuery, StudentRow};
 use crate::repo::schedule::{
     ApplyTemplateReport, Capacity, ClosedDayInput, Conflict, DaySessionRow, DeleteReport,
-    GroupDetail, GroupInput, GroupQuery, GroupRow, SaveSessionReport, SessionInput, SessionScope,
-    SubjectInput, TemplatePreview,
+    GroupDetail, GroupInput, GroupQuery, GroupRow, RescheduleReport, RescheduleScope,
+    SaveSessionReport, SessionInput, SessionScope, SubjectInput, TemplatePreview,
 };
 use crate::{db, repo, AppState};
 
@@ -376,15 +376,27 @@ pub fn delete_sessions(
     state.with_conn(|conn| repo::schedule::delete_sessions(conn, session_id, scope))
 }
 
+/// Ders taşır. Kapsam **çağırandan** gelir ve varsayılanı en dar olan (`only`);
+/// "bu ve sonraki dersler" (R3.8) şablonu bu tarihten itibaren yeni gün/saate geçirir.
+/// "Bugün" burada bind ediliyor (§0) — yeni şablonun seansları üretilecek.
 #[tauri::command]
 pub fn reschedule_session(
     state: State<'_, AppState>,
     session_id: i64,
     starts_at: String,
     duration_min: i64,
-) -> AppResult<()> {
+    scope: Option<RescheduleScope>,
+) -> AppResult<RescheduleReport> {
+    let today = clock::today_local();
     state.with_conn(|conn| {
-        repo::schedule::reschedule_session(conn, session_id, &starts_at, duration_min)
+        repo::schedule::reschedule_sessions(
+            conn,
+            session_id,
+            &starts_at,
+            duration_min,
+            scope.unwrap_or_default(),
+            today,
+        )
     })
 }
 
@@ -421,20 +433,38 @@ pub fn has_schedule(state: State<'_, AppState>) -> AppResult<bool> {
     state.with_conn(repo::schedule::has_schedule)
 }
 
+// ---------------------------------------------------------------------------
+// Faz 5C — takvim
+// ---------------------------------------------------------------------------
+
+/// Bir tarih aralığındaki dersler — takvimin hafta/ay ızgarası (5C).
+///
+/// `day_sessions` ile aynı projeksiyon, aynı fonksiyon: üye sayısı **satırın kendi
+/// gününe** göre hesaplandığı için aralık genişlemesi sonucu bozmuyor. Takvim için
+/// ikinci bir sorgu yazılmadı.
+#[tauri::command]
+pub fn range_sessions(
+    state: State<'_, AppState>,
+    from: String,
+    to: String,
+) -> AppResult<Vec<DaySessionRow>> {
+    state.with_conn(|conn| repo::schedule::session_rows_between(conn, from.trim(), to.trim()))
+}
+
+/// Aralıktaki kapalı günler — takvimin taralı sütunları ve K-2'nin bırakma yasağı.
+#[tauri::command]
+pub fn closed_days(state: State<'_, AppState>, from: String, to: String) -> AppResult<Vec<String>> {
+    state.with_conn(|conn| {
+        repo::schedule::closed_days_in_range(conn, parse_day(&from)?, parse_day(&to)?)
+    })
+}
+
 /// Bir gün programa kapalı mı: tek seferlik tatil **veya** haftalık kapalı gün.
 /// Form kaydetmeden önce buna bakar (K-2) — kullanıcı hatayı kaydetme anında değil
 /// tarihi seçtiğinde görür.
 #[tauri::command]
 pub fn is_closed_day(state: State<'_, AppState>, day: String) -> AppResult<bool> {
-    state.with_conn(|conn| {
-        let parsed = chrono::NaiveDate::parse_from_str(day.trim(), "%Y-%m-%d").map_err(|_| {
-            crate::error::AppError::new(
-                "invalid_date",
-                "Tarih okunamadı. Tarihi gün.ay.yıl biçiminde seçin.",
-            )
-        })?;
-        repo::schedule::is_closed_day(conn, parsed)
-    })
+    state.with_conn(|conn| repo::schedule::is_closed_day(conn, parse_day(&day)?))
 }
 
 /// Ders kaydeder: tek seferlik ya da haftalık. Tatile ders eklenmez (K-2); çakışma

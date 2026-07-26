@@ -16,8 +16,9 @@
 | 5A | Ders & Takvim — branş, tatil, grup, **seans üretim motoru** | `/faz-05` | ✅ Tamamlandı (342 test); CI ilk kez yeşil |
 | 5B | Ders ekle/düzenle, seans işlemleri, **Bugün ekranı** | `/faz-05b` | ✅ Tamamlandı (388 test); ADR-028 + ADR-029 eklendi |
 | 5B.5 | **Faz 5B denetimi** — 7/7 kilitli kontrol temiz, 3 bulgu; **ADR-030** (Pointer Events) ve 5C'nin ikiye bölünmesi | `/yonetici` | ✅ Tamamlandı |
-| 5C-K | **Takvim kütüphanesi kararı** — ölçüm, deneme, ADR-031 + para biçimleme düzeltmesi | `/faz-05c-karar` | ⬜ |
-| 5C | **Takvim ekranı** — ADR-031'i uygular + push + **ilk Windows testi** | `/faz-05c` | ⬜ |
+| 5C-K | **Takvim kütüphanesi kararı** — ölçüm, deneme, ADR-031 + para biçimleme düzeltmesi | `/faz-05c-karar` | ✅ Tamamlandı (411 test); **ADR-031: elde yazılır** — üç adayın üçü de ölçüt 6'da (5px sürükleme eşiği) düştü |
+| 5C-K.5 | **Karar denetimi** — 7/7 kilitli kontrol temiz; üç bulgu `/faz-05c`'ye (aralık dışı ders görünmezliği · `toMinutes` ikizi · paket kapısının dev sayfasını görmemesi) | `/yonetici` | ✅ Tamamlandı |
+| 5C | **Takvim ekranı** — ADR-031'i uygular, Pointer Events sürükleme, ay/hafta/gün | `/faz-05c` | ✅ Tamamlandı (481 test); **ADR-032** (taşıma kapsamı). Gerçek veriyle iki hata yakalandı: şerit hesabı gün başına değildi, `/dev/durum` metinleri üretim paketine sızıyordu |
 | 6 | Yoklama & Telafi | `/faz-06` | ⬜ |
 | 7 | Fiyatlandırma & Ders Paketi | `/faz-07` | ⬜ |
 | 8 | Tahsilat & Makbuz | `/faz-08` | ⬜ |

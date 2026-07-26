@@ -27,6 +27,9 @@ export const GROUPS_PATH = '/gruplar'
 /** Tanımlar — branşlar ve tatil günleri (Faz 5A). */
 export const DEFINITIONS_PATH = '/tanimlar'
 
+/** Takvim (Faz 5C). */
+export const CALENDAR_PATH = '/takvim'
+
 export const PAGES: readonly PageDef[] = [
   { path: '/', title: tr.pages.today.title, subtitle: tr.pages.today.subtitle, phase: 4 },
   {
@@ -83,7 +86,13 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { path: '/raporlar', label: tr.nav.reports },
 ]
 
-/** Geliştirici rotaları — üretim derlemesinde yer almaz (`import.meta.env.DEV`). */
+/**
+ * Geliştirici rotaları — üretim derlemesinde yer almaz (`import.meta.env.DEV`).
+ *
+ * Buraya eklenen her sayfanın `scripts/verify-bundle.mjs > FORBIDDEN` listesinde
+ * **kendine özgü bir işaretçisi** olmak zorunda; yoksa statik bir `import` sızar ve
+ * kapı susar. `/faz-05c-karar`'ın takvim denemesi burada duruyordu, taşındı ve silindi.
+ */
 export const DEV_ROUTES = {
   showcase: '/dev/komponentler',
   status: '/dev/durum',

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { tr } from '../i18n/tr'
+import { upperTr } from '../lib/format'
 import { Button } from './Button'
 import { marks } from './marks'
 import styles from './Display.module.css'
@@ -131,16 +132,23 @@ export function StatusDot({ tone, label, hollow = false }: StatusDotProps) {
   )
 }
 
-/** Baş harfler. Ad boşsa tire — "undefined" harfleri çizilmesin. */
+/**
+ * Baş harfler. Ad boşsa tire — "undefined" harfleri çizilmesin.
+ *
+ * Büyütme `upperTr` ile: `toLocaleUpperCase('tr')` ICU verisi eksik bir WebView2'de
+ * `İrem`i `IR` yapardı. Bu bir etiket, para değil — ama düzeltmesi iki karakterlik bir
+ * özel durum ve karşılığında projede tek bir `toLocale*` çağrısı kalmıyor.
+ */
 export function Avatar({ name, size = 44 }: { name: string; size?: 44 | 46 | 52 }) {
   const initials =
-    name
-      .split(/\s+/)
-      .filter(Boolean)
-      .map((word) => word[0] ?? '')
-      .slice(0, 2)
-      .join('')
-      .toLocaleUpperCase('tr') || marks.empty
+    upperTr(
+      name
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((word) => word[0] ?? '')
+        .slice(0, 2)
+        .join(''),
+    ) || marks.empty
 
   return (
     <span

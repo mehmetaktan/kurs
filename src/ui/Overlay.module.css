@@ -204,6 +204,18 @@
   transform: translateX(-50%);
 }
 
+/* "Geri al" — bildirimin içinde, altı çizili ve koyu zeminde okunur (R3.12). */
+.toastAction {
+  margin-left: var(--space-3);
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-on-dark);
+  text-decoration: underline;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
 /* ── Boş / yükleniyor / hata ──────────────────────────────────────────────── */
 
 .state {

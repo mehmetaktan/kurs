@@ -21,6 +21,7 @@ import {
   parseTimeTr,
   phoneDigits,
   timeToMinutes,
+  upperTr,
   weekdayTr,
 } from './format'
 
@@ -103,6 +104,95 @@ describe('Rust karşılığıyla aynı çıktı', () => {
 
   it.each(rustBeklentileri)('formatKurus(%i) === %s', (kurus, beklenen) => {
     expect(formatKurus(kurus)).toBe(beklenen)
+  })
+})
+
+describe('ICU bağımsızlığı — bu testin var olma sebebi Windows', () => {
+  /**
+   * Bu dosya Node'un TAM ICU'suyla koşuyor; kullanıcının WebView2'si koşmayabilir
+   * (`tr.ts:801`, `format.ts > groupThousands`). Yani "vitest yeşil" tek başına
+   * `Intl`'e bel bağlamadığımızın kanıtı DEĞİL — kanıt, ICU'yu bilerek bozup
+   * çıktının değişmediğini görmek.
+   *
+   * ICU eksik bir motorda `Intl` patlamaz, sessizce başka bir yerele düşer: para
+   * ayıraçları yer değiştirir (`1.234,56` → `1,234,56`) ve tutar başka bir sayı gibi
+   * okunur. Aşağıdaki taklit tam olarak bunu yapıyor.
+   */
+  function icuBozukken<T>(govde: () => T): T {
+    const numara = Number.prototype.toLocaleString
+    const buyut = String.prototype.toLocaleUpperCase
+    const kucult = String.prototype.toLocaleLowerCase
+    Number.prototype.toLocaleString = function (this: number) {
+      return `ICU-YOK-${this}`
+    }
+    String.prototype.toLocaleUpperCase = function (this: string) {
+      return `ICU-YOK-${this}`
+    }
+    String.prototype.toLocaleLowerCase = function (this: string) {
+      return `ICU-YOK-${this}`
+    }
+    try {
+      return govde()
+    } finally {
+      Number.prototype.toLocaleString = numara
+      String.prototype.toLocaleUpperCase = buyut
+      String.prototype.toLocaleLowerCase = kucult
+    }
+  }
+
+  it('formatKurus ICU olmadan da aynı metni üretir', () => {
+    icuBozukken(() => {
+      expect(formatKurus(123456)).toBe('1.234,56')
+      expect(formatKurus(100000000)).toBe('1.000.000,00')
+      expect(formatKurus(-120000)).toBe('−1.200,00')
+      expect(formatKurus(999)).toBe('9,99')
+    })
+  })
+
+  it('upperTr ICU olmadan da Türkçe büyütür', () => {
+    icuBozukken(() => {
+      expect(upperTr('irem')).toBe('İREM')
+      expect(upperTr('ışık')).toBe('IŞIK')
+    })
+  })
+
+  it('normalizeTr ICU olmadan da aynı arama anahtarını üretir', () => {
+    icuBozukken(() => {
+      expect(normalizeTr('İngilizce')).toBe('ingilizce')
+      expect(normalizeTr('IŞIK  Yılmaz')).toBe('ışık yılmaz')
+      expect(normalizeTr('ÇĞÖŞÜ')).toBe('çğöşü')
+    })
+  })
+
+  it('taklit gerçekten ısırıyor — yoksa test boşa geçerdi', () => {
+    // Kontrol grubu: aynı taklit altında `Intl`'e bel bağlayan bir çağrı BOZULUYOR.
+    // Bu olmadan yukarıdaki iki test, taklit hiç çalışmasa da geçerdi.
+    icuBozukken(() => {
+      expect((1234).toLocaleString('tr-TR')).toBe('ICU-YOK-1234')
+    })
+  })
+})
+
+describe('upperTr — normalizeTr ile aynı i/ı disiplini', () => {
+  const beklentiler: Array<[string, string]> = [
+    ['irem', 'İREM'],
+    ['İrem', 'İREM'],
+    ['ışık', 'IŞIK'],
+    ['Ilgaz', 'ILGAZ'],
+    ['çğöşü', 'ÇĞÖŞÜ'],
+    ['Ayşe Demir', 'AYŞE DEMİR'],
+    ['', ''],
+  ]
+
+  it.each(beklentiler)('upperTr(%j) === %j', (girdi, beklenen) => {
+    expect(upperTr(girdi)).toBe(beklenen)
+  })
+
+  it('normalizeTr ile gidiş-dönüş tutarlı', () => {
+    // Büyütüp küçültmek adı başlangıç hâline döndürmeli — i/ı çifti burada kayardı.
+    for (const ad of ['irem', 'ışık', 'ingilizce', 'ılgaz']) {
+      expect(normalizeTr(upperTr(ad))).toBe(ad)
+    }
   })
 })
 

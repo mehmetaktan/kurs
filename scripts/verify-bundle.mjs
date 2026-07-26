@@ -15,13 +15,25 @@ import { join } from 'node:path'
 
 const DIST_ASSETS = 'dist/assets'
 
-/** Showcase / durum sayfasına özgü, başka hiçbir yerde geçmeyen işaretçiler. */
+/**
+ * Geliştirici sayfalarına özgü, başka hiçbir yerde geçmeyen işaretçiler.
+ *
+ * **Her dev sayfasının kendi işaretçisi olmak zorunda.** Faz 5C denetimine kadar liste
+ * yalnızca Showcase'e özgü dizeler içeriyordu; `/dev/durum` statik `import` edilse
+ * pakete sızar ve kapı **susardı**. `src/dev/` altına yeni bir sayfa eklenirse buraya da
+ * bir satır eklenir — `DEV_ROUTES` yorumu bunu söylüyor.
+ */
 const FORBIDDEN = [
+  // /dev/komponentler
   'Komponentler', // showcase başlığı
-  'komponentler', // /dev/komponentler rotası
+  'komponentler', // rota
   'showcaseTr', // showcase sözlüğü
   'Bildirim göster', // yalnızca showcase'te olan etiket
   'drawerRow', // yalnızca Showcase.module.css'te olan sınıf
+  // /dev/durum
+  'Sistem durumu', // tr.status.heading — sayfanın başlığı
+  'Demo verisi yüklemek için', // tr.status.seedHint
+  'Günlük kipi', // tr.status.journalMode
 ]
 
 /** Kabuğun gerçekten paketlendiğinin kontrolü — boş bir dist'e bakıp "temiz" demeyelim. */

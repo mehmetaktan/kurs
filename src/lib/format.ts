@@ -20,6 +20,29 @@
 import { tr } from '../i18n/tr'
 
 /**
+ * Binlik ayıracını **elle** koyar: `1234567` → `"1.234.567"`.
+ *
+ * `toLocaleString('tr-TR')` bilerek kullanılmıyor. Gerekçe bu dosyanın `normalizeTr`
+ * yorumundakiyle ve `tr.ts:801`'dekiyle aynı: WebView2'de ICU verisi eksik kurulmuş bir
+ * Windows'ta `Intl` sessizce varsayılan yerele düşer ve `1.234,56` yerine `1,234,56`
+ * yazar — yani ayıraçlar yer değiştirir ve tutar **başka bir sayı gibi okunur**.
+ *
+ * Vitest bunu yakalayamaz: Node tam ICU ile koşuyor. İki ikiz yalnızca kullanıcının
+ * ekranında ayrışırdı. Döngü `money::format_kurus`'unkinin birebir aynısı — iki taraf
+ * artık aynı sonucu **aynı nedenle** veriyor.
+ */
+function groupThousands(value: number): string {
+  const digits = String(value)
+  let out = ''
+  for (let i = 0; i < digits.length; i += 1) {
+    // Baştan sayarak, kalan basamak sayısı 3'ün katıysa binlik ayıracı gir.
+    if (i > 0 && (digits.length - i) % 3 === 0) out += '.'
+    out += digits[i]
+  }
+  return out
+}
+
+/**
  * Kuruş → Türkçe para metni (ADR-003).
  * Binlik ayıracı '.', ondalık ',' ve eksi işareti U+2212 (ASCII tire değil, ADR-014).
  *
@@ -37,9 +60,8 @@ export function formatKurus(kurus: number): string {
   const lira = Math.trunc(abs / 100)
   const cents = abs % 100
 
-  const liraText = lira.toLocaleString('tr-TR')
   const centsText = String(cents).padStart(2, '0')
-  const body = `${liraText},${centsText}`
+  const body = `${groupThousands(lira)},${centsText}`
 
   return negative ? `${tr.units.minus}${body}` : body
 }
@@ -152,12 +174,12 @@ export function weekdayTr(iso: string | null | undefined): string {
   const parts = iso ? parseIso(iso) : null
   if (!parts) return tr.units.emptyValue
   const index = new Date(Date.UTC(parts.year, parts.month - 1, parts.day)).getUTCDay()
-  return tr.calendar.weekdays[index] ?? tr.units.emptyValue
+  return tr.dates.weekdays[index] ?? tr.units.emptyValue
 }
 
 /** Ay adı, 1-tabanlı ay numarasından. */
 export function monthNameTr(month: number): string {
-  return tr.calendar.months[month - 1] ?? tr.units.emptyValue
+  return tr.dates.months[month - 1] ?? tr.units.emptyValue
 }
 
 /**
@@ -388,18 +410,47 @@ export function backspacePhone(value: string, caret: number): PhoneEdit {
  * süzerken (Öğrenciler ekranının filtresi) aynı normalleştirme gerekiyor. İki taraf
  * ayrışırsa `İngilizce` yazan kullanıcı `ingilizce` kaydını bulamaz.
  *
- * `toLocaleLowerCase('tr')` tek başına yetmiyor: WebView2'de ICU verisi eksik kurulmuş
- * bir Windows'ta `'I'` → `'i'` döner (Türkçe'de `'ı'` olmalı). Noktalı/noktasız i çifti
- * bu yüzden elle ele alınıyor — Rust tarafındaki gerekçenin aynısı.
+ * Türkçe'nin ASCII'den ayrıldığı **tek** yer noktalı/noktasız i çiftidir ve o çift
+ * burada elle ele alınıyor. Geri kalan harfler için düz `toLowerCase()` yeterli —
+ * ve doğrusu da bu:
+ *
+ * - `toLocaleLowerCase('tr')`, ICU verisi eksik kurulmuş bir WebView2'de sessizce
+ *   varsayılan yerele düşerdi; yani zaten güvenilemezdi.
+ * - Rust ikizi `text::search_name` de `char::to_lowercase` kullanıyor — o da yerelden
+ *   bağımsız. İki taraf artık aynı işlevi çağırıyor; "aynı sonucu verir" bir gözleme
+ *   değil, aynı tanıma dayanıyor.
  */
 export function normalizeTr(input: string): string {
   let lowered = ''
   for (const ch of input) {
     if (ch === 'I') lowered += 'ı'
     else if (ch === 'İ') lowered += 'i'
-    else lowered += ch.toLocaleLowerCase('tr')
+    else lowered += ch.toLowerCase()
   }
   return lowered.split(/\s+/).filter(Boolean).join(' ')
+}
+
+/**
+ * Türkçe büyütme. `normalizeTr`'nin ikizi ve aynı nedenle elle yazılmış.
+ *
+ * Yerele bağlı tek çift noktalı/noktasız i'dir: `'i' → 'İ'`, `'ı' → 'I'`. Geri kalan
+ * Türkçe harflerde (`ç ğ ö ş ü`) düz `toUpperCase()` zaten doğru sonucu veriyor, çünkü
+ * onların büyütmesi yerele bağlı değil.
+ *
+ * `toLocaleUpperCase('tr')` kullanılmıyor: ICU verisi eksik bir WebView2'de sessizce
+ * varsayılan yerele düşer ve `İrem` → `IREM` çıkar. Bir harflik bir yanlışlık ama
+ * kullanıcının **kendi öğrencisinin adının baş harfi**; ve bedeli iki karakterlik bir
+ * özel durum. Projede `toLocale*` çağrısı bırakmamanın asıl sebebi de bu: bir tane
+ * kalırsa kural "çoğunlukla" geçerli olur ve bir sonraki kopyalanan yer onu taşır.
+ */
+export function upperTr(input: string): string {
+  let out = ''
+  for (const ch of input) {
+    if (ch === 'i') out += 'İ'
+    else if (ch === 'ı') out += 'I'
+    else out += ch.toUpperCase()
+  }
+  return out
 }
 
 /**
