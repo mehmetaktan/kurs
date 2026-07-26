@@ -85,8 +85,11 @@ kullanıyor; hepsi kırmızı olsaydı hiçbiri fark edilmezdi.
 
 ### 1.6 Kategori paleti
 
-Tasarımda öğretmen ayırt etmek için kullanılıyor. **ADR-011 gereği MVP'de tek öğretmen var**,
-bu paletin gerçek kullanım yeri **branş** rengi olacak (`subject.color`):
+Tasarımda öğretmen ayırt etmek için kullanılıyor. Paletin asıl kullanım yeri **branş**
+rengidir (`subject.color`) — ders bloğunun rengini branş belirler. **ADR-037 ile
+öğretmen rengi de aynı paletten seçilir** (`teacher.color`, `Tanımlar → Öğretmenler`);
+takvimde blok rengi değil, meta satırındaki nokta olarak görünür — iki eksen aynı anda
+renklendirilmez:
 
 | Hex | Ton |
 |---|---|

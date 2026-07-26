@@ -25,7 +25,11 @@ hizmet eder.
 soruyu "deftere bakayım" diye cevaplamak zorunda kalmasın.
 
 **Kapsam dışı (MVP):** otomatik SMS/WhatsApp (ADR-009) · veli girişi · çoklu şube · fatura/KDV ·
-öğretmen hakedişi · derslik yönetimi · bulut senkronizasyon (ADR-001) · mobil.
+**öğretmen hakedişi** · derslik yönetimi · bulut senkronizasyon (ADR-001) · mobil.
+
+> Kurs **birden fazla öğretmenli** (ADR-037, 2026-07-26 — ADR-011'in "tek öğretmen"
+> varsayımı sorulmamıştı ve yanlıştı). Öğretmen tanımlama, derse/gruba atama ve çakışma
+> uyarısı kapsam **içi**; hakediş/maaş takibi ürün sahibinin kararıyla kapsam **dışı** kalır.
 
 ---
 
@@ -258,7 +262,7 @@ taksit planından gelir. Peşin ödemede tek taksit, vadesi satış günü.
 
 | # | Kural | Seviye | Nasıl uygulanır |
 |---|---|---|---|
-| K-1 | Aynı saate iki ders (tek öğretmen) | **Onay iste** | Kaydetmeden önce diyalog; takvimde `!` rozeti kalır |
+| K-1 | **Aynı öğretmene** aynı saatte iki ders | **Onay iste** | Kaydetmeden önce diyalog; takvimde `!` rozeti kalır. ADR-037: kontrol `teacher_id`'ye göre daralır — o güne kadar `teacher_id` hiç karşılaştırılmadığı için kural **ölü doğmuştu** (`DENETIM-FAZ1 > C5`), `/faz-07 §0b`'de kapanıyor |
 | K-2 | Tatil / kapalı güne ders | **Engelle** | Sürüklemede hedef çıkmaz; formda kaydettirmez |
 | K-3 | Katılım aralığı dışında yoklama | **Engelle** | `trg_attendance_within_enrollment` tetikleyicisi |
 | K-4 | Aynı yoklamadan iki kez borç | **Engelle** | `ux_ledger_attendance` kısmi UNIQUE indeksi |

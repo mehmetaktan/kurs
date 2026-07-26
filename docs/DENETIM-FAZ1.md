@@ -1,6 +1,15 @@
 # Faz 1 Denetimi
 
-**Tarih:** 2026-07-25 · **Durum:** bulgular onaylandı, düzeltmeler dağıtılmayı bekliyor
+**Tarih:** 2026-07-25 · **Durum:** bulgular onaylandı, düzeltmeler dağıtıldı
+
+> **Bu dosya bir arşivdir, takip listesi değildir — ADR-039.** Kapanmamış bir bulgunun
+> yaşadığı yer `docs/DURUM.md`'nin borç tablosudur. `C5` tam olarak buraya yazılıp
+> oraya yazılmadığı için Faz 5A/5B/5C boyunca kayboldu.
+>
+> **Tarama (2026-07-26, yönetici):** **C bölümünün tamamı** kod üzerinde doğrulandı —
+> C1, C3, C4, C6, C7, C8, C10 kapandı; C2 ve C9 faz komutlarında yazılı; **C5 açıktı ve
+> `/faz-07 §0b`'ye taşındı** (ADR-037). **A ve B bölümleri bu oturumda taranmadı** —
+> düzeltmelerinin çoğu Faz 2'de uygulanmış görünüyor ama satır satır doğrulanmadı.
 
 Faz 1 çıktısı (21 tablo, 3 view, 4 trigger, PRD, ekran envanteri, 17 ADR) Faz 2 başlamadan
 önce denetlendi. Gerekçe: şema şu an **belge**; Faz 2'de gerçek SQL'e dönüşecek. Bugün
@@ -394,15 +403,15 @@ seans üretilmemiş. Bir `setting` anahtarı (üretim ufku) ve aynı seri+slot i
 
 | # | Bulgu | Faz |
 |---|---|---|
-| C1 | `ledger_entry.payment_id` üzerinde tekillik mührü yok — aynı tahsilat iki kez deftere yazılabilir. `ux_ledger_payment` eklenmeli. **Asıl risk başka yerde:** çift tıklama iki ayrı `payment` **satırı** üretir, hiçbir ledger indeksi bunu yakalamaz — koruma modal tarafında (submit kilidi + makbuz numarasının modal açılırken rezerve edilmesi) olmalı | Faz 2 + Faz 8 |
-| C2 | Avans varken `v_student_balance` ile `v_student_overdue` çelişiyor. Düzeltme view'da değil veride: otomatik mahsup **bütün açık taksitleri** kapsamalı (vadesi gelmiş + gelmemiş, `due_on` artan) | Faz 8 |
-| C3 | `payment` tablosu mühürsüz — `amount` serbestçe UPDATE edilip defterdeki karşılığından koparılabiliyor. `trg_payment_immutable` + `trg_payment_no_delete` eklenmeli. (Ayrı `voided_at` sütunu **eklenmemeli** — iptal durumu ters kayıttan türetiliyor, iki yerde tutmak ADR-004'e aykırı) | Faz 2 |
-| C4 | `teacher` satırını **hiçbir faz komutu oluşturmuyor**. Üretim kurulumunda tablo sonsuza kadar boş kalır (seed yalnızca geliştirmede çalışıyor) → `001_initial.sql` şemadan sonra **başlangıç verisi** de yazmalı: 12 `setting` varsayılanı + tek satır `teacher` | Faz 2 |
-| C5 | `teacher_id`'yi **yazan hiçbir ekran yok** → K-1/R3.11 çakışma uyarısı hiçbir zaman tetiklenmiyor (`b.teacher_id = a.teacher_id` daima NULL). ADR-011'in "çakışma uyarısı önem kazanır" dediği tek koruma ölü doğuyor | Faz 5 |
-| C6 | E5 Grup detayı "Notlar" sekmesinin arkasında tablo yok. Şema değişikliği **gerekmiyor** — sekme, grup üyelerinin `student_note` akışının birleşimi olarak tanımlanmalı | Faz 5 |
-| C7 | `faz-02.md`'de `rusqlite`'ın `bundled` özelliği ve `rust-toolchain.toml` **adıyla yazılmamış**. Şemanın SQLite tabanı **3.31.0** (`GENERATED ALWAYS ... STORED`). Açılışta `sqlite_version()` loglanmalı | Faz 2 |
-| C8 | `.gitattributes` yok → Windows CI checkout'unda migration dosyaları CRLF olur ve `schema_migration.checksum` (SHA-256) tutmaz; uygulama açılışta "migration değiştirilmiş" hatası verir | Faz 2 |
-| C9 | Veritabanı ve kullanıcı çıktıları `%APPDATA%` (Roaming, **gizli klasör**) altında. Kullanıcı makbuz PDF'ini (R4.13) kendi başına bulamaz; yedek dosyası da oraya yazılırsa OneDrive kapsamı dışında kalır | Faz 2 / Faz 10 |
+| C1 | ~~`ledger_entry.payment_id` üzerinde tekillik mührü yok — aynı tahsilat iki kez deftere yazılabilir. `ux_ledger_payment` eklenmeli. **Asıl risk başka yerde:** çift tıklama iki ayrı `payment` **satırı** üretir, hiçbir ledger indeksi bunu yakalamaz — koruma modal tarafında (submit kilidi + makbuz numarasının modal açılırken rezerve edilmesi) olmalı~~ → **KAPANDI/KOMUTTA (denetlendi 2026-07-26).** `ux_ledger_payment` migration'da var; çift tık koruması `/faz-07 §5`'te K-19 olarak yazılı | ~~Faz 2 + Faz 8~~ |
+| C2 | Avans varken `v_student_balance` ile `v_student_overdue` çelişiyor. Düzeltme view'da değil veride: otomatik mahsup **bütün açık taksitleri** kapsamalı (vadesi gelmiş + gelmemiş, `due_on` artan) → **KOMUTTA (denetlendi 2026-07-26):** `/faz-07 §5` *"otomatik mahsup bütün açık taksitleri kapsar — vadesi gelmiş ve gelmemiş"* | ~~Faz 8~~ → `/faz-07 §5` |
+| C3 | ~~`payment` tablosu mühürsüz — `amount` serbestçe UPDATE edilip defterdeki karşılığından koparılabiliyor. `trg_payment_immutable` + `trg_payment_no_delete` eklenmeli. (Ayrı `voided_at` sütunu **eklenmemeli** — iptal durumu ters kayıttan türetiliyor, iki yerde tutmak ADR-004'e aykırı)~~ → **KAPANDI (denetlendi 2026-07-26).** `trg_payment_immutable` ve `trg_payment_no_delete` migration'da var | ~~Faz 2~~ |
+| C4 | ~~`teacher` satırını **hiçbir faz komutu oluşturmuyor**. Üretim kurulumunda tablo sonsuza kadar boş kalır (seed yalnızca geliştirmede çalışıyor) → `001_initial.sql` şemadan sonra **başlangıç verisi** de yazmalı: 12 `setting` varsayılanı + tek satır `teacher`~~ → **KAPANDI (Faz 2).** `001_initial.sql:623` 15 `setting` + `:641` `teacher` satırı. **Ama satırın adı `'Öğretmen'` kaldı ve düzenleme ekranı yoktu** — o kısım C5'in kardeşi, `/faz-07 §0a`'da (ADR-037) | ~~Faz 2~~ |
+| C5 | `teacher_id`'yi **yazan hiçbir ekran yok** → K-1/R3.11 çakışma uyarısı hiçbir zaman tetiklenmiyor (`b.teacher_id = a.teacher_id` daima NULL). ADR-011'in "çakışma uyarısı önem kazanır" dediği tek koruma ölü doğuyor. **Faz 5A/5B/5C boyunca kapanmadı ve takip listesine hiç girmedi** — form alanı yazıldı, çakışma kontrolü `teacher_id`'ye bakmadı. `/faz-07 §0b`'ye taşındı (ADR-037); kaybolma mekanizması **ADR-039**'da | ~~Faz 5~~ → Para fazı §0b |
+| C6 | ~~E5 Grup detayı "Notlar" sekmesinin arkasında tablo yok. Şema değişikliği **gerekmiyor** — sekme, grup üyelerinin `student_note` akışının birleşimi olarak tanımlanmalı~~ → **KAPANDI (Faz 5A).** `GroupDetailPage.tsx:188` `notes` sekmesi çalışıyor | ~~Faz 5~~ |
+| C7 | ~~`faz-02.md`'de `rusqlite`'ın `bundled` özelliği ve `rust-toolchain.toml` **adıyla yazılmamış**. Şemanın SQLite tabanı **3.31.0** (`GENERATED ALWAYS ... STORED`). Açılışta `sqlite_version()` loglanmalı~~ → **KAPANDI (Faz 2).** `bundled`, `rust-toolchain.toml` ve `sqlite_version` loglaması yerinde | ~~Faz 2~~ |
+| C8 | ~~`.gitattributes` yok → Windows CI checkout'unda migration dosyaları CRLF olur ve `schema_migration.checksum` (SHA-256) tutmaz; uygulama açılışta "migration değiştirilmiş" hatası verir~~ → **KAPANDI (Faz 2).** `.gitattributes` var; CI dört işte yeşil | ~~Faz 2~~ |
+| C9 | Veritabanı ve kullanıcı çıktıları `%APPDATA%` (Roaming, **gizli klasör**) altında. Kullanıcı makbuz PDF'ini (R4.13) kendi başına bulamaz; yedek dosyası da oraya yazılırsa OneDrive kapsamı dışında kalır → **AÇIK, komutta:** `/faz-10 §2` *"yedek klasörü Belgeler altı gibi bulunabilir bir yerde"* | ~~Faz 2~~ / Faz 10 |
 | C10 | ~~`faz-05.md` branş CRUD'unda "varsayılan süre" istiyor ama ne `subject`'te ne `setting`'de böyle bir alan var — PRD S4'ün cevabının saklanacağı yer yok~~ → **KAPANDI (Faz 2).** `subject.default_min` (`001_initial.sql:59`) ve `setting.default_session_minutes = '60'` (satır 628) eklendi. **S4 2026-07-25'te cevaplandı ve cevap tam da bu değer** — Faz 5 bu iş için migration **eklemez** | ~~Faz 5~~ |
 
 ---

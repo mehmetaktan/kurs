@@ -21,16 +21,27 @@ Oturumu kapat. Sırayla:
    > Geçmiş `git log`'da, gerekçeler ADR'lerde duruyor. Bir oturum eklerken bir öncekinin
    > detayını sil; büyüyen DURUM.md okunmayan DURUM.md'dir.
 
-4. Bu oturumda mimari bir karar aldıysan `docs/KARARLAR.md`'ye ADR ekle.
+4. **Sahiplik kontrolü — ADR-039.** Tek soruyla cevapla ve cevabı DURUM.md'ye yaz:
+   *"Bu faz bitince kurs sahibi hangi işi baştan sona yapabiliyor, ve yapamadığı ne kaldı?"*
+   Yapamadığı bir şey plandaki hiçbir faza ait değilse **plan eksiktir** — maddeyi
+   `docs/KULLANILABILIRLIK.md`'ye ya da ilgili faz komutuna yaz, kendi kafana göre çözme.
+
+5. **Kapanmamış denetim bulguları borç tablosuna geçer — ADR-039.** Bu fazın komutunda
+   veya bir denetim dosyasında (`docs/DENETIM-*.md`) bu faza atanmış ama kapanmamış bulgu
+   varsa, DURUM.md'nin *"Bilinçli ertelenenler"* tablosuna **hangi faza kaydığıyla** yaz.
+   Denetim dosyaları arşivdir, takip yüzeyi değil: `DENETIM-FAZ1 > C5` tam olarak burada
+   üç faz boyunca kayboldu.
+
+6. Bu oturumda mimari bir karar aldıysan `docs/KARARLAR.md`'ye ADR ekle.
    Numarayı sıradan devam ettir. Mevcut bir kararı değiştirdiysen eskisini
    `Durum: Değiştirildi` yap, silme.
 
-5. Faz tamamlandıysa `docs/YOL-HARITASI.md`'de o satırı ✅ yap.
+7. Faz tamamlandıysa `docs/YOL-HARITASI.md`'de o satırı ✅ yap.
 
-6. Yeni bir komut/script eklendiyse `CLAUDE.md` > Komutlar bölümünü güncelle.
+8. Yeni bir komut/script eklendiyse `CLAUDE.md` > Komutlar bölümünü güncelle.
 
-7. Değişiklikleri anlamlı bir mesajla commit et.
+9. Değişiklikleri anlamlı bir mesajla commit et.
 
-8. Bana **en fazla 5 madde** özet ver ve bir sonraki oturumun en büyük riskini söyle.
+10. Bana **en fazla 5 madde** özet ver ve bir sonraki oturumun en büyük riskini söyle.
 
 Özeti uzun tutma — asıl kayıt `docs/DURUM.md`'de olmalı, sohbette değil.

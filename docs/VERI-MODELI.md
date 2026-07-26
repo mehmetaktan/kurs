@@ -134,7 +134,7 @@ CREATE TABLE setting (
 
 **Bu tablo neden var:** Tasarımın tamamı öğretmen kavramı üzerine kurulu — ders bloğunun meta
 satırı, notun yazarı, çakışma kuralı ("aynı öğretmen aynı saatte") ve grubun sorumlusu.
-MVP'de **tek satır** olacak (kurs sahibi, ADR-011) ama tablo olarak duruyor: ikinci öğretmen
+MVP'de tek satırla başlar (migration yazar) ama tablo olarak duruyor: ikinci öğretmen
 çıktığında migration + veri taşıma gerekmesin.
 
 ```sql
@@ -153,12 +153,15 @@ CREATE TABLE teacher (
 CREATE INDEX ix_teacher_active ON teacher(is_active) WHERE deleted_at IS NULL;
 ```
 
-> **MVP sadeleştirmesi (ADR-011).** Takvimdeki öğretmen filtresi ve Gün görünümünün
-> öğretmen-başına-sütun düzeni arayüzde **kurulmaz**. Gün görünümü tek geniş sütundur.
-> Şema değişmez; ikinci öğretmen eklenirse bu ekranlar açılır.
+> **~~MVP sadeleştirmesi (ADR-011)~~ → çok öğretmenli (ADR-037, 2026-07-26).** Kursta
+> birden fazla öğretmen olduğu ortaya çıktı. **Şema değişmiyor, migration yazılmıyor** —
+> ADR-011'in "tabloyu kur, arayüzü sadeleştir" kararı burada karşılığını verdi. Değişen
+> arayüz: `Tanımlar → Öğretmenler` sekmesi açılır, takvime öğretmen filtre ekseni gelir
+> (ADR-038), çakışma kontrolü `teacher_id`'ye göre daralır. **Gün görünümü tek geniş sütun
+> kalır** — öğretmen-başına-sütun düzeni hâlâ kurulmuyor.
 
-**Bu satırı kim yazıyor.** Tek öğretmen satırı `001_initial.sql` içinde, **migration'ın
-başlangıç verisi** olarak yazılır — seed'de değil:
+**Bu satırı kim yazıyor.** Başlangıç öğretmen satırı `001_initial.sql` içinde,
+**migration'ın başlangıç verisi** olarak yazılır — seed'de değil:
 
 ```sql
 INSERT INTO teacher (id, full_name, color) VALUES (1, 'Öğretmen', '#5f8f6b');
@@ -166,7 +169,12 @@ INSERT INTO teacher (id, full_name, color) VALUES (1, 'Öğretmen', '#5f8f6b');
 
 Seed yalnızca geliştirmede çalışıyor (`faz-02.md §6`); orada bırakılırsa kurs sahibinin
 gerçek makinesinde `teacher` tablosu **sonsuza kadar boş kalır** ve öğretmen alanı olan
-5 tablo ile 4 ekran karşılıksız olur. Ad, Tanımlar → Genel ekranından değiştirilebilir.
+5 tablo ile 4 ekran karşılıksız olur.
+
+> Bu satırın adı `'Öğretmen'` ve **üç faz boyunca onu değiştirecek ekran yoktu** —
+> Gruplar listesinin `Öğretmen` kolonunda `Öğretmen` yazıyordu. Düzenleme ve yeni öğretmen
+> ekleme `Tanımlar → Öğretmenler`'e geliyor (`/faz-07 §0a`, ADR-037); migration'daki bu
+> satır o ekranın **ilk kaydı** olarak durur, kurs sahibi adını düzeltir.
 
 Kurum adından türetilmez: o bir **kurum** adı ("Aydın Özel Ders"), kişi adı değil —
 üstelik artık başka bir yerde yaşıyor (`config/kurum.json`, ADR-024).
@@ -1449,7 +1457,7 @@ Windows CI'da düşer.
 | yapılmadı | gerekirse ne olur |
 |---|---|
 | Çoklu şube / kurum | Şu an tek kurum varsayılıyor; kurum adı derleme zamanı sabiti (ADR-024). Çoklu şube gerekirse önce o karar geri alınır: kurum kimliği veriye döner. |
-| Öğretmen hakedişi / maaş | ADR-011: tek öğretmen. Gerekirse `teacher_payout` tablosu eklenir. |
+| Öğretmen hakedişi / maaş | Kurs birden fazla öğretmenli (ADR-037) ama ürün sahibi hakediş takibi **istemedi**. Gerekirse `teacher_payout` tablosu eklenir; `teacher` ve `session.teacher_id` zaten hazır. |
 | KDV / fatura | Kurs sahibi makbuz veriyor, fatura kesmiyor. Gerekirse `payment`'a alan eklenir. |
 | Derslik / oda çakışması | Tasarımda oda kavramı yok. |
 | Çoklu para birimi | ₺ sabit. |

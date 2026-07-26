@@ -9,7 +9,8 @@ description: Faz Para — fiyat tarifesi, paket, tahsilat, ekstre ve makbuz (esk
 
 Önce oku: `CLAUDE.md`, `docs/DURUM.md`, `docs/VERI-MODELI.md` (**§3 ve §4 satır satır**),
 `docs/PRD.md`, `docs/KARARLAR.md` — özellikle ADR-003, ADR-004, ADR-006, **ADR-014**,
-**ADR-015**, ADR-016, **ADR-018**, ADR-025, ADR-026, ADR-027, **ADR-035**.
+**ADR-015**, ADR-016, **ADR-018**, ADR-025, ADR-026, ADR-027, **ADR-035**,
+**ADR-037** (çok öğretmenli — ADR-011 düştü), **ADR-038** (takvimin dar istisnası).
 
 **Para mantığının temeli burada kuruluyor. Burada yapılan hata her ekstrede, her raporda
 çoğalır.** Buna karşılık: **ölçüm veya araştırma oturumu açılmaz** (ADR-033). Bir yerde
@@ -18,18 +19,96 @@ devam et ve varsayımı bu komuta yaz.
 
 ## Bu faz sığmazsa
 
-Dikiş yeri **§5'in başı**. Öncesi: tarife + paket + tahakkuk + tüketim fonksiyonu.
-Sonrası: tahsilat + borçlu + ekstre + makbuz. `/kapat` çalıştır, **aynı komutla** ikinci
-oturumda devam et. Arada denetim veya karar oturumu **açılmaz**.
+**İki dikiş yeri var**, sırayla:
+
+| Dikiş | Öncesi | Sonrası |
+|---|---|---|
+| **§1'in başı** | §0 — öğretmenler, ayarlar, çakışma uyarısı, aranabilir seçim | para işi |
+| **§5'in başı** | tarife + paket + tahakkuk + tüketim fonksiyonu | tahsilat + borçlu + ekstre + makbuz |
+
+`/kapat` çalıştır, **aynı komutla** sonraki oturumda devam et. Arada denetim veya karar
+oturumu **açılmaz**. §0 tek başına bir oturumdan küçüktür; para işinin başıyla birlikte
+sığarsa ilk dikişte durma.
 
 ---
 
-## 0. Kullanılabilirlik — K1: seçim listelerinde arama
+## 0. Kurs sahibinin kendi programını tanımlayabilmesi
 
-`docs/KULLANILABILIRLIK.md > K1`. Bu fazın kendi ihtiyacı olduğu için başta:
-tahsilat ekranı uzun öğrenci listesinden seçim yaptıracak.
+**Bu bölüm para işinden önce gelir ve atlanmaz.** Bugün kurs sahibi programında hiçbir
+işletme değerini değiştiremiyor: öğretmenin adı `'Öğretmen'`, çalışma saatleri sabit,
+devamsızlık politikası sabit. Sonuncusu bu fazın **girdisi**.
 
-- `src/ui/Field.tsx > Select` yerel `<select>`; uzun listede kullanılamıyor.
+Bitiş ölçütü tek cümle: *kurs sahibi kendi öğretmenlerini ve çalışma düzenini programa
+girebiliyor, ve uzun listelerden arayarak seçim yapabiliyor.*
+
+### 0a. `Tanımlar → Öğretmenler` — **ADR-037**
+
+ADR-011 düştü: **kursta birden fazla öğretmen var.** Şema değişmiyor, migration yazılmıyor.
+
+- `Tanımlar` sayfasına üçüncü sekme: `DataTable` + ekle/düzenle. Alanlar: ad, renk
+  (kategori paletinden — `pages/tanimlar/palette.ts`), telefon (`formatPhone`, ADR-027),
+  e-posta, aktif. Arşivleme `deleted_at` ile (ADR-005), kullanıcıya "Arşivle".
+- Rust tarafında `insert_teacher` / `update_teacher` **zaten var** (`repo/people.rs:40,57`);
+  eksik olan `#[tauri::command]` yüzeyi ve arşivleme. `list_teachers` var, pasifleri de
+  döndürecek şekilde genişletilir.
+- Sıralama `lib/sortTr.ts` (ADR-020), SQL'de `ORDER BY full_name` **yazılmaz**.
+- Grup ve seans formlarındaki öğretmen alanı zaten `teacher_id` yazıyor
+  (`gruplar/GroupForm.tsx:154`, `dersler/validate.ts:97`). **Tek adayı otomatik seçen
+  satır kaldırılır** (`GroupForm.tsx:89`) — alan gerçek bir seçim olur.
+- Öğretmen adı `null` olabilir; listelerde `tr.units.emptyValue` gösterimi korunur.
+- **Koddaki ADR-011 atıflarını temizle.** 12 yerde "tek öğretmen" yazan yorum ve test adı
+  var; hepsi ADR-037'ye göre düzeltilir ya da silinir. Tam liste:
+  `src/lib/api.ts:340` · `src/pages/takvim/{CalendarPage.tsx:40, filters.ts:8, WeekGrid.tsx:26,
+  drag.test.ts:111, calendar.test.tsx:329}` · `src/pages/dersler/SessionForm.tsx:125` ·
+  `src/pages/gruplar/GroupForm.tsx:87` · `src-tauri/src/{model.rs:52, commands.rs:255,
+  repo/schedule.rs:363, repo/roster.rs:717, db/migrate.rs:224}`.
+  Gün görünümünün tek sütun kalması **doğru** — o satırlar ADR-038'e atıfla kalır, silinmez.
+
+### 0b. K-1 çakışma uyarısı gerçekten çalışsın — `DENETIM-FAZ1 > C5`
+
+Bu bulgu Faz 1'de yazıldı, Faz 5'e atandı, üç faz boyunca kapanmadı. **Burada kapanıyor.**
+
+- `repo/schedule.rs:364` civarındaki çakışma kontrolü `teacher_id` eşitliğine göre daraltılır.
+- PRD `K-1`: aynı öğretmen aynı saatte iki derste → **kaydetmeden önce onay diyaloğu**,
+  engelleme değil. Takvimde `!` rozeti kalır.
+- Testi Rust'ta: aynı öğretmen çakışıyor · farklı öğretmen çakışmıyor · `teacher_id` boş
+  olan seans uyarı üretmiyor.
+
+### 0c. `Tanımlar → Genel` — işletme ayarları (E18, Faz 10'dan alındı)
+
+`repo/setting.rs`'te `set` / `update_existing` **yazılmış ve testsiz duruyor**;
+`list_settings` okuyor, **yazan komut ve ekran yok.**
+
+- Yazan `#[tauri::command]` eklenir. **Yalnızca bilinen anahtarlar yazılabilir**
+  (`update_existing` zaten var olmayan anahtarı reddediyor — bu davranışın testi olsun).
+- Ekrana çıkan satırlar: çalışma saatleri (`day_start`, `day_end`), `slot_minutes`,
+  `default_session_minutes`, `session_horizon_weeks`, `weekly_closed_days`, `row_density`,
+  **`absence_excused_consumes_lesson`** ve **`absence_unexcused_consumes_lesson`**,
+  `package_expiry_days`, `receipt_prefix`, `backup_warn_days`.
+- Ekrana **çıkmaz**: `institution_name` (ADR-024 — okunmuyor, `config/kurum.json`'dan
+  geliyor), `receipt_next_no` ve `last_backup_at` (program yazıyor, kullanıcı değil).
+- İki devamsızlık satırı para politikasıdır — ekranda ne yaptığı Türkçe bir cümleyle yazılı
+  olsun: *"Mazeretli devamsızlıkta ders hakkı düşmez."*
+- Değişiklik anında kaydedilir ve bildirim çıkar; kaydedilmemiş form bırakılmaz.
+- `session_horizon_weeks` değişince seans motoru etkilenir — kaydetmeden önce bunu söyle,
+  yeniden üretimi `on_startup` zaten idempotent yapıyor.
+
+### 0d. Takvim — dar istisna, **ADR-038**
+
+Takvim dondurulmuş durumda (ADR-034) ve öyle kalıyor. İzin verilen **tek** iki değişiklik:
+
+- `pages/takvim/filters.ts`'e **öğretmen filtre ekseni** (branş ekseninin birebir tekrarı).
+- Ders bloğunun meta satırında öğretmen adı.
+
+**Gün görünümü tek sütun kalır.** Öğretmen-başına-sütun düzeni, sürükleme jesti, kenarda
+kaydırma — hepsi hâlâ kapsam dışı.
+
+### 0e. K1 — seçim listelerinde arama
+
+`docs/KULLANILABILIRLIK.md > K1`. Bu fazın kendi ihtiyacı: tahsilat ekranı uzun öğrenci
+listesinden seçim yaptıracak.
+
+- `src/ui/Field.tsx:206 > Select` yerel `<select>`; uzun listede kullanılamıyor.
 - Aranabilir bir seçim komponenti **`src/ui/`'ya** eklenir (mevcut `Select` bozulmadan
   kalır — kısa listelerde yerel `<select>` doğru olan). Klavyeyle çalışır: yaz-filtrele,
   ok tuşlarıyla gez, `Enter` seç, `Esc` kapat.
@@ -37,8 +116,8 @@ tahsilat ekranı uzun öğrenci listesinden seçim yaptıracak.
   (ADR-030'un ICU satırı). `ingilizce` yazınca `İngilizce` bulunur.
 - Metinler `src/i18n/tr.ts`'e; `dev/` sözlüklerine değil.
 - Öğrenci/grup seçen mevcut formlar buna geçirilir (`dersler/SessionForm`,
-  `gruplar/GroupForm`, yeni para ekranları). Kısa listeler (branş, ödeme yöntemi) `Select`
-  kalır.
+  `gruplar/GroupForm`, yeni para ekranları). Kısa listeler (branş, ödeme yöntemi, öğretmen)
+  `Select` kalır.
 - Komponentin testi olur: filtreleme, Türkçe eşleşme, klavye gezinmesi.
 - Bitince `docs/KULLANILABILIRLIK.md`'de ✅ işaretle. Sahibinin eklediği başka madde varsa
   onları da §0'a al.
@@ -124,7 +203,7 @@ Tüketimi tetikleyen şey **yoklama** (ADR-015) ve yoklama ekranı `/faz-06`'da.
 
 ## 5. Tahsilat alma — *(dikiş yeri: buradan öncesi bir oturuma sığar)*
 
-- Öğrenci seç (**§0'ın aranabilir seçimi**), tutar, tarih, yöntem (Nakit / Havale / Kart),
+- Öğrenci seç (**§0e'nin aranabilir seçimi**), tutar, tarih, yöntem (Nakit / Havale / Kart),
   açıklama
 - Ödeme `ledger_entry`'ye **alacak** satırı olarak işlenir
 - **Açık taksitlere mahsup** (`payment_allocation`) — tasarımın "Mahsup edildiği taksit"

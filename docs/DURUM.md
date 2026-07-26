@@ -1,7 +1,7 @@
 # Durum
 
-**Son güncelleme:** 2026-07-26 · yönetici oturumu — plan kısaltıldı
-**Sıradaki iş:** `/faz-07` — **para** (fiyat tarifesi, paket, tahsilat, ekstre, makbuz)
+**Son güncelleme:** 2026-07-26 · ikinci yönetici oturumu — ADR-011 düştü, §0 büyüdü
+**Sıradaki iş:** `/faz-07` — **§0 önce** (öğretmenler + işletme ayarları), sonra para
 **Kalan plan:** üç faz — `/faz-07` → `/faz-06` (yoklama) → `/faz-10` (teslim)
 
 > Bu dosya **son durumu** tutar, oturum arşivi değildir. Geçmiş `git log`'da, gerekçeler
@@ -12,24 +12,30 @@
 
 ## Bu oturumda ne değişti (yönetici, kod yazılmadı)
 
-Ürün sahibi planın gidişine ve harcanan oturumlara itiraz etti; itiraz **haklı bulundu ve
-plan değiştirildi.** Kararların hepsi sahibinin.
+Ürün sahibi sordu: *"öğretmen tanımlamaları yok — projeyi yönetirken yanlış mı yapıyorsun?"*
+Sorulunca ortaya çıktı ki **kursta birden fazla öğretmen var** ve bu hiç sorulmamıştı.
 
 | Karar | Nerede |
 |---|---|
-| **Takvim donduruldu** — kod yerinde, üstüne iş yazılmaz; sahibi kendi kütüphanesini getirirse yalnızca ekran katmanı değişir | **ADR-034** |
-| **Ölçüm/karar oturumu açılmaz** — karar sahibine tek soruyla gelir, cevap yoksa en ucuz varsayım. Denetim yalnızca para fazından sonra | **ADR-033** |
-| **Faz 7 + 8 birleşti** (`/faz-08` → işaretçi), **Faz 9 kırpıldı** (`/faz-10 §0`'a indi), sıra değişti: para yoklamanın önüne geçti | `YOL-HARITASI.md` |
-| **Ders hakkı sayacı ters kayıt zincirine geçiyor** — Faz 6'nın en riskli açık kararı kapandı; migration para fazında | **ADR-036** |
-| **Paket kapatmada iki yol** — avans bırak / iade et, kullanıcı seçer (S6 cevabı) | **ADR-035** |
-| Kullanılabilirlik artık bir dosyanın işi; her kod oturumu §0'da onunla başlıyor | `docs/KULLANILABILIRLIK.md` |
+| **ADR-011 düştü — MVP çok öğretmenli.** `Tanımlar → Öğretmenler` sekmesi, `Tanımlar → Genel` (işletme ayarları) ve gerçek çakışma uyarısı `/faz-07 §0`'a girdi. **Şema değişmiyor, migration yok** | **ADR-037** |
+| **Takvime dar istisna** — öğretmen filtre ekseni + meta satırında ad. Gün görünümü tek sütun kalır; dondurma bunun dışında geçerli | **ADR-038** |
+| **Plan ekran envanterinden çıkmaz.** `EKRANLAR.md` referans oldu, plan kaynağı olmaktan çıktı; `/kapat`'a iki kontrol eklendi | **ADR-039** |
+| Öğretmen **hakedişi kapsam dışı kaldı** — sahibi çok öğretmen dedi, hakediş istemedi | `PRD.md §1` |
 
-**Üç açık soru cevaplandı:** S3 paket süresiz · S5 makbuz numarası otomatik+düzeltilebilir ·
-S6 avans/iade seçimli (PRD §9'da işaretlendi).
+**Ölçülen hata, kayda geçsin.** İki hasar somut:
 
-**Ölçülen israf, kayda geçsin:** yol haritasındaki adımların 6'sı kod yazmayan oturumdu
-(5 denetim + plan) ve `/faz-05c-karar` sorulmamış bir soru yüzünden vardı. ADR-033 bunu
-tekrarlanamaz hâle getiriyor.
+1. **`teacher` tablosunun tek satırı `'Öğretmen'` ve üç faz boyunca onu değiştirecek ekran
+   yoktu.** Gruplar listesinin `Öğretmen` kolonunda `Öğretmen` yazıyor.
+2. **`DENETIM-FAZ1 > C5` sessizce öldü.** *"`teacher_id`'yi yazan ekran yok → çakışma
+   uyarısı ölü doğuyor"* bulgusu Faz 5'e atanmıştı; 5A, 5B, 5C geçti, madde kapanmadı ve
+   bu dosyanın borç tablosuna **hiç girmedi** — takip bir denetim arşivinde duruyordu.
+
+Mekanizma ADR-039'da: plan `EKRANLAR.md`'den türetildiği için tanımlar/ayarlar "bir satır"
+sayılıp sona atıldı, takvim öne geçti. Bir önceki oturumun ölçtüğü israfla (6 kod yazmayan
+oturum) aynı aileden.
+
+**`DENETIM-FAZ1 > C` bölümü tarandı:** C1, C3, C4, C6, C7, C8 kod üzerinde kapanmış çıktı;
+C2 ve C9 faz komutlarında yazılı; açık olan tek madde C5'ti. **A ve B taranmadı** — borçta.
 
 ---
 
@@ -47,23 +53,44 @@ clippy + rustfmt + paket denetimi. CI dört işin dördünde yeşil, Windows `.m
 | Takvim — ay/hafta/gün, sürükle-bırak (**donduruldu**, ADR-034) | `pages/takvim/` |
 | Şema — 2 migration, checksum mühürlü; defter tarafı ADR-022 ile kapalı | `src-tauri/migrations/` |
 
-**Yok olan:** para. Fiyat tarifesi, paket, taksit, tahsilat, borçlu listesi, ekstre, makbuz —
-hiçbiri yazılmadı. Uygulamanın adındaki "tahsilat" henüz yok; sıradaki faz bu.
+**Yok olan iki şey:**
+
+1. **Para.** Tarife, paket, taksit, tahsilat, borçlu listesi, ekstre, makbuz — hiçbiri
+   yazılmadı. Uygulamanın adındaki "tahsilat" henüz yok.
+2. **Kurs sahibinin kendi programını tanımlaması.** Öğretmen ekleyemiyor, adını
+   değiştiremiyor; çalışma saatleri, ders süresi ve **devamsızlık politikası** sabit.
+   `repo/setting.rs`'te `set`/`update_existing` yazılı ama **yazan komut ve ekran yok**.
 
 ---
 
 ## Sıradaki oturum — `/faz-07`
 
-Sırası şu: **§0 aranabilir seçim listesi** (uzun öğrenci listesinden seçim para ekranlarının
-zorunlu girdisi) → **ADR-036 migration'ı ve kanıt testleri** → tarife → paket/taksit →
-tahakkuk → tüketim fonksiyonu → *(dikiş)* → tahsilat → borçlu → ekstre → makbuz.
+Sırası şu: **§0** — öğretmenler (0a) → çakışma uyarısı (0b) → işletme ayarları (0c) →
+takvim filtre ekseni (0d) → aranabilir seçim (0e) → *(dikiş §1)* → **ADR-036 migration'ı ve
+kanıt testleri** → tarife → paket/taksit → tahakkuk → tüketim fonksiyonu → *(dikiş §5)* →
+tahsilat → borçlu → ekstre → makbuz.
 
-Sığmazsa dikişten bölünür, **aynı komutla** devam edilir; arada denetim veya karar oturumu
-yok. Denetim yalnızca bu faz bittikten sonra.
+Sığmazsa iki dikişten birinde bölünür, **aynı komutla** devam edilir; arada denetim veya
+karar oturumu yok. Denetim yalnızca bu faz bittikten sonra.
+
+### Sahiplik kontrolü (ADR-039)
+
+*Bu faz bitince kurs sahibi hangi işi baştan sona yapabiliyor?* Öğrencisini ve grubunu
+tanımlar, **öğretmenlerini ve çalışma düzenini girer**, dersini planlar, **parasını takip
+eder**: tarife, paket, taksit, tahsilat, borçlu listesi, ekstre, makbuz.
+
+*Yapamadığı ne kalıyor?* Yoklama alamıyor (Faz 6 — paket tüketimi ekranı orada bağlanıyor),
+yedek alamıyor ve özet ekranı yok (Faz 10). **İkisi de plandaki bir faza ait; plan eksik
+değil.**
 
 ### Bu fazın en büyük riski
 
-**Kapsam ile para doğruluğu arasındaki gerilim.** `/faz-07` iki fazın birleşimi ve
+**§0 büyüdü ve para işini bastırabilir.** Beş alt maddesi var; hiçbiri zor değil ama
+toplamı bir oturum eder. Kural: **§0 para mantığından çalmaz.** §1'e geçmeden oturum
+şişerse `/kapat` çalıştır, aynı komutla devam et — §0'ı kısaltarak para işine yer açma,
+tersi de yok.
+
+**İkinci risk: kapsam ile para doğruluğu arasındaki gerilim.** `/faz-07` iki fazın birleşimi ve
 projenin en pahalı yanlış olan yeri: defter, tahakkuk, mahsup. Risk "yetişmez" değil,
 **yetiştirmeye çalışıp testi kısmak.** Üç sabit kural bunu tutuyor:
 
@@ -72,20 +99,19 @@ projenin en pahalı yanlış olan yeri: defter, tahakkuk, mahsup. Risk "yetişme
    ertelemek değil (`CLAUDE.md > Para`).
 3. Tıkanınca uydurma yok: buraya yaz ve **tek soruyla** sor (ADR-033).
 
-İkincil risk: bu oturumda kod yazılmadığı için **kontroller çalıştırılmadı.** Son yeşil
-ölçüm `519f1f7`'de: 481 test. `src/` ve `src-tauri/` bu oturumda hiç değişmedi, dolayısıyla
-sonuç geçerli sayılıyor — ama `/faz-07` işe `npm run check` ile başlamalı, varsayımla değil.
+Üçüncü risk: iki yönetici oturumudur **kontroller çalıştırılmadı** (kod yazılmadı; `src/`
+ve `src-tauri/` hiç değişmedi). Son yeşil ölçüm `519f1f7`'de: 481 test. `/faz-07` işe
+`npm run check` ile başlamalı, varsayımla değil.
 
 ---
 
 ## Ürün sahibinden beklenen iki şey
 
-1. **Windows testi.** `.msi` gönderildi; 5 maddelik liste Segoe UI metriklerini, DPI
-   ölçeklemeyi, kaydırma çubuğunu ve ICU verisini yokluyor. Cevap gelince bulgular buraya
-   ve ilgili faz komutuna girer. **Bu hâlâ tek gerçek Windows kanıtı** — CI ızgarayı
-   çalıştırmıyor, jsdom testleri ve paket derlemesi bu boşluğu kapatmıyor.
-2. **Kullanılabilirlik maddeleri.** `docs/KULLANILABILIRLIK.md` içinde boş bir liste
-   bekliyor; oraya yazılan her satır bir sonraki kod oturumunun §0'ı olur.
+1. **Windows testi.** `.msi` gönderildi; 5 maddelik liste Segoe UI metriklerini, DPI'ı,
+   kaydırma çubuğunu ve ICU verisini yokluyor. **Tek gerçek Windows kanıtı bu** — CI
+   ızgarayı çalıştırmıyor, jsdom ve paket derlemesi boşluğu kapatmıyor.
+2. **Kullanılabilirlik maddeleri.** `docs/KULLANILABILIRLIK.md`'ye yazılan her satır bir
+   sonraki kod oturumunun §0'ı olur.
 
 ---
 
@@ -96,7 +122,7 @@ sonuç geçerli sayılıyor — ama `/faz-07` işe `npm run check` ile başlamal
 
 | # | Soru | Hangi faz |
 |---|---|---|
-| S7 | "Devam oranı" hangi pencerede hesaplansın? | ~~Faz 9~~ → kapsam kırpıldı; Faz 4'ün varsayımı (tüm işlenen dersler, kartta yazılı) **kalıcı** kabul edildi. Faz 10'un özet şeridinde de aynı pencere kullanılır |
+| S7 | "Devam oranı" hangi pencerede? | Kapandı: Faz 4'ün varsayımı (tüm işlenen dersler) kalıcı; Faz 10 özeti de aynı pencereyi kullanır |
 | S9 | Bilgisayarındaki Windows sürümü ne? | Faz 10 öncesi |
 | S10 | Kod imzalama sertifikası alınacak mı? | Faz 10 — alınmazsa SmartScreen yönergesi `docs/KURULUM.md`'ye girer |
 
@@ -104,8 +130,13 @@ sonuç geçerli sayılıyor — ama `/faz-07` işe `npm run check` ile başlamal
 
 ## Bilinçli ertelenenler — hâlâ borç
 
+> **ADR-039:** kapanmamış denetim bulgusu bu tabloya girer. Denetim dosyaları arşivdir;
+> `DENETIM-FAZ1 > C5` tam olarak buraya yazılmadığı için üç faz kayboldu.
+
 | Ne | Nereye bağlı |
 |---|---|
+| `student_note.teacher_id` hep `NULL` yazılıyor — notun yazarı ayırt edilmiyor, hepsi "Ofis" (`repo/roster.rs:717`). Çok öğretmenlilikle anlam kazandı ama ADR-037'nin kapsamında değil | Faz 6 (notlar sekmesiyle) |
+| `DENETIM-FAZ1` **A ve B bölümleri kapanış açısından taranmadı** (C bölümü 2026-07-26'da tarandı ve kapandı). Düzeltmelerin çoğu Faz 2'de uygulanmış görünüyor ama doğrulanmadı | Para fazı denetimi (yalnızca doğrulama, kod değil) |
 | Öğrenci detayında `Kayıtlar` sekmesi yok | Faz 6 (`Dersler` sekmesiyle birlikte) |
 | Birebir şablonun düzenleme ekranı yok; tek yönetim yolu "Tüm seri" ile kaldırmak | Faz 6, öğrenci detayı (ADR-028'de not) |
 | Bugün ekranının yan panelinde borç bölümü "yakında" diyor | `/faz-07 §9` |
@@ -115,6 +146,5 @@ sonuç geçerli sayılıyor — ama `/faz-07` işe `npm run check` ile başlamal
 | Gün değişince ekran kendiliğinden tazelenmiyor | ADR-029'da kabul edilen sınır — kapanmadı, kapatılmayacak |
 | `checkout@v4` / `setup-node@v4` Node 20 hedefliyor, GitHub Node 24'e zorluyor | Faz 10'da eylem sürümleri yükseltilir |
 
-**Takvimden devreden maddeler artık borç değil, kapsam dışı** (ADR-034): sürükleme
-jestinin ekranda doğrulanması, kenarda kendiliğinden kaydırma, şeritlerin boşluğa
-genişlemesi.
+**Takvimden devreden maddeler borç değil, kapsam dışı** (ADR-034): sürükleme jestinin
+ekranda doğrulanması, kenarda kaydırma, şeritlerin genişlemesi. Filtre ekseni istisna (ADR-038).

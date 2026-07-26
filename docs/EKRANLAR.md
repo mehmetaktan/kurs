@@ -3,6 +3,12 @@
 `design-ref/` altındaki 4 tasarlanmış ekranın envanteri + MVP'de gereken ekranların listesi.
 Komponent adları `docs/TASARIM-SISTEMI.md` §6'daki envanterle aynıdır.
 
+> **Bu dosya bir referanstır, plan kaynağı değildir — ADR-039.** Bir ekran yapılırken
+> içeriği buradan okunur; **hangi ekranın ne zaman yapılacağı** buradan çıkarılmaz.
+> Envanterde her ekran bir satır, oysa sahibinin işinde biri "programı kullanamıyorum",
+> diğeri "daha güzel görünüyor" demek. Sıralamanın kaynağı `docs/YOL-HARITASI.md` ve
+> `docs/KULLANILABILIRLIK.md`.
+
 ---
 
 ## Gezinme
@@ -65,7 +71,7 @@ borçlu.*
 |---|---|
 | Saat | `session.starts_at` |
 | Ders | `subject.name · study_group.name` veya `· öğrenci adı`; altında `Grup` / `Birebir` |
-| Öğretmen | `teacher.full_name` — **ADR-011: tek öğretmen olduğu için bu kolon MVP'de kaldırılıyor** |
+| Öğretmen | `teacher.full_name` — ~~ADR-011'de kaldırılmıştı~~; **ADR-037 ile geri geliyor** (birden fazla öğretmen var) |
 | Öğrenci | `n öğrenci` — grupta üye sayısı, birebirde `1 öğrenci` |
 | Yoklama | üç durum: `✓ 6/6 katıldı` · **Yoklama al** düğmesi + "girilmedi" · "Bekleniyor" |
 
@@ -157,13 +163,18 @@ Dar sütunda meta satırı gizlenir.
 | Filtre sonuçsuz | "*X* için ders yok" | **Filtreyi temizle** |
 | Gün boş | "Bu gün için ders yok" / "Bu gün kapalı" | **Ders ekle** / — |
 
-### MVP sadeleştirmeleri (ADR-011)
+### MVP sadeleştirmeleri (~~ADR-011~~ → **ADR-037 / ADR-038**, 2026-07-26)
 
-- **Öğretmen filtresi kaldırılıyor** — tek öğretmen var.
-- **Gün görünümü tek sütun** olur (tasarımda öğretmen başına sütun açıyordu); saatler daha
-  geniş, blok içeriği tam görünür.
-- **Çakışma uyarısı önem kazanıyor:** tek öğretmen üst üste iki ders veremez. Tasarımdaki
-  gibi engellenmez ama kaydetmeden önce **onay diyaloğu** çıkar.
+ADR-011 düştü: kursta **birden fazla öğretmen var.** Güncel hâl:
+
+- **Öğretmen filtresi geri geliyor** — `pages/takvim/filters.ts`'e ikinci eksen olarak
+  (ADR-038'in izin verdiği dar istisna). Ders bloğunun meta satırında öğretmen adı görünür.
+- **Gün görünümü tek sütun kalıyor.** Öğretmen-başına-sütun düzeni kurulmaz — ızgara
+  geometrisini yeniden açmak dondurulmuş takvimin dışında (ADR-034).
+- **Çakışma uyarısı gerçekten çalışıyor:** aynı **öğretmen** aynı saatte iki derste
+  olamaz. Engellenmez, kaydetmeden önce **onay diyaloğu** çıkar. Bugüne kadar
+  `teacher_id` kontrole girmediği için ölü doğuyordu (`DENETIM-FAZ1 > C5`);
+  `/faz-07 §0b`'de kapanıyor.
 
 ---
 
@@ -319,6 +330,25 @@ Basit `DataTable` + satır içi düzenleme. Renk seçimi kategori paletinden (5 
 ### E8. Tanımlar → Tatil / kapalı günler
 `DataTable` (tarih · açıklama) + haftalık kapalı gün seçimi. Takvim buradan besleniyor.
 
+## Para fazı §0 — kurs sahibinin kendi programını tanımlaması
+
+> Bu iki ekran tasarımda ayrı çizilmemişti ve plan onları en sona atmıştı; **ADR-039**
+> bunun neden bir yönetim hatası olduğunu anlatıyor. Yapıldıkları yer `/faz-07 §0`.
+
+### E21. Tanımlar → Öğretmenler — **ADR-037**
+`DataTable` + ekle/düzenle. Kolonlar: ad · renk · telefon · e-posta · durum · eylem.
+Renk kategori paletinden. Arşivleme `deleted_at` ile, kullanıcıya "Arşivle".
+Boş durum pratikte görünmez — migration tek satır yazıyor — ama yine de yazılır.
+
+### E18. Tanımlar → Genel *(Faz 10'dan alındı)*
+Çalışma saatleri · slot ve varsayılan ders süresi · seans ufku · haftalık kapalı gün ·
+satır yoğunluğu · **devamsızlık politikası (2 satır — para politikası)** · paket geçerlilik
+gün sayısı · makbuz numarası öneki · yedek uyarı eşiği. Hepsi `setting` tablosuna yazar.
+
+> **Kurum adı bu ekranda YOK (ADR-024).** Derleme zamanı `config/kurum.json`'dan geliyor;
+> kurs sahibi değiştiremez, değişiklik yeniden derleme gerektirir. `receipt_next_no` ve
+> `last_backup_at` da yok — onları program yazar, kullanıcı değil.
+
 ## Faz 6 — Yoklama ve telafi
 
 ### E9. Yoklama paneli
@@ -377,15 +407,10 @@ Yeni 7. menü öğesi. `StatCard` şeridi (aylık tahsilat, işlenen ders, devam
 Grafik **gerekli değil** — tasarımda hiç grafik yok, sayı ve tablo dili hâkim.
 Boş: "Bu dönem için veri yok."
 
-## Faz 10 — Ayarlar ve yedekleme
+## Faz 10 — Yedekleme
 
-### E18. Tanımlar → Genel
-Çalışma saatleri · satır yoğunluğu · devamsızlık politikası · makbuz numarası öneki.
-Hepsi `setting` tablosuna yazar.
-
-> **Kurum adı bu ekranda YOK (ADR-024).** Derleme zamanı `config/kurum.json` dosyasından
-> geliyor; kurs sahibi değiştiremez, değişiklik yeniden derleme gerektirir. Burada kalan
-> her şey kurs sahibinin gerçekten değiştirdiği işletme değerleri.
+> **E18 buradan alındı** (2026-07-26): işletme ayarları para fazının §0'ına taşındı,
+> gerekçesi **ADR-037**. Tanım yukarıda, "Para fazı §0" başlığı altında.
 
 ### E19. Tanımlar → Yedekleme
 Son yedeklemeler listesi (`backup_log`) · **Şimdi yedekle** · **Geri yükle** (çift onaylı,

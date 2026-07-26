@@ -49,7 +49,8 @@ ekle ki sonraki oturumlar bilsin.
 - **`001_initial.sql` şemadan sonra başlangıç verisini de yazar** (seed değil — üretimde de
   gerekli, `VERI-MODELI.md §2` sonu):
   - `§1.2` tablosundaki 14 `setting` varsayılanı
-  - tek satırlık `teacher` (ADR-011). Bu satır seed'e konursa kurs sahibinin gerçek
+  - tek satırlık `teacher` (ADR-011; ADR-037 sonrası da doğru — bu satır artık
+    `Tanımlar → Öğretmenler`'in **ilk kaydı**). Bu satır seed'e konursa kurs sahibinin gerçek
     makinesinde `teacher` tablosu **sonsuza kadar boş kalır**.
 
 ## 4. Repository katmanı

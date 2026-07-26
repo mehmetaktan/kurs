@@ -33,6 +33,14 @@ komutla ikinci oturumda devam edilir. Dikiş yeri faz komutunda yazılıdır.
 > **Denetim oturumu** da yalnızca **para fazından sonra** açılır; diğer fazlar kendi
 > kapanışlarındaki kontrol listesiyle yeter.
 
+> **Plan ekran envanterinden çıkmaz — ADR-039.** `docs/EKRANLAR.md` bir **referanstır**:
+> bir ekran yapılırken içeriği oradan okunur, **sırası** oradan çıkarılmaz. Envanterde her
+> ekran bir satır, oysa sahibinin işinde biri *"programı kullanamıyorum"*, diğeri *"daha
+> güzel görünürdü"* demek. Bu fark kaybolduğu için tanımlar ve ayarlar en sona atıldı,
+> takvim öne geçti — ve `DENETIM-FAZ1 > C5` bir arşiv dosyasında üç faz boyunca kayboldu.
+> Sıranın kaynağı `docs/YOL-HARITASI.md` + `docs/KULLANILABILIRLIK.md`; `/kapat` iki
+> kontrolle bunu tutuyor.
+
 ### İki mod
 
 - **Kod oturumu** (`/faz-NN`): uygulama kodu yazılır. Kararlar sorgulanmaz, uygulanır.

@@ -70,7 +70,11 @@ boşsa `setting.default_session_minutes`, varsayılan 60).
 > görünür kılar. Aynı dil §6'daki çakışma uyarısıyla tutarlı: program ve kapasiteyle
 > ilgili her şey uyarır, para ve geçmişle ilgili her şey engeller (PRD §7 genel ilke).
 
-> **Öğretmen alanı (ADR-011).** `teacher` tablosu tek satır ve o satırı migration yazıyor.
+> **Öğretmen alanı (~~ADR-011~~ → ADR-037).** *2026-07-26 notu: bu faz bittikten sonra
+> ADR-011 düştü — kurs **çok öğretmenli.** Aşağıdaki "tek öğretmen" varsayımı tarihsel
+> kayıttır; öğretmen tanımlama ekranı `/faz-07 §0a`'da geldi.*
+>
+> `teacher` tablosu tek satır ve o satırı migration yazıyor.
 > Ama `teacher_id`'yi **yazan** bir ekran yoksa 5 tablodaki alan NULL kalır ve K-1/R3.11
 > çakışma uyarısı (`aynı öğretmen aynı saatte`) hiçbir zaman tetiklenmez — sessizce ölü doğar.
 > Grup ve seans formlarında öğretmen alanı **varsayılanı tek öğretmen olan, gizli olmayan**

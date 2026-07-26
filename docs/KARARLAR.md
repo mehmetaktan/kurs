@@ -145,7 +145,10 @@ Format: her ADR'de **Karar / Gerekçe / Sonuç / Durum**.
 
 **Sonuç.** Tek öğretmen olduğu için "aynı saatte iki ders" fiziksel olarak imkânsız — çakışma uyarısı önem kazanır ve kaydetmeden önce onay diyaloğu çıkar. `subject.color` kategori paletinin asıl kullanım yeri olur.
 
-**Durum.** Kabul edildi.
+**Durum. Değiştirildi (2026-07-26) — bkz. ADR-037.** Kararın dayandığı olgu ("kurs sahibi
+tek başına ders veriyor") ürün sahibine **hiç sorulmamıştı** ve yanlış çıktı: kursta birden
+fazla öğretmen var. Şema tarafı doğru kurulmuştu — tablo, `teacher_id` yabancı anahtarları
+ve form alanları yerinde, migration gerekmiyor. Değişen arayüz sadeleştirmesidir.
 
 ---
 
@@ -1038,6 +1041,8 @@ yanlışı ADR-033'te; sonucunun yanlışı yok. Bu yüzden ADR-031 `Kabul edild
 kapsamı bu ADR ile daralıyor.
 
 **Durum.** Kabul edildi (2026-07-26, ürün sahibinin kararı: "dondur, yerinde kalsın").
+**Kapsamı ADR-038 ile netleşti:** dondurma görsel/etkileşim işleri içindir; çok öğretmenli
+veri modeline uyum (filtre ekseni + meta satırında öğretmen adı) istisnadır.
 
 ---
 
@@ -1140,3 +1145,100 @@ aynı satırı iki kez ters kaydetme (ikincisi reddedilir) · `UPDATE` denemesi 
 
 **Durum.** Kabul edildi (2026-07-26). Uygulama `/faz-07`'de,
 `003_package_usage_reversal_chain.sql`.
+
+---
+
+## ADR-037 — MVP çok öğretmenli; öğretmen ve işletme ayarları ekranı para fazından önce gelir
+
+**Karar.** ADR-011 düşer. Kursta birden fazla öğretmen var (ürün sahibi, 2026-07-26).
+Uygulamaya **üç** iş girer, hepsi `/faz-07 §0`'da, para mantığından **önce**:
+
+1. **`Tanımlar → Öğretmenler` sekmesi** — listele, ekle, düzenle, arşivle
+   (ad, renk, telefon, e-posta, aktif). Tablo, `repo::people::insert_teacher` /
+   `update_teacher` ve `list_teachers` zaten var; eksik olan komut yüzeyi ve ekran.
+2. **`Tanımlar → Genel` sekmesi** — `setting` tablosunun kullanıcıya ait satırları.
+   `repo::setting::set` / `update_existing` yazılmış, `list_settings` okuyor;
+   **yazan komut ve ekran yok.**
+3. **K-1 çakışma uyarısı gerçekten çalışır** — `repo/schedule.rs`'teki çakışma kontrolü
+   `teacher_id`'ye göre daraltılır. Bugüne kadar ölü doğuyordu (`DENETIM-FAZ1 > C5`).
+
+**Gerekçe.** ADR-011 "tek öğretmen" olgusunu **varsaydı, sormadı** — tam olarak ADR-033'ün
+yasakladığı hata, bir ölçümde değil bir olguda. Bedeli üç yerde birikti:
+
+- Müşterinin makinesinde `teacher` tablosunda tek satır var ve adı harfi harfine
+  `'Öğretmen'` (`001_initial.sql:641`). Gruplar listesinin `Öğretmen` kolonunda
+  `Öğretmen` yazıyor ve **değiştirmenin hiçbir yolu yok.**
+- Migration'ın kendi yorumu (`:640`) *"Ad, Tanımlar → Genel ekranından değiştirilir"* diyor;
+  o ekran (E18) Faz 10'a, yani en sona bırakılmıştı.
+- Aynı ekran 15 `setting` satırını tutuyor. İkisi — `absence_excused_consumes_lesson` ve
+  `absence_unexcused_consumes_lesson` — **doğrudan para politikası** ve para fazının girdisi.
+  Kullanıcının değiştiremediği bir politikayı sabit sayıp üstüne defter kurmak, sonra
+  değiştirmek pahalı.
+
+**Sonuç.**
+
+- **Şema değişmiyor, migration yazılmıyor.** ADR-011'in "tabloyu kur, arayüzü sadeleştir"
+  kararı burada karşılığını verdi: geri dönüş bedeli sıfır. ADR-011 yanlış tahmini için
+  değil, **sorulmamış olduğu için** düşüyor.
+- Grup ve seans formlarındaki öğretmen alanı zaten yazıyor (`GroupForm`, `SessionForm`);
+  tek öğretmenlik varsayımı kaldırılır — tek aday otomatik seçilmez, alan gerçek bir seçim olur.
+- **Öğretmen hakedişi / maaş kapsam dışı kalır** (`PRD.md` §1). Ürün sahibi çok öğretmen
+  dedi, hakediş takibi **istemedi**. `teacher_payout` tablosu açılmaz.
+- `student_note.teacher_id` hâlâ `NULL` yazılıyor ("Ofis"); notun yazarını ayırmak bu
+  fazın işi değil, `DURUM.md` borç tablosuna girer.
+- Takvim için sınırlı istisna aşağıda.
+
+**Durum.** Kabul edildi (2026-07-26, ürün sahibinin cevabı).
+
+---
+
+## ADR-038 — Dondurulmuş takvim veri modeline uyar, ama geliştirilmez
+
+**Karar.** ADR-034'ün dondurması **görsel ve etkileşim işleri** içindir. Çok öğretmenli
+veri modeline uyum bunun dışındadır ve `/faz-07 §0`'da yapılır: takvime **öğretmen filtre
+ekseni** eklenir (`pages/takvim/filters.ts` — branş ekseninin birebir aynısı) ve ders
+bloğunun meta satırında öğretmen adı görünür. **Gün görünümü tek sütun kalır**;
+öğretmen-başına-sütun düzeni kurulmaz.
+
+**Gerekçe.** Dondurma kararının amacı takvime **oturum harcamamaktı**, takvimi yanlış
+bırakmak değil. Birden fazla öğretmenin dersi tek ızgarada filtresiz yığılırsa ekran
+okunamaz hâle gelir — bu ADR-034'ün önlemeye çalıştığı israfın değil, ürün sahibinin
+şikâyet ettiği kullanılabilirlik sorununun tam örneğidir. Filtre ekseni mevcut desenin
+tekrarı ve tek dosya; sütun geometrisi ise ızgara matematiğini yeniden açmak demek —
+sınır oraya çekiliyor.
+
+**Sonuç.** `src/pages/takvim/` bu üç madde dışında hâlâ kapalı. Ürün sahibi kendi takvim
+kütüphanesini getirirse filtre ekseni de onunla birlikte yeniden gelir; ADR-034'ün
+"değişim noktası yalnızca ekran katmanı" cümlesi geçerli kalır.
+
+**Durum.** Kabul edildi (2026-07-26). ADR-034 `Kabul edildi` kalır, kapsamı bu ADR ile
+netleşir.
+
+---
+
+## ADR-039 — Plan ekran envanterinden değil, sahibinin yapamadığı işten çıkar
+
+**Karar.** Faz planı ve faz komutları `docs/EKRANLAR.md`'yi (tasarımdan türeyen ekran
+listesi) **kapsam kaynağı olarak kullanmaz**. Her faz komutunun §0'ı tek soruyla açılır:
+**"Bu faz bitince kurs sahibi hangi işi baştan sona yapabiliyor, ve yapamadığı ne kaldı?"**
+Ayrıca: **kapanmamış her denetim bulgusu `docs/DURUM.md`'nin borç tablosuna geçer** —
+denetim dosyaları arşivdir, takip yüzeyi değildir.
+
+**Gerekçe.** İki somut hasar ölçüldü (2026-07-26):
+
+- **Tanımlar/ayarlar en sona atıldı, takvim öne alındı.** Ekran envanterinde ikisi de
+  birer satır; sahibinin işinde biri "programı hiç kullanamıyorum" (öğretmen adı, çalışma
+  saatleri, devamsızlık politikası), diğeri "daha güzel görünüyor". Envanter bu farkı
+  taşımıyor, o yüzden sıralama görsel cazibeye göre oluştu: takvim üç oturum + bir karar
+  oturumu aldı, ayarlar hiç yapılmadı.
+- **`DENETIM-FAZ1 > C5` sessizce öldü.** *"`teacher_id`'yi yazan hiçbir ekran yok →
+  çakışma uyarısı ölü doğuyor"* bulgusu Faz 5'e atanmıştı. 5A, 5B ve 5C geçti, madde
+  kapanmadı ve `DURUM.md`'nin borç tablosuna **hiç girmedi** — çünkü takip, canlı bir
+  listede değil bir denetim arşivinde duruyordu.
+
+**Sonuç.** `EKRANLAR.md` bir **referans** olarak kalır (bir ekran yapılırken içeriği oradan
+okunur), **plan kaynağı** olmaktan çıkar. Sıralamanın kaynağı `docs/YOL-HARITASI.md` ve
+`docs/KULLANILABILIRLIK.md`'dir. `/kapat` komutu bu iki kontrolü kapanış listesine ekler.
+
+**Durum.** Kabul edildi (2026-07-26, ürün sahibinin *"sanki sen yönetmeden çok tema
+yönetiyorsun"* itirazı üzerine). ADR-033'ün süreç ailesindendir.

@@ -67,15 +67,23 @@ tablolarında da bağlayıcı: arama/filtre Rust'ta, Türkçe sıralama ve sayfa
 - Yedek klasörü **kullanıcının bulabileceği bir yerde** olsun (Belgeler altı gibi),
   `%APPDATA%\Roaming` içinde değil — orası gizli klasör ve OneDrive kapsamı dışında kalabilir
 
-## 3. Ayarlar ekranı
+## 3. Ayarlar ekranı — **`/faz-07 §0c`'ye taşındı**
 
-Yedek klasörü, varsayılan tarife, varsayılan ders süresi, yoğunluk/tema tercihi.
+`Tanımlar → Genel` (E18) bu fazdan çıktı ve **para fazının §0'ına** alındı (ADR-037):
+kurs sahibi çalışma saatlerini ve devamsızlık politikasını değiştiremeden para mantığı
+kurulamıyordu, üstelik ekranı yapılmamış bir tabloyu (`setting`) en sona bırakmak
+ADR-039'un anlattığı hatanın ta kendisiydi.
 
-> ⚠️ **Kurum adı, adres, logo ve makbuz başlığı Ayarlar'a KONMAZ** — ADR-024: kurum kimliği
-> `config/kurum.json`'dan **derleme anında** gömülüyor ve `setting.institution_name` satırı
-> şemada durup **okunmuyor**. Bu komut eskiden "kurs adı, logo, adres Ayarlar'dan" diyordu;
-> ADR-024'ten önce yazılmıştı. Teslim öncesi müşteriye özel değerleri `kurum.json`'da
-> düzenlemek `docs/KURULUM.md`'nin değil **senin** işin (§7'nin kontrol listesine yaz).
+Bu fazda geriye **tek bir ayar satırı** kalıyor ve yeri `Tanımlar → Yedekleme`'dir (§2):
+
+- **Yedek klasörü** ve `backup_warn_days` — ikisi de yedekleme ekranında, ayrı bir
+  Ayarlar sekmesi açılmadan.
+
+> ⚠️ **Kurum adı, adres, logo ve makbuz başlığı hiçbir ayar ekranına KONMAZ** — ADR-024:
+> kurum kimliği `config/kurum.json`'dan **derleme anında** gömülüyor ve
+> `setting.institution_name` satırı şemada durup **okunmuyor**. Teslim öncesi müşteriye
+> özel değerleri `kurum.json`'da düzenlemek `docs/KURULUM.md`'nin değil **senin** işin
+> (§7'nin kontrol listesine yaz).
 
 ## 4. Hata dayanıklılığı
 

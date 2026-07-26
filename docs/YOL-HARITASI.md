@@ -13,13 +13,22 @@ açılmıyor (ADR-033).
 
 | Sıra | Faz | Komut | Ne çıkar |
 |---|---|---|---|
-| **1** | **Para** — fiyat tarifesi, paket/taksit, tahsilat, borçlu listesi, ekstre, makbuz PDF (eski 7 + 8) | `/faz-07` | Program ilk kez **para takip ediyor**. §0'da aranabilir seçim listesi |
+| **1** | **Para** — fiyat tarifesi, paket/taksit, tahsilat, borçlu listesi, ekstre, makbuz PDF (eski 7 + 8) | `/faz-07` | Program ilk kez **para takip ediyor**. §0'da önce **öğretmen ve işletme ayarları** (ADR-037) |
 | **2** | **Yoklama & Telafi** — yoklama girişi, devamsızlık, telafi dersi, **paket tüketiminin bağlanması** | `/faz-06` | Ders sonrası rutini kapanır; ADR-015'in ders hakkı sayacı ekrana bağlanır |
 | **3** | **Teslim** — özet ekranı (kırpılmış Faz 9), yedekleme, hata dayanıklılığı, kurulum, kılavuz | `/faz-10` | Kurs sahibinin kullandığı hâl |
 
-**Sıra 1 sığmazsa** ikiye bölünür ama **yeni komut açılmaz**: dikiş yeri `/faz-07 §5`
-(tahsilat) — öncesi tarife + paket + tahakkuk, sonrası tahsilat + ekstre + makbuz. Aynı
-komutla ikinci oturumda devam edilir, arada denetim veya karar oturumu **yok**.
+**Sıra 1 sığmazsa** bölünür ama **yeni komut açılmaz**. İki dikiş yeri var:
+`/faz-07 §1` (öncesi §0 — öğretmenler, ayarlar, çakışma uyarısı, aranabilir seçim) ve
+`/faz-07 §5` (öncesi tarife + paket + tahakkuk, sonrası tahsilat + ekstre + makbuz).
+Aynı komutla devam edilir, arada denetim veya karar oturumu **yok**.
+
+### Sıra 1'in §0'ı neden var
+
+Kurs sahibi bugün programında **hiçbir işletme değerini değiştiremiyor**: öğretmenin adı
+migration'dan gelen `'Öğretmen'`, çalışma saatleri sabit, devamsızlık politikası sabit.
+Sonuncusu para mantığının doğrudan girdisi — kullanıcının değiştiremediği bir politikayı
+sabit sayıp üstüne defter kurmak, sonra değiştirmek pahalı. Ayrıntı: **ADR-037**, hata
+analizi: **ADR-039**.
 
 **Denetim** yalnızca Sıra 1'den sonra (para mantığı — `CLAUDE.md`'nin kendi istisnası).
 Sıra 2 ve 3 kendi kapanışlarındaki kontrol listesiyle yeter.

@@ -49,9 +49,11 @@ Gerçek Windows bilinmeyenleri motor semantiği değil, şunlar:
 
 - **Haftalık ızgara** (ana görünüm)
 - **Aylık genel bakış**
-- **Günlük liste** — ADR-011: tek sütun, öğretmen başına sütun **yok**
+- **Günlük liste** — tek sütun, öğretmen başına sütun **yok** (ADR-011; ADR-037 sonrası
+  da böyle kalıyor — ADR-038 yalnızca filtre eksenine izin veriyor)
 - Branş rengine göre ayrım (`subject.color`, 5 renkli kategori paleti), grup/birebir ayrımı
-- **Öğretmen filtresi kurulmaz** (ADR-011: tek öğretmen)
+- **Öğretmen filtresi kurulmaz** (ADR-011) — *2026-07-26: ADR-011 düştü, filtre `/faz-07 §0d`'de
+  ekleniyor (ADR-038). Bu faz kapandığı için burada geriye dönük değişiklik yapılmaz.*
 
 Dört ayrı boş durum (`EKRANLAR §149`): ilk kullanım · hafta tamamen tatil · filtre
 sonuçsuz · gün boş. Tek bir "kayıt yok" hepsini anlatmaz.
