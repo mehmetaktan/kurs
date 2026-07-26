@@ -690,3 +690,49 @@ fn tahsilat_iptali_ters_kayit_yazar_mahsuplari_arsivler_odemeyi_silmez() {
     );
     common::assert_ledger_invariant(&conn);
 }
+
+#[test]
+fn cari_ekstre_tarih_filtresinde_acilis_bakiyesini_korur() {
+    let conn = common::conn();
+    let student_id = common::student(&conn, "Ekstre Öğrencisi");
+    common::ledger(&conn, student_id, "2026-02-01", "session_charge", -100_000);
+    common::ledger(&conn, student_id, "2026-03-05", "payment", 40_000);
+    common::ledger(&conn, student_id, "2026-03-10", "session_charge", -25_000);
+
+    let rows = repo::finance::statement_rows(
+        &conn,
+        &repo::finance::StatementQuery {
+            student_id,
+            from: Some("2026-03-01".into()),
+            to: Some("2026-03-31".into()),
+        },
+    )
+    .unwrap();
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0].credit_kurus, 40_000);
+    assert_eq!(rows[0].balance_kurus, -60_000, "Şubat devri korunmalı");
+    assert_eq!(rows[1].debit_kurus, 25_000);
+    assert_eq!(rows[1].balance_kurus, -85_000);
+}
+
+#[test]
+fn cari_ekstre_csvsi_bomlu_turkce_ve_excel_icin_kacisli() {
+    let rows = vec![repo::finance::StatementRow {
+        entry_id: 1,
+        entry_date: "2026-03-05".into(),
+        kind: "payment".into(),
+        memo: Some("Öğrenci; \"İpek\" tahsilatı".into()),
+        debit_kurus: 0,
+        credit_kurus: 125_050,
+        balance_kurus: 125_050,
+        payment_id: Some(1),
+        payment_cancelled: false,
+    }];
+    let csv = repo::finance::statement_csv(&rows);
+
+    assert!(csv.starts_with(&[0xef, 0xbb, 0xbf]));
+    let text = String::from_utf8(csv).unwrap();
+    assert!(text.contains("Açıklama;Borç;Alacak;Bakiye"));
+    assert!(text.contains("\"Öğrenci; \"\"İpek\"\" tahsilatı\""));
+    assert!(text.contains("1.250,50"));
+}

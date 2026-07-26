@@ -254,6 +254,32 @@ export function cancelPayment(paymentId: number): Promise<number> {
   return call<number>('cancel_payment', { paymentId })
 }
 
+export interface StatementQuery {
+  studentId: number
+  from: string | null
+  to: string | null
+}
+
+export interface StatementRow {
+  entryId: number
+  entryDate: string
+  kind: 'session_charge' | 'installment_charge' | 'payment' | 'reversal' | 'adjustment'
+  memo: string | null
+  debitKurus: number
+  creditKurus: number
+  balanceKurus: number
+  paymentId: number | null
+  paymentCancelled: boolean
+}
+
+export function fetchStatementRows(query: StatementQuery): Promise<StatementRow[]> {
+  return call<StatementRow[]>('statement_rows', { query })
+}
+
+export function exportStatementCsv(query: StatementQuery): Promise<string> {
+  return call<string>('export_statement_csv', { query })
+}
+
 // ─── Faz 4 — öğrenci ve veli ──────────────────────────────────────────────────
 //
 // Tipler `src-tauri/src/repo/roster.rs` ile birebir (`rename_all = "camelCase"`).

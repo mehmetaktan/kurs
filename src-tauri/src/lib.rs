@@ -166,6 +166,8 @@ pub fn run() {
             commands::suggest_payment_allocations,
             commands::record_payment,
             commands::cancel_payment,
+            commands::statement_rows,
+            commands::export_statement_csv,
             // Faz 4 — öğrenci ve veli
             commands::student_list,
             commands::student_detail,

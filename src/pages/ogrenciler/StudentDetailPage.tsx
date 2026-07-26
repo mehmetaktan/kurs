@@ -37,6 +37,7 @@ import {
 } from '../../ui'
 import { StudentForm } from './StudentForm'
 import { PackageSaleModal } from './PackageSaleModal'
+import { StatementPanel } from '../odemeler/StatementPanel'
 import styles from './Students.module.css'
 
 type DetailTab = 'info' | 'lessons' | 'payments' | 'notes'
@@ -236,12 +237,7 @@ export function StudentDetailPage({ studentId }: { studentId: number }) {
               body={tr.students.detail.soon.lessonsBody}
             />
           )}
-          {tab === 'payments' && (
-            <EmptyState
-              title={tr.students.detail.soon.paymentsTitle}
-              body={tr.students.detail.soon.paymentsBody}
-            />
-          )}
+          {tab === 'payments' && <StatementPanel studentId={student.id} />}
 
           {tab === 'notes' && (
             <NotesTab

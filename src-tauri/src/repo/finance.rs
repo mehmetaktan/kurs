@@ -1535,6 +1535,141 @@ pub fn ledger_of(conn: &Connection, student_id: i64) -> AppResult<Vec<LedgerEntr
     Ok(out)
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StatementQuery {
+    pub student_id: i64,
+    pub from: Option<String>,
+    pub to: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StatementRow {
+    pub entry_id: i64,
+    pub entry_date: String,
+    pub kind: String,
+    pub memo: Option<String>,
+    pub debit_kurus: i64,
+    pub credit_kurus: i64,
+    pub balance_kurus: i64,
+    pub payment_id: Option<i64>,
+    pub payment_cancelled: bool,
+}
+
+/// Cari ekstreyi tüm defter üzerinden yürüyen bakiye hesaplayarak üretir. Tarih filtresi
+/// sonradan uygulanır; böylece aralık başındaki devir kaybolmaz (ADR-004).
+pub fn statement_rows(conn: &Connection, query: &StatementQuery) -> AppResult<Vec<StatementRow>> {
+    if let Some(from) = query.from.as_deref() {
+        parse_day(from, "statement.from")?;
+    }
+    if let Some(to) = query.to.as_deref() {
+        parse_day(to, "statement.to")?;
+    }
+    if matches!((&query.from, &query.to), (Some(from), Some(to)) if from > to) {
+        return Err(AppError::new(
+            "statement.range",
+            "Başlangıç tarihi bitiş tarihinden sonra olamaz. Tarih aralığını düzeltin.",
+        ));
+    }
+    let mut stmt = conn.prepare(
+        "SELECT l.id, l.entry_date, l.kind, l.memo, l.amount, l.payment_id, \
+                CASE WHEN l.kind = 'payment' THEN EXISTS( \
+                  SELECT 1 FROM ledger_entry r WHERE r.reverses_id = l.id \
+                    AND r.deleted_at IS NULL \
+                ) ELSE 0 END \
+         FROM ledger_entry l \
+         WHERE l.student_id = ?1 AND l.deleted_at IS NULL \
+         ORDER BY l.entry_date, l.id",
+    )?;
+    let rows = stmt.query_map([query.student_id], |row| {
+        Ok((
+            row.get::<_, i64>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+            row.get::<_, Option<String>>(3)?,
+            row.get::<_, i64>(4)?,
+            row.get::<_, Option<i64>>(5)?,
+            row.get::<_, bool>(6)?,
+        ))
+    })?;
+    let mut balance = 0_i64;
+    let mut out = Vec::new();
+    for row in rows {
+        let (entry_id, entry_date, kind, memo, amount, payment_id, payment_cancelled) = row?;
+        balance = balance.checked_add(amount).ok_or_else(|| {
+            AppError::new(
+                "statement.balance",
+                "Cari ekstre bakiyesi hesaplanamadı. Defter kayıtlarını kontrol edin.",
+            )
+        })?;
+        let in_range = query.from.as_ref().is_none_or(|from| &entry_date >= from)
+            && query.to.as_ref().is_none_or(|to| &entry_date <= to);
+        if !in_range {
+            continue;
+        }
+        let (debit_kurus, credit_kurus) = if amount < 0 {
+            (
+                amount.checked_neg().ok_or_else(|| {
+                    AppError::new(
+                        "statement.amount",
+                        "Defter tutarı gösterilemedi. Defter kayıtlarını kontrol edin.",
+                    )
+                })?,
+                0,
+            )
+        } else {
+            (0, amount)
+        };
+        out.push(StatementRow {
+            entry_id,
+            entry_date,
+            kind,
+            memo,
+            debit_kurus,
+            credit_kurus,
+            balance_kurus: balance,
+            payment_id,
+            payment_cancelled,
+        });
+    }
+    Ok(out)
+}
+
+/// Excel'in Türkçe karakterleri doğru açması için UTF-8 BOM'lu cari ekstre CSV'si.
+pub fn statement_csv(rows: &[StatementRow]) -> Vec<u8> {
+    let mut csv = String::from("\u{feff}Tarih;Açıklama;Borç;Alacak;Bakiye\r\n");
+    for row in rows {
+        let description = row.memo.as_deref().unwrap_or(match row.kind.as_str() {
+            "session_charge" => "Ders ücreti",
+            "installment_charge" => "Taksit",
+            "payment" => "Tahsilat",
+            "reversal" => "İptal / düzeltme",
+            _ => "Düzeltme",
+        });
+        csv.push_str(&format!(
+            "{};{};{};{};{}\r\n",
+            csv_cell(&row.entry_date),
+            csv_cell(description),
+            crate::money::format_kurus(row.debit_kurus),
+            crate::money::format_kurus(row.credit_kurus),
+            crate::money::format_kurus(row.balance_kurus),
+        ));
+    }
+    csv.into_bytes()
+}
+
+fn csv_cell(value: &str) -> String {
+    if value
+        .chars()
+        .any(|ch| matches!(ch, ';' | '"' | '\r' | '\n'))
+    {
+        format!("\"{}\"", value.replace('"', "\"\""))
+    } else {
+        value.to_string()
+    }
+}
+
 /// Paketsiz öğrencinin işlenen dersini borçlandırır. Mazeret politikası ayardan okunur;
 /// telafi dersi ikinci kez ücretlenmez. Daha önce ters kaydedilmiş bir ücret varsa yeni
 /// başlık açmak yerine ters kaydın tersini yazar (`VERI-MODELI §4`).

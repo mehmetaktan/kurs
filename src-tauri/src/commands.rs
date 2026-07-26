@@ -197,6 +197,57 @@ pub fn cancel_payment(
     state.with_conn(|conn| repo::finance::cancel_payment(conn, payment_id, &day))
 }
 
+#[tauri::command]
+pub fn statement_rows(
+    state: State<'_, AppState>,
+    query: repo::finance::StatementQuery,
+) -> AppResult<Vec<repo::finance::StatementRow>> {
+    state.with_conn(|conn| repo::finance::statement_rows(conn, &query))
+}
+
+#[tauri::command]
+pub fn export_statement_csv(
+    state: State<'_, AppState>,
+    query: repo::finance::StatementQuery,
+) -> AppResult<String> {
+    let rows = state.with_conn(|conn| repo::finance::statement_rows(conn, &query))?;
+    let parent = state.db_path.parent().ok_or_else(|| {
+        crate::error::AppError::new(
+            "export_path",
+            "Dışa aktarma klasörü bulunamadı. Programı kapatıp yeniden açın.",
+        )
+    })?;
+    let export_dir = parent.join("exports");
+    std::fs::create_dir_all(&export_dir).map_err(|err| {
+        eprintln!("[kurs] dışa aktarma klasörü oluşturulamadı: {err}");
+        crate::error::AppError::new(
+            "export_directory",
+            "Dışa aktarma klasörü oluşturulamadı. Disk alanını ve klasör izinlerini kontrol edin.",
+        )
+    })?;
+    let stamp = clock::now_local().replace(['-', ':', ' '], "");
+    let stem = format!("cari-ekstre-{}-{stamp}", query.student_id);
+    let mut path = export_dir.join(format!("{stem}.csv"));
+    let mut suffix = 2_i64;
+    while path.exists() {
+        path = export_dir.join(format!("{stem}-{suffix}.csv"));
+        suffix = suffix.checked_add(1).ok_or_else(|| {
+            crate::error::AppError::new(
+                "export_name",
+                "Dışa aktarma dosyası adlandırılamadı. Eski dışa aktarımları başka klasöre taşıyın.",
+            )
+        })?;
+    }
+    std::fs::write(&path, repo::finance::statement_csv(&rows)).map_err(|err| {
+        eprintln!("[kurs] cari ekstre CSV yazılamadı: {err}");
+        crate::error::AppError::new(
+            "export_write",
+            "Cari ekstre kaydedilemedi. Disk alanını ve klasör izinlerini kontrol edin.",
+        )
+    })?;
+    Ok(path.display().to_string())
+}
+
 // ---------------------------------------------------------------------------
 // Faz 4 — öğrenci ve veli
 // ---------------------------------------------------------------------------
