@@ -942,6 +942,41 @@ export const tr = {
     },
   },
 
+  // Faz 6 §1 — yoklama paneli (E9, PRD R2.1–R2.4).
+  attendance: {
+    title: 'Yoklama',
+    open: 'Yoklama al',
+    edit: 'Yoklamayı aç',
+    allPresent: 'Hepsi geldi',
+    statusLabel: 'Yoklama durumu',
+    status: {
+      present: 'Geldi',
+      excused: 'Mazeretli',
+      unexcused: 'Mazeretsiz',
+      cancelled: 'İptal',
+    },
+    note: 'Kısa not',
+    notePlaceholder: 'İsteğe bağlı',
+    empty: 'Bu derse kayıtlı öğrenci yok',
+    emptyBody: 'Grubun bu ders tarihindeki katılım kayıtlarını kontrol edin.',
+    effect: {
+      pending: 'Etkiyi görmek için her öğrencinin durumunu seçin.',
+      lessonCreditsConsume: 'ders hakkı düşecek',
+      lessonCreditsRestore: 'ders hakkı geri verilecek',
+      debtAdd: 'borç yazılacak',
+      debtRemove: 'borç silinecek',
+      unchanged: 'Ders hakkı ve borç değişmeyecek.',
+      separator: ', ',
+      period: '.',
+    },
+    discardTitle: 'Kaydedilmemiş yoklama değişiklikleri var',
+    discardBody: 'Paneli kapatırsanız yaptığınız seçimler ve notlar kaybolur.',
+    discardConfirm: 'Kaydetmeden kapat',
+    discardHint: 'Yoklama değişiklikleri silinir.',
+    keepEditing: 'Yoklamaya dön',
+    saved: 'Yoklama kaydedildi.',
+  },
+
   // Faz 5B — ders ekle/düzenle (E3), seans işlemleri ve şablondan oluştur (E6).
   sessions: {
     form: {

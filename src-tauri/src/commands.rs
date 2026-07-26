@@ -16,6 +16,7 @@ use crate::model::{
     ClosedDay, Guardian, InstallmentOpen, PriceRule, Setting, Student, StudentBalance, StudentDebt,
     StudyGroup, Subject, Teacher,
 };
+use crate::repo::attendance::{AttendanceDetail, SaveAttendanceInput, SaveAttendanceReport};
 use crate::repo::finance::{
     PackageCloseMode, PackageCloseReport, PackageOverview, PackageSaleInput,
     PaymentAllocationInput, PaymentInput, PaymentReport, PriceRuleInput,
@@ -671,6 +672,27 @@ pub fn day_sessions(
         let day = day.clone().unwrap_or_else(clock::today_local_string);
         repo::schedule::day_rows(conn, &day)
     })
+}
+
+// ---------------------------------------------------------------------------
+// Faz 6 §1 — yoklama paneli
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+pub fn attendance_detail(
+    state: State<'_, AppState>,
+    session_id: i64,
+    today: String,
+) -> AppResult<AttendanceDetail> {
+    state.with_conn(|conn| repo::attendance::attendance_detail(conn, session_id, &today))
+}
+
+#[tauri::command]
+pub fn save_attendance(
+    state: State<'_, AppState>,
+    input: SaveAttendanceInput,
+) -> AppResult<SaveAttendanceReport> {
+    state.with_conn(|conn| repo::attendance::save_attendance(conn, &input))
 }
 
 /// Haftalık program tanımlı mı — Bugün ekranının iki boş durumunu ayırır (R1.7).

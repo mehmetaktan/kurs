@@ -248,6 +248,29 @@ pub fn resolve_unit_price(conn: &Connection, attendance_id: i64) -> AppResult<i6
             )
         })?;
 
+    resolve_session_unit_price(
+        conn,
+        student_id,
+        subject_id,
+        group_id,
+        &session_day,
+        session_price,
+    )
+}
+
+/// Henüz `attendance` satırı oluşmadan aynı ücret çözüm zincirini kullanır.
+///
+/// Yoklama önizlemesi bu fonksiyonu çağırır; kaydetme yolu ise `resolve_unit_price`
+/// üzerinden yine buraya gelir. Böylece ekrandaki borç özetiyle gerçek defter yazımı
+/// iki ayrı fiyat kuralı geliştiremez.
+fn resolve_session_unit_price(
+    conn: &Connection,
+    student_id: i64,
+    subject_id: i64,
+    group_id: Option<i64>,
+    session_day: &str,
+    session_price: Option<i64>,
+) -> AppResult<i64> {
     let mut stmt = conn.prepare(
         "SELECT unit_price FROM enrollment \
          WHERE student_id = ?1 AND subject_id = ?2 AND pricing_model = 'per_session' \
@@ -273,6 +296,140 @@ pub fn resolve_unit_price(conn: &Connection, attendance_id: i64) -> AppResult<i6
             format!("Bu ders için birden fazla geçerli kayıt bulundu. Öğrencinin {session_day} tarihindeki kayıt aralıklarını düzeltin."),
         )),
     }
+}
+
+/// Kaydedilmemiş bir yoklama seçiminin, durum tüketim doğuruyorsa yaratacağı temel
+/// finans etkisi. Durum politikası `repo::attendance` içinde ayarlardan okunur; burada
+/// yalnızca öğrencinin **paket mi, ders başı mı** olduğu tek finans kaynağından çözülür.
+///
+/// Hedef ve mevcut ders hakkı alanları adettir; borç alanları kuruştur. Bu fonksiyon
+/// salt okunurdur. Faz 6 §2 aynı üretim yazma yolunu (`consume_package_credit` /
+/// `charge_session`) mevcut `save_attendance` transaction'ına bağlayacaktır.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AttendanceFinancialPreview {
+    /// Seçilen durum tüketim doğurursa hedefte tüketilmiş olacak paket hakkı.
+    pub lesson_credits_if_consumed: i64,
+    /// Seçilen durum tüketim doğurursa hedefte etkin olacak ders borcu.
+    pub debt_if_consumed_kurus: i64,
+    /// Zincirin şu an etkin tuttuğu paket tüketimi (0 veya 1).
+    pub current_lesson_credits_consumed: i64,
+    /// Zincirin şu an etkin tuttuğu ders borcu.
+    pub current_debt_kurus: i64,
+}
+
+pub fn preview_attendance_financials(
+    conn: &Connection,
+    session_id: i64,
+    student_id: i64,
+    attendance_id: Option<i64>,
+    today: &str,
+) -> AppResult<AttendanceFinancialPreview> {
+    let (subject_id, group_id, session_day, session_price, is_makeup): (
+        i64,
+        Option<i64>,
+        String,
+        Option<i64>,
+        bool,
+    ) = conn
+        .query_row(
+            "SELECT subject_id, study_group_id, session_date, unit_price, is_makeup \
+             FROM session WHERE id = ?1 AND deleted_at IS NULL",
+            [session_id],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                ))
+            },
+        )
+        .map_err(|_| {
+            AppError::new(
+                "session_not_found",
+                "Bu ders bulunamadı. Bugün listesini yenileyip yeniden deneyin.",
+            )
+        })?;
+
+    if is_makeup {
+        return Ok(AttendanceFinancialPreview {
+            lesson_credits_if_consumed: 0,
+            debt_if_consumed_kurus: 0,
+            current_lesson_credits_consumed: 0,
+            current_debt_kurus: 0,
+        });
+    }
+    // Düzeltme için açılan eski yoklamada öğrencinin bugünkü paketi sınıflandırmayı
+    // değiştiremez. Önceden hangi sayaçta başlık açıldıysa önizleme de onu temel alır.
+    if let Some(attendance_id) = attendance_id {
+        let package_head: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM package_usage \
+                           WHERE attendance_id = ?1 AND reverses_id IS NULL \
+                             AND deleted_at IS NULL)",
+            [attendance_id],
+            |row| row.get(0),
+        )?;
+        if package_head {
+            let current =
+                usage_tail(conn, attendance_id)?.is_some_and(|tail| tail.delta == -1) as i64;
+            return Ok(AttendanceFinancialPreview {
+                lesson_credits_if_consumed: 1,
+                debt_if_consumed_kurus: 0,
+                current_lesson_credits_consumed: current,
+                current_debt_kurus: 0,
+            });
+        }
+        let charged: Option<i64> = conn
+            .query_row(
+                "SELECT amount FROM ledger_entry \
+                 WHERE attendance_id = ?1 AND kind = 'session_charge' \
+                   AND reverses_id IS NULL AND deleted_at IS NULL",
+                [attendance_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        if let Some(amount) = charged {
+            let debt_kurus = amount.checked_abs().ok_or_else(|| {
+                AppError::new(
+                    "session.amount",
+                    "Ders ücreti önizlenemedi. Tarifedeki birim ücreti kontrol edin.",
+                )
+            })?;
+            let current_debt_kurus = session_charge_tail(conn, attendance_id)?
+                .filter(|(_, tail_amount)| *tail_amount < 0)
+                .map(|_| debt_kurus)
+                .unwrap_or(0);
+            return Ok(AttendanceFinancialPreview {
+                lesson_credits_if_consumed: 0,
+                debt_if_consumed_kurus: debt_kurus,
+                current_lesson_credits_consumed: 0,
+                current_debt_kurus,
+            });
+        }
+    }
+    if !crate::repo::views::active_packages(conn, student_id, today)?.is_empty() {
+        return Ok(AttendanceFinancialPreview {
+            lesson_credits_if_consumed: 1,
+            debt_if_consumed_kurus: 0,
+            current_lesson_credits_consumed: 0,
+            current_debt_kurus: 0,
+        });
+    }
+
+    Ok(AttendanceFinancialPreview {
+        lesson_credits_if_consumed: 0,
+        debt_if_consumed_kurus: resolve_session_unit_price(
+            conn,
+            student_id,
+            subject_id,
+            group_id,
+            &session_day,
+            session_price,
+        )?,
+        current_lesson_credits_consumed: 0,
+        current_debt_kurus: 0,
+    })
 }
 
 fn validate_price_rule(input: &PriceRuleInput) -> AppResult<()> {

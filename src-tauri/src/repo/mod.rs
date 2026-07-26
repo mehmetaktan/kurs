@@ -7,6 +7,7 @@
 //! `TABLE` ve `COLUMNS` derleme zamanı sabitleridir — SQL'e kullanıcı girdisi girmez.
 
 pub mod academic;
+pub mod attendance;
 pub mod finance;
 pub mod ops;
 pub mod people;

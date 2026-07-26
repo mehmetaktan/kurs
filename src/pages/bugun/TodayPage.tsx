@@ -23,6 +23,7 @@ import {
   Table,
 } from '../../ui'
 import type { Column } from '../../ui'
+import { AttendanceDrawer } from '../dersler/AttendanceDrawer'
 import { SessionActions, type SessionAction } from '../dersler/SessionActions'
 import { SessionForm } from '../dersler/SessionForm'
 import { TemplateModal } from '../dersler/TemplateModal'
@@ -52,6 +53,7 @@ export function TodayPage() {
   const [templateOpen, setTemplateOpen] = useState(false)
   const [editing, setEditing] = useState<DaySessionRow | null>(null)
   const [action, setAction] = useState<{ row: DaySessionRow; kind: SessionAction } | null>(null)
+  const [attendanceRow, setAttendanceRow] = useState<DaySessionRow | null>(null)
 
   const load = useCallback(async () => {
     setError(null)
@@ -88,7 +90,11 @@ export function TodayPage() {
 
   const columns = useMemo(
     () =>
-      buildColumns(now ?? '', (row, kind) => setAction({ row, kind })),
+      buildColumns(
+        now ?? '',
+        (row, kind) => setAction({ row, kind }),
+        (row) => setAttendanceRow(row),
+      ),
     [now],
   )
 
@@ -108,6 +114,7 @@ export function TodayPage() {
     setTemplateOpen(false)
     setAction(null)
     setEditing(null)
+    setAttendanceRow(null)
     void load()
   }
 
@@ -231,6 +238,15 @@ export function TodayPage() {
           onDone={refresh}
         />
       )}
+
+      {now !== null && (
+        <AttendanceDrawer
+          row={attendanceRow}
+          now={now}
+          onClose={() => setAttendanceRow(null)}
+          onSaved={refresh}
+        />
+      )}
     </>
   )
 }
@@ -239,6 +255,7 @@ export function TodayPage() {
 function buildColumns(
   now: string,
   onAction: (row: DaySessionRow, kind: SessionAction) => void,
+  onAttendance: (row: DaySessionRow) => void,
 ): Column<DaySessionRow>[] {
   return [
     {
@@ -292,7 +309,7 @@ function buildColumns(
       key: 'attendance',
       header: tr.today.lessons.table.attendance,
       width: '168px',
-      render: (row) => <AttendanceCell row={row} now={now} />,
+      render: (row) => <AttendanceCell row={row} now={now} onOpen={onAttendance} />,
     },
     {
       key: 'actions',
@@ -318,20 +335,34 @@ function buildColumns(
   ]
 }
 
-/** Yoklamanın üç durumu (EKRANLAR §1). "Yoklama al" düğmesi Faz 6'da gelir. */
-function AttendanceCell({ row, now }: { row: DaySessionRow; now: string }) {
+/** Yoklamanın dört kayıt durumu ve henüz zamanı gelmeyen dersin bekleme görünümü. */
+function AttendanceCell({
+  row,
+  now,
+  onOpen,
+}: {
+  row: DaySessionRow
+  now: string
+  onOpen: (row: DaySessionRow) => void
+}) {
   if (row.status === 'cancelled') {
     return <Badge tone="neutral">{tr.today.lessons.cancelled}</Badge>
   }
   if (row.attendanceTaken) {
     return (
-      <span className={styles.attendanceDone}>
-        {row.presentCount}/{row.markedCount} {tr.today.lessons.attendanceDone}
-      </span>
+      <Button size="small" onClick={() => onOpen(row)}>
+        <span className={styles.attendanceDone}>
+          {row.presentCount}/{row.markedCount} {tr.today.lessons.attendanceDone}
+        </span>
+      </Button>
     )
   }
   if (isPendingAttendance(row, now)) {
-    return <Badge tone="warn">{tr.today.lessons.attendanceMissing}</Badge>
+    return (
+      <Button variant="warning" size="small" onClick={() => onOpen(row)}>
+        {tr.attendance.open}
+      </Button>
+    )
   }
   return <span className={styles.muted}>{tr.today.lessons.attendanceWaiting}</span>
 }

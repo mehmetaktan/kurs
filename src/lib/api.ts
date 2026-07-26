@@ -881,6 +881,79 @@ export function fetchDaySessions(day: string | null = null): Promise<DaySessionR
   return call<DaySessionRow[]>('day_sessions', { day })
 }
 
+// ─── Faz 6 §1 — yoklama paneli ─────────────────────────────────────────────
+
+export type AttendanceStatus = 'pending' | 'present' | 'excused' | 'unexcused' | 'cancelled'
+export type MarkedAttendanceStatus = Exclude<AttendanceStatus, 'pending'>
+
+export interface AttendancePolicy {
+  excusedConsumesLesson: boolean
+  unexcusedConsumesLesson: boolean
+}
+
+export interface AttendanceStudentRow {
+  attendanceId: number | null
+  studentId: number
+  fullName: string
+  status: AttendanceStatus
+  note: string | null
+  effects: AttendanceStatusEffects
+}
+
+export interface AttendanceEffectDelta {
+  /** Pozitif = düşüm, negatif = iade. */
+  lessonCredits: number
+  /** Pozitif = borç, negatif = borç silme (kuruş). */
+  debtKurus: number
+}
+
+export interface AttendanceStatusEffects {
+  present: AttendanceEffectDelta
+  excused: AttendanceEffectDelta
+  unexcused: AttendanceEffectDelta
+  cancelled: AttendanceEffectDelta
+}
+
+export interface AttendanceDetail {
+  sessionId: number
+  title: string
+  subjectName: string
+  startsAt: string
+  endsAt: string
+  kind: string
+  rows: AttendanceStudentRow[]
+  policy: AttendancePolicy
+}
+
+export interface AttendanceMarkInput {
+  studentId: number
+  status: MarkedAttendanceStatus
+  note: string | null
+}
+
+export interface SaveAttendanceInput {
+  sessionId: number
+  /** `local_now` komutundan gelen yerel duvar saati. */
+  markedAt: string
+  marks: AttendanceMarkInput[]
+}
+
+export interface SaveAttendanceReport {
+  saved: number
+}
+
+export function fetchAttendanceDetail(
+  sessionId: number,
+  today: string,
+): Promise<AttendanceDetail> {
+  return call<AttendanceDetail>('attendance_detail', { sessionId, today })
+}
+
+/** §2 finans etkilerini bu aynı komut/transaction yoluna bağlayacak. */
+export function saveAttendance(input: SaveAttendanceInput): Promise<SaveAttendanceReport> {
+  return call<SaveAttendanceReport>('save_attendance', { input })
+}
+
 /**
  * Haftalık program tanımlı mı — Bugün ekranının **iki** boş durumunu ayırır (R1.7).
  * Boş bir gün listesi iki durumu da üretiyor; ayrımı başka bir şey veremiyor.

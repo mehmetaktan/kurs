@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { TodayPage } from './TodayPage'
 
@@ -7,6 +7,8 @@ const api = vi.hoisted(() => ({
   fetchDaySessions: vi.fn(),
   fetchHasSchedule: vi.fn(),
   fetchDebtorRows: vi.fn(),
+  fetchAttendanceDetail: vi.fn(),
+  saveAttendance: vi.fn(),
 }))
 vi.mock('../../lib/api', async (original) => ({ ...(await original()), ...api }))
 vi.mock('../dersler/SessionForm', () => ({ SessionForm: () => null }))
@@ -22,6 +24,17 @@ beforeEach(() => {
     { studentId: 4, fullName: 'İpek Şahin', guardianPhone: null, archived: false, debtKurus: 120_000, advanceKurus: 0, oldestDueOn: '2026-07-14', daysOverdue: 12 },
     { studentId: 5, fullName: 'Arşiv Borçlu', guardianPhone: null, archived: true, debtKurus: 80_000, advanceKurus: 0, oldestDueOn: '2026-07-10', daysOverdue: 16 },
   ])
+  api.fetchAttendanceDetail.mockResolvedValue({
+    sessionId: 12,
+    title: 'Grup A',
+    subjectName: 'Matematik',
+    startsAt: '2026-07-26 08:00',
+    endsAt: '2026-07-26 09:00',
+    kind: 'group',
+    rows: [],
+    policy: { excusedConsumesLesson: false, unexcusedConsumesLesson: true },
+  })
+  api.saveAttendance.mockResolvedValue({ saved: 0 })
 })
 
 describe('Bugün borç özeti', () => {
@@ -33,5 +46,40 @@ describe('Bugün borç özeti', () => {
     expect(screen.getByText(/1 öğrenci/)).toBeTruthy()
     expect(screen.queryByText('Arşiv Borçlu')).toBeNull()
     expect(api.fetchDebtorRows).toHaveBeenCalledWith({ search: null, filter: 'all', today: '2026-07-26' })
+  })
+})
+
+describe('Bugün yoklama girişi', () => {
+  it('bitmiş dersin Yoklama al düğmesi E9 panelini açar', async () => {
+    api.fetchDaySessions.mockResolvedValue([
+      {
+        id: 12,
+        seriesId: null,
+        startsAt: '2026-07-26 08:00',
+        endsAt: '2026-07-26 09:00',
+        kind: 'group',
+        subjectId: 1,
+        subjectName: 'Matematik',
+        subjectColor: null,
+        teacherId: 1,
+        teacherName: 'Ayşe Demir',
+        studyGroupId: 1,
+        studentId: null,
+        title: 'Grup A',
+        status: 'planned',
+        attendanceTaken: false,
+        studentCount: 0,
+        presentCount: 0,
+        markedCount: 0,
+        isMakeup: false,
+        cancelReason: null,
+      },
+    ])
+
+    render(<TodayPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Yoklama al' }))
+
+    expect(await screen.findByRole('dialog', { name: 'Matematik · Grup A' })).toBeTruthy()
+    expect(api.fetchAttendanceDetail).toHaveBeenCalledWith(12, '2026-07-26')
   })
 })
