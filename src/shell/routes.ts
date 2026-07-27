@@ -30,6 +30,9 @@ export const DEFINITIONS_PATH = '/tanimlar'
 /** Takvim (Faz 5C). */
 export const CALENDAR_PATH = '/takvim'
 
+/** Raporlar (Faz 6 §5 ile başlayan rapor yüzeyi). */
+export const REPORTS_PATH = '/raporlar'
+
 export const PAGES: readonly PageDef[] = [
   { path: '/', title: tr.pages.today.title, subtitle: tr.pages.today.subtitle, phase: 4 },
   {
@@ -58,7 +61,7 @@ export const PAGES: readonly PageDef[] = [
     phase: 5,
   },
   {
-    path: '/raporlar',
+    path: REPORTS_PATH,
     title: tr.pages.reports.title,
     subtitle: tr.pages.reports.subtitle,
     phase: 9,
@@ -83,7 +86,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { path: '/gruplar', label: tr.nav.groups },
   { path: '/odemeler', label: tr.nav.payments, badge: 'debtors' },
   { path: '/tanimlar', label: tr.nav.definitions },
-  { path: '/raporlar', label: tr.nav.reports },
+  { path: REPORTS_PATH, label: tr.nav.reports },
 ]
 
 /**

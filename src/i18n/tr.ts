@@ -1178,6 +1178,48 @@ export const tr = {
     },
   },
 
+  // Faz 6 §5 — Raporlar > Devamsızlık.
+  reports: {
+    absence: {
+      title: 'Devamsızlık raporu',
+      description:
+        'Seçilen tarih aralığında mazeretli ve mazeretsiz devamsızlıkları en çoktan aza gösterir.',
+      search: 'Öğrenci adı ara',
+      filters: {
+        from: 'Başlangıç tarihi',
+        to: 'Bitiş tarihi',
+        subject: 'Branş',
+        group: 'Grup',
+        allSubjects: 'Tüm branşlar',
+        allGroups: 'Tüm gruplar',
+      },
+      errors: {
+        dateRequired: 'Başlangıç ve bitiş tarihlerini seçin.',
+        rangeOrder:
+          'Başlangıç tarihi bitiş tarihinden sonra olamaz. Tarih aralığını düzeltin.',
+      },
+      table: {
+        label: 'Devamsızlık sıralaması',
+        rank: 'Sıra',
+        student: 'Öğrenci',
+        excused: 'Mazeretli',
+        unexcused: 'Mazeretsiz',
+        total: 'Toplam',
+        archived: 'Arşivlendi',
+      },
+      empty: {
+        range: 'Bu tarih aralığında devamsızlık yok',
+        rangeBody: 'Başka bir tarih aralığı seçerek yeniden deneyin.',
+        filtered: 'Bu filtrelerle devamsızlık bulunamadı',
+        filteredBody: 'Branş, grup ya da öğrenci filtresini değiştirerek yeniden deneyin.',
+      },
+      status: {
+        students: 'öğrenci gösteriliyor',
+        total: 'Toplam devamsızlık',
+      },
+    },
+  },
+
   errors: {
     // Kullanıcı teknik değil: mesaj Türkçe ve EYLEM önerir, ham hata kodu göstermez.
     title: 'Bir sorun çıktı',

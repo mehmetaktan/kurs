@@ -1025,6 +1025,52 @@ export function fetchStudentLessonOverview(
   return call<StudentLessonOverview>('student_lesson_overview', { studentId, now })
 }
 
+// ─── Faz 6 §5 — devamsızlık raporu ──────────────────────────────────────────
+
+export interface AbsenceReportQuery {
+  /** İki uç da dahildir. */
+  from: string
+  to: string
+  search: string
+  subjectId: number | null
+  groupId: number | null
+}
+
+export interface AbsenceReportRow {
+  studentId: number
+  fullName: string
+  archived: boolean
+  excusedCount: number
+  unexcusedCount: number
+  totalCount: number
+}
+
+export interface AbsenceSubjectOption {
+  id: number
+  name: string
+  archived: boolean
+}
+
+export interface AbsenceGroupOption {
+  id: number
+  name: string
+  subjectId: number
+  archived: boolean
+}
+
+export interface AbsenceFilterOptions {
+  subjects: AbsenceSubjectOption[]
+  groups: AbsenceGroupOption[]
+}
+
+export function fetchAbsenceReport(query: AbsenceReportQuery): Promise<AbsenceReportRow[]> {
+  return call<AbsenceReportRow[]>('absence_report', { query })
+}
+
+export function fetchAbsenceReportOptions(): Promise<AbsenceFilterOptions> {
+  return call<AbsenceFilterOptions>('absence_report_options')
+}
+
 /**
  * Haftalık program tanımlı mı — Bugün ekranının **iki** boş durumunu ayırır (R1.7).
  * Boş bir gün listesi iki durumu da üretiyor; ayrımı başka bir şey veremiyor.

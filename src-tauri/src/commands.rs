@@ -25,6 +25,7 @@ use crate::repo::finance::{
     PaymentAllocationInput, PaymentInput, PaymentReport, PriceRuleInput,
 };
 use crate::repo::people::TeacherInput;
+use crate::repo::reports::{AbsenceFilterOptions, AbsenceReportQuery, AbsenceReportRow};
 use crate::repo::roster::{StudentDetail, StudentInput, StudentQuery, StudentRow};
 use crate::repo::schedule::{
     ApplyTemplateReport, Capacity, ClosedDayInput, Conflict, DaySessionRow, DeleteReport,
@@ -719,6 +720,23 @@ pub fn student_lesson_overview(
     now: String,
 ) -> AppResult<StudentLessonOverview> {
     state.with_conn(|conn| repo::attendance::student_lesson_overview(conn, student_id, &now))
+}
+
+// ---------------------------------------------------------------------------
+// Faz 6 §5 — devamsızlık raporu
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+pub fn absence_report(
+    state: State<'_, AppState>,
+    query: AbsenceReportQuery,
+) -> AppResult<Vec<AbsenceReportRow>> {
+    state.with_conn(|conn| repo::reports::absence_rows(conn, &query))
+}
+
+#[tauri::command]
+pub fn absence_report_options(state: State<'_, AppState>) -> AppResult<AbsenceFilterOptions> {
+    state.with_conn(repo::reports::absence_filter_options)
 }
 
 /// Haftalık program tanımlı mı — Bugün ekranının iki boş durumunu ayırır (R1.7).

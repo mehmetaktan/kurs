@@ -7,6 +7,7 @@ import { GroupsPage } from './pages/gruplar/GroupsPage'
 import { StudentDetailPage } from './pages/ogrenciler/StudentDetailPage'
 import { StudentsPage } from './pages/ogrenciler/StudentsPage'
 import { PaymentsPage } from './pages/odemeler/PaymentsPage'
+import { ReportsPage } from './pages/raporlar/ReportsPage'
 import { CalendarPage } from './pages/takvim/CalendarPage'
 import { DefinitionsPage } from './pages/tanimlar/DefinitionsPage'
 import { AppShell } from './shell/AppShell'
@@ -16,6 +17,7 @@ import {
   DEV_ROUTES,
   GROUPS_PATH,
   PAGES,
+  REPORTS_PATH,
   STUDENTS_PATH,
 } from './shell/routes'
 import { LoadingState, ToastProvider } from './ui'
@@ -57,6 +59,7 @@ function RoutedPage({ path }: { path: string }) {
   if (matchRoute(GROUPS_PATH, path)) return <GroupsPage />
   if (matchRoute(DEFINITIONS_PATH, path)) return <DefinitionsPage />
   if (path === '/odemeler') return <PaymentsPage />
+  if (path === REPORTS_PATH) return <ReportsPage />
 
   const student = matchRoute(`${STUDENTS_PATH}/:id`, path)
   if (student) {

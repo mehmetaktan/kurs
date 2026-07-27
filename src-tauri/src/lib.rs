@@ -218,6 +218,9 @@ pub fn run() {
             commands::save_makeup_session,
             commands::makeup_debts,
             commands::student_lesson_overview,
+            // Faz 6 §5 — devamsızlık raporu
+            commands::absence_report,
+            commands::absence_report_options,
             commands::has_schedule,
             commands::is_closed_day,
             commands::save_session,

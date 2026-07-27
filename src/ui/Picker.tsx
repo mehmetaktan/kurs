@@ -65,6 +65,11 @@ export interface DatePickerProps {
   hint?: string
   /** Dışarıdan gelen doğrulama hatası; biçim hatası zaten içeride yakalanıyor. */
   error?: string
+  /**
+   * Birden fazla tarih alanının paylaştığı dış hata metninin id'si. `error` gibi
+   * ikinci bir canlı uyarı çizmez; girdiyi mevcut tek mesaja bağlar.
+   */
+  errorMessageId?: string
   disabled?: boolean
   /** Ay ızgarasında çerçeveyle işaretlenen gün. Rust'tan gelen "bugün" (§0). */
   today?: string
@@ -76,6 +81,7 @@ export function DatePicker({
   label,
   hint,
   error,
+  errorMessageId,
   disabled,
   today,
 }: DatePickerProps) {
@@ -118,6 +124,7 @@ export function DatePicker({
   }
 
   const shownError = error ?? formatError ?? undefined
+  const invalid = Boolean(shownError || errorMessageId)
 
   return (
     <div className={styles.wrap} ref={wrapRef}>
@@ -128,7 +135,7 @@ export function DatePicker({
             className={[
               fieldStyles.control,
               styles.grow,
-              shownError ? fieldStyles.invalid : undefined,
+              invalid ? fieldStyles.invalid : undefined,
             ]
               .filter(Boolean)
               .join(' ')}
@@ -136,7 +143,8 @@ export function DatePicker({
             placeholder={tr.form.datePlaceholder}
             disabled={disabled}
             inputMode="numeric"
-            aria-invalid={shownError ? true : undefined}
+            aria-invalid={invalid ? true : undefined}
+            aria-errormessage={shownError ? `${id}-error` : errorMessageId}
             onChange={(event) => setText(event.target.value)}
             onBlur={(event) => commit(event.target.value)}
             onKeyDown={(event) => {
