@@ -5,11 +5,13 @@ import { TodayPage } from './TodayPage'
 const api = vi.hoisted(() => ({
   fetchLocalNow: vi.fn(),
   fetchDaySessions: vi.fn(),
+  fetchBackupStatus: vi.fn(),
   fetchHasSchedule: vi.fn(),
   fetchDebtorRows: vi.fn(),
   fetchMakeupDebts: vi.fn(),
   fetchReportOverview: vi.fn(),
   fetchStudentList: vi.fn(),
+  createBackupNow: vi.fn(),
   fetchAttendanceDetail: vi.fn(),
   saveAttendance: vi.fn(),
 }))
@@ -66,6 +68,25 @@ beforeEach(() => {
       groupIds: [],
     },
   ])
+  api.fetchBackupStatus.mockResolvedValue({
+    directory: 'C:\\Users\\Ayşe\\Documents\\Kurs Takip\\Yedekler',
+    warnDays: 3,
+    logs: [
+      {
+        id: 1,
+        takenAt: '2026-07-25 08:14',
+        filePath: 'yedek.db',
+        sizeBytes: 1000,
+        isAuto: true,
+        ok: true,
+        error: null,
+        createdAt: null,
+        updatedAt: null,
+        deletedAt: null,
+      },
+    ],
+  })
+  api.createBackupNow.mockResolvedValue('yedek.db')
   api.fetchAttendanceDetail.mockResolvedValue({
     sessionId: 12,
     title: 'Grup A',

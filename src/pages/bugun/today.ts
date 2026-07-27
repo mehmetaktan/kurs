@@ -10,6 +10,7 @@
  * kural arayüzde delinmiş olurdu.
  */
 import type { DaySessionRow, StudentRow } from '../../lib/api'
+import { isoToDate } from '../../lib/format'
 import { compareTr } from '../../lib/sortTr'
 import { LOW_PACKAGE_THRESHOLD } from '../ogrenciler/filters'
 
@@ -76,4 +77,11 @@ export function lowPackageRows(rows: readonly StudentRow[]): StudentRow[] {
         compareTr(a.fullName, b.fullName) ||
         a.id - b.id,
     )
+}
+
+export function backupAgeDays(today: string, takenAt: string): number | null {
+  const current = isoToDate(today)
+  const taken = isoToDate(takenAt.slice(0, 10))
+  if (!current || !taken) return null
+  return Math.max(0, Math.floor((current.getTime() - taken.getTime()) / 86_400_000))
 }

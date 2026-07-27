@@ -13,8 +13,8 @@ use tauri::State;
 use crate::clock;
 use crate::error::AppResult;
 use crate::model::{
-    ClosedDay, Guardian, InstallmentOpen, PriceRule, Setting, Student, StudentBalance, StudentDebt,
-    StudyGroup, Subject, Teacher,
+    BackupLog, ClosedDay, Guardian, InstallmentOpen, PriceRule, Setting, Student, StudentBalance,
+    StudentDebt, StudyGroup, Subject, Teacher,
 };
 use crate::repo::attendance::{
     AttendanceDetail, MakeupDebtRow, SaveAttendanceInput, SaveAttendanceReport,
@@ -53,6 +53,14 @@ pub struct AppStatus {
     pub ledger_count: i64,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupStatus {
+    pub directory: String,
+    pub warn_days: i64,
+    pub logs: Vec<BackupLog>,
+}
+
 #[tauri::command]
 pub fn app_status(state: State<'_, AppState>) -> AppResult<AppStatus> {
     let db_path = state.db_path.display().to_string();
@@ -75,6 +83,63 @@ pub fn app_status(state: State<'_, AppState>) -> AppResult<AppStatus> {
             ledger_count: repo::count_live::<crate::model::LedgerEntry>(conn)?,
         })
     })
+}
+
+#[tauri::command]
+pub fn backup_status(state: State<'_, AppState>) -> AppResult<BackupStatus> {
+    let directory = state.backup_dir.clone()?;
+    state.with_conn(|conn| {
+        Ok(BackupStatus {
+            directory: directory.display().to_string(),
+            warn_days: repo::setting::value_i64(conn, "backup_warn_days")?.unwrap_or(3),
+            logs: repo::ops::recent_backup_logs(conn)?,
+        })
+    })
+}
+
+#[tauri::command]
+pub async fn create_backup_now(state: State<'_, AppState>) -> AppResult<String> {
+    let db_path = state.db_path.clone();
+    let backup_dir = state.backup_dir.clone()?;
+    let now = clock::now_local();
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::backup::run_manual(&db_path, &backup_dir, &now)
+            .map(|path| path.display().to_string())
+    })
+    .await
+    .map_err(|err| crate::error::AppError::internal("backup_task", err))?
+}
+
+#[tauri::command]
+pub async fn copy_backup_to(
+    state: State<'_, AppState>,
+    backup_path: String,
+    destination_dir: String,
+) -> AppResult<String> {
+    let allowed =
+        state.with_conn(|conn| repo::ops::is_successful_backup_path(conn, &backup_path))?;
+    if !allowed {
+        return Err(crate::error::AppError::new(
+            "backup.copy_not_allowed",
+            "Bu dosya doğrulanmış yedek listesinde değil. Listeden bir yedek seçip yeniden deneyin.",
+        ));
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::backup::copy_to_directory(
+            std::path::Path::new(&backup_path),
+            std::path::Path::new(&destination_dir),
+        )
+        .map(|path| path.display().to_string())
+    })
+    .await
+    .map_err(|err| crate::error::AppError::internal("backup_copy_task", err))?
+}
+
+#[tauri::command]
+pub fn restore_backup(state: State<'_, AppState>, backup_path: String) -> AppResult<String> {
+    state
+        .restore_from_backup(std::path::Path::new(&backup_path), &clock::now_local())
+        .map(|path| path.display().to_string())
 }
 
 #[tauri::command]

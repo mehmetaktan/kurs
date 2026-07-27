@@ -2,20 +2,23 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { tr } from '../../i18n/tr'
 import {
   fetchDaySessions,
+  fetchBackupStatus,
   fetchDebtorRows,
   fetchHasSchedule,
   fetchLocalNow,
   fetchMakeupDebts,
   fetchReportOverview,
   fetchStudentList,
+  createBackupNow,
   type AppError,
+  type BackupStatus,
   type DaySessionRow,
   type DebtorRow,
   type MakeupDebtRow,
   type ReportOverview,
   type StudentRow,
 } from '../../lib/api'
-import { formatDateWithWeekday, formatLira, formatTime } from '../../lib/format'
+import { formatDate, formatDateWithWeekday, formatLira, formatTime } from '../../lib/format'
 import { navigate } from '../../lib/router'
 import { PageContent } from '../../shell/AppShell'
 import { PageHeader } from '../../shell/PageHeader'
@@ -30,6 +33,7 @@ import {
   SectionHeader,
   StatCard,
   Table,
+  useToast,
 } from '../../ui'
 import type { Column } from '../../ui'
 import { AttendanceDrawer } from '../dersler/AttendanceDrawer'
@@ -38,7 +42,13 @@ import { SessionForm } from '../dersler/SessionForm'
 import { TemplateModal } from '../dersler/TemplateModal'
 import { subjectColorOf } from '../tanimlar/palette'
 import { sortTrBy } from '../../lib/sortTr'
-import { isPendingAttendance, lowPackageRows, pendingAttendanceCount, splitByNow } from './today'
+import {
+  backupAgeDays,
+  isPendingAttendance,
+  lowPackageRows,
+  pendingAttendanceCount,
+  splitByNow,
+} from './today'
 import styles from './Today.module.css'
 import { sortDebtors, visibleReceivableKurus } from '../odemeler/debtors'
 
@@ -64,6 +74,10 @@ export function TodayPage() {
   const [overviewError, setOverviewError] = useState<AppError | null>(null)
   const [students, setStudents] = useState<StudentRow[] | null>(null)
   const [packageError, setPackageError] = useState<AppError | null>(null)
+  const [backupStatus, setBackupStatus] = useState<BackupStatus | null>(null)
+  const [backupError, setBackupError] = useState<AppError | null>(null)
+  const [backupBusy, setBackupBusy] = useState(false)
+  const toast = useToast()
 
   const [formOpen, setFormOpen] = useState(false)
   const [templateOpen, setTemplateOpen] = useState(false)
@@ -77,10 +91,12 @@ export function TodayPage() {
     setMakeupError(null)
     setOverviewError(null)
     setPackageError(null)
+    setBackupError(null)
     setDebtors(null)
     setMakeupDebts(null)
     setOverview(null)
     setStudents(null)
+    setBackupStatus(null)
     try {
       const stamp = await fetchLocalNow()
       setNow(stamp)
@@ -111,6 +127,11 @@ export function TodayPage() {
         setStudents(await fetchStudentList({ today: stamp.slice(0, 10) }))
       } catch (err) {
         setPackageError(err as AppError)
+      }
+      try {
+        setBackupStatus(await fetchBackupStatus())
+      } catch (err) {
+        setBackupError(err as AppError)
       }
     } catch (err) {
       setError(err as AppError)
@@ -155,6 +176,20 @@ export function TodayPage() {
     setEditing(null)
     setAttendanceRow(null)
     void load()
+  }
+
+  const backupNow = async () => {
+    setBackupBusy(true)
+    setBackupError(null)
+    try {
+      await createBackupNow()
+      toast(tr.backup.messages.created)
+      await load()
+    } catch (caught) {
+      setBackupError(caught as AppError)
+    } finally {
+      setBackupBusy(false)
+    }
   }
 
   return (
@@ -250,7 +285,13 @@ export function TodayPage() {
             <DebtorSection rows={debtors} error={debtError} />
             <MakeupDebtSection rows={makeupDebts} error={makeupError} />
             <PackageSection rows={students === null ? null : endingPackages} error={packageError} />
-            <SideSection title={tr.today.backup.heading} body={tr.today.backup.soon} />
+            <BackupSection
+              status={backupStatus}
+              error={backupError}
+              today={today}
+              busy={backupBusy}
+              onBackup={() => void backupNow()}
+            />
           </aside>
         </div>
       </PageContent>
@@ -661,15 +702,6 @@ function TodayEmptyState({
   )
 }
 
-function SideSection({ title, body }: { title: string; body: string }) {
-  return (
-    <Card className={styles.sideCard}>
-      <SectionHeader title={title} />
-      <p className={styles.sideBody}>{body}</p>
-    </Card>
-  )
-}
-
 function DebtorSection({ rows, error }: { rows: DebtorRow[] | null; error: AppError | null }) {
   const total = rows === null ? 0 : visibleReceivableKurus(rows)
   return (
@@ -691,6 +723,54 @@ function DebtorSection({ rows, error }: { rows: DebtorRow[] | null; error: AppEr
             </div>
           ))}
         </div>
+      )}
+    </Card>
+  )
+}
+
+function BackupSection({
+  status,
+  error,
+  today,
+  busy,
+  onBackup,
+}: {
+  status: BackupStatus | null
+  error: AppError | null
+  today: string | null
+  busy: boolean
+  onBackup: () => void
+}) {
+  const latest = status?.logs.find((row) => row.ok) ?? null
+  const age = today && latest ? backupAgeDays(today, latest.takenAt) : null
+  const delayed = age !== null && status !== null && age >= status.warnDays
+  return (
+    <Card className={styles.sideCard}>
+      <SectionHeader
+        title={tr.today.backup.heading}
+        meta={
+          latest
+            ? `${formatDate(latest.takenAt.slice(0, 10))}${tr.units.separator}${formatTime(latest.takenAt)}`
+            : null
+        }
+      />
+      {status === null && !error && <LoadingState inline />}
+      {error && <ErrorState inline message={error.message} />}
+      {status !== null && !error && (
+        <>
+          <p className={delayed ? styles.backupDelayed : styles.sideBody}>
+            {latest === null
+              ? tr.today.backup.empty
+              : delayed
+                ? `${age} ${tr.today.backup.delayed}`
+                : latest.isAuto
+                  ? tr.today.backup.automatic
+                  : tr.today.backup.manual}
+          </p>
+          <Button size="small" disabled={busy} onClick={onBackup}>
+            {busy ? tr.backup.actions.working : tr.today.backup.action}
+          </Button>
+        </>
       )}
     </Card>
   )

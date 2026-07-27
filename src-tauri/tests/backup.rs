@@ -2,7 +2,7 @@ mod common;
 
 use std::path::{Path, PathBuf};
 
-use kurs_takip_lib::{backup, db, repo};
+use kurs_takip_lib::{backup, db, repo, AppState};
 use rusqlite::Connection;
 
 struct TestDirectory(PathBuf);
@@ -110,4 +110,85 @@ fn yazilamayan_yedek_turkce_eylemle_hata_verir_ve_basarisizligi_loglar() {
         .unwrap();
     assert_eq!(failed.0, 1);
     assert!(failed.1.contains("kontrol edin"));
+}
+
+#[test]
+fn geri_yukleme_eski_wal_verisini_temizler_ve_once_canliyi_vacuum_ile_yedekler() {
+    let root = TestDirectory::new("restore");
+    let db_path = root.path().join("canli").join("kurs.db");
+    let backup_dir = root
+        .path()
+        .join("Belgeler")
+        .join("Kurs Takip")
+        .join("Yedekler");
+    {
+        let live = db::open(&db_path).unwrap();
+        db::migrate::run(&live).unwrap();
+        common::student(&live, "Yedekteki Öğrenci");
+    }
+    let source = backup::run_manual(&db_path, &backup_dir, "2026-07-26 08:00").unwrap();
+    let state = AppState::open(db_path.clone(), Ok(backup_dir.clone()));
+    state
+        .with_conn(|conn| {
+            common::student(conn, "Sonradan Eklenen");
+            Ok(())
+        })
+        .unwrap();
+
+    let safety = state
+        .restore_from_backup(&source, "2026-07-27 10:30")
+        .unwrap();
+
+    let names = state
+        .with_conn(|conn| {
+            let mut stmt = conn.prepare("SELECT full_name FROM student")?;
+            let rows = stmt
+                .query_map([], |row| row.get::<_, String>(0))?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            Ok(rows)
+        })
+        .unwrap();
+    assert_eq!(names, vec!["Yedekteki Öğrenci"]);
+    assert!(safety
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .starts_with("kurs-geri-yukleme-oncesi-"));
+    let safety_db = Connection::open(&safety).unwrap();
+    let safety_count: i64 = safety_db
+        .query_row("SELECT COUNT(*) FROM student", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(
+        safety_count, 2,
+        "geri yükleme öncesi canlı veri kurtarılabilmeli"
+    );
+    let safety_logged = state
+        .with_conn(|conn| repo::ops::is_successful_backup_path(conn, &safety.to_string_lossy()))
+        .unwrap();
+    assert!(safety_logged);
+}
+
+#[test]
+fn eksik_tablolu_dosya_geri_yukleme_adayi_olamaz() {
+    let root = TestDirectory::new("invalid-restore");
+    let invalid = root.path().join("bos.db");
+    Connection::open(&invalid).unwrap();
+
+    let error = backup::validate_restore_candidate(&invalid).unwrap_err();
+    assert_eq!(error.code, "backup.missing_table");
+    assert!(error.message.contains("Başka bir yedek seçin"));
+}
+
+#[test]
+fn dogrulanmis_yedek_dis_klasore_ayni_adi_ezmeden_kopyalanir() {
+    let root = TestDirectory::new("copy-backup");
+    let source = root.path().join("kurs-yedek-2026-07-27.db");
+    let destination = root.path().join("USB");
+    std::fs::write(&source, b"yedek").unwrap();
+    std::fs::create_dir_all(&destination).unwrap();
+    std::fs::write(destination.join("kurs-yedek-2026-07-27.db"), b"eski").unwrap();
+
+    let copied = backup::copy_to_directory(&source, &destination).unwrap();
+    assert_eq!(copied.file_name().unwrap(), "kurs-yedek-2026-07-27-2.db");
+    assert_eq!(std::fs::read(copied).unwrap(), b"yedek");
 }

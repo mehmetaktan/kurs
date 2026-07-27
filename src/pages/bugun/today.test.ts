@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { DaySessionRow, StudentRow } from '../../lib/api'
 import {
   isPendingAttendance,
+  backupAgeDays,
   lowPackageRows,
   pendingAttendanceCount,
   sortByStart,
@@ -173,5 +174,14 @@ describe('lowPackageRows', () => {
     ]
 
     expect(lowPackageRows(rows).map((item) => item.id)).toEqual([2, 1])
+  })
+})
+
+describe('backupAgeDays', () => {
+  it('yerel tarih metinleri arasındaki tam gün sayısını verir', () => {
+    expect(backupAgeDays('2026-07-27', '2026-07-25 08:14')).toBe(2)
+    expect(backupAgeDays('2026-07-27', '2026-07-27 23:59')).toBe(0)
+    expect(backupAgeDays('2026-07-27', '2026-07-28 08:00')).toBe(0)
+    expect(backupAgeDays('bozuk', '2026-07-25 08:14')).toBeNull()
   })
 })

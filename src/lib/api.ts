@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
+import { open } from '@tauri-apps/plugin-dialog'
 import { openPath } from '@tauri-apps/plugin-opener'
 import { tr } from '../i18n/tr'
 
@@ -51,6 +52,66 @@ export interface AppStatus {
 
 export function fetchAppStatus(): Promise<AppStatus> {
   return call<AppStatus>('app_status')
+}
+
+export interface BackupLog {
+  id: number
+  takenAt: string
+  filePath: string
+  sizeBytes: number | null
+  isAuto: boolean
+  ok: boolean
+  error: string | null
+  createdAt: string | null
+  updatedAt: string | null
+  deletedAt: string | null
+}
+
+export interface BackupStatus {
+  directory: string
+  warnDays: number
+  logs: BackupLog[]
+}
+
+export function fetchBackupStatus(): Promise<BackupStatus> {
+  return call<BackupStatus>('backup_status')
+}
+
+export function createBackupNow(): Promise<string> {
+  return call<string>('create_backup_now')
+}
+
+export async function openBackupDirectory(directory: string): Promise<void> {
+  try {
+    await openPath(directory)
+  } catch {
+    throw { code: 'backup_open', message: tr.backup.errors.openDirectory } satisfies AppError
+  }
+}
+
+export async function selectBackupFile(): Promise<string | null> {
+  return open({
+    multiple: false,
+    directory: false,
+    title: tr.backup.dialog.restoreTitle,
+    filters: [{ name: tr.backup.dialog.databaseFiles, extensions: ['db'] }],
+  })
+}
+
+export async function selectBackupDestination(): Promise<string | null> {
+  return open({
+    multiple: false,
+    directory: true,
+    title: tr.backup.dialog.copyTitle,
+  })
+}
+
+export function copyBackupTo(backupPath: string, destinationDir: string): Promise<string> {
+  return call<string>('copy_backup_to', { backupPath, destinationDir })
+}
+
+export function restoreBackup(backupPath: string): Promise<string> {
+  return call<string>('restore_backup', { backupPath })
 }
 
 /**

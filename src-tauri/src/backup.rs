@@ -48,8 +48,35 @@ pub fn run_automatic(db_path: &Path, backup_dir: &Path, now: &str) -> AppResult<
     if repo::ops::has_successful_backup_on(&conn, day)? {
         return Ok(None);
     }
+    let target = backup_dir.join(format!("{BACKUP_FILE_PREFIX}{day}{BACKUP_FILE_SUFFIX}"));
+    attempt_backup(&conn, backup_dir, &target, now, true, true).map(Some)
+}
 
-    attempt_backup(&conn, backup_dir, now, true).map(Some)
+pub fn run_manual(db_path: &Path, backup_dir: &Path, now: &str) -> AppResult<PathBuf> {
+    let conn = db::open(db_path)?;
+    fs::create_dir_all(backup_dir).map_err(backup_directory_error)?;
+    let stamp = file_stamp(now)?;
+    let target = unique_target(
+        backup_dir,
+        &format!("{BACKUP_FILE_PREFIX}{stamp}"),
+        BACKUP_FILE_SUFFIX,
+    );
+    attempt_backup(&conn, backup_dir, &target, now, false, false)
+}
+
+/// Geri yüklemeden hemen önce, hâlâ açık olan canlı bağlantıdan kurtarma noktası.
+pub fn create_pre_restore_backup(
+    conn: &Connection,
+    backup_dir: &Path,
+    now: &str,
+) -> AppResult<PathBuf> {
+    fs::create_dir_all(backup_dir).map_err(backup_directory_error)?;
+    let target = unique_target(
+        backup_dir,
+        &format!("kurs-geri-yukleme-oncesi-{}", file_stamp(now)?),
+        BACKUP_FILE_SUFFIX,
+    );
+    attempt_backup(conn, backup_dir, &target, now, true, false)
 }
 
 /// Belgeler yolu çözülemezse deneme yine `backup_log`'a başarısız olarak yazılır.
@@ -70,18 +97,12 @@ pub fn record_directory_failure(db_path: &Path, now: &str, error: &AppError) -> 
 fn create_backup(
     conn: &Connection,
     backup_dir: &Path,
+    target: &Path,
     now: &str,
     is_auto: bool,
+    replace_existing: bool,
 ) -> AppResult<PathBuf> {
-    let day = local_day(now)?;
-    fs::create_dir_all(backup_dir).map_err(|err| {
-        eprintln!("[kurs] yedek klasörü oluşturulamadı: {err}");
-        AppError::new(
-            "backup.directory",
-            "Yedek klasörü oluşturulamadı. Belgeler klasörünün yazma iznini ve disk alanını kontrol edin.",
-        )
-    })?;
-    let target = backup_dir.join(format!("{BACKUP_FILE_PREFIX}{day}{BACKUP_FILE_SUFFIX}"));
+    fs::create_dir_all(backup_dir).map_err(backup_directory_error)?;
     let target_text = target.to_str().ok_or_else(|| {
         AppError::new(
             "backup.path",
@@ -90,8 +111,8 @@ fn create_backup(
     })?;
 
     // Önceki yarım kalmış aynı-gün dosyası `VACUUM INTO`'yu engellemesin.
-    if target.exists() {
-        fs::remove_file(&target).map_err(|err| {
+    if replace_existing && target.exists() {
+        fs::remove_file(target).map_err(|err| {
             eprintln!("[kurs] yarım kalmış yedek kaldırılamadı: {err}");
             AppError::new(
                 "backup.replace",
@@ -104,16 +125,16 @@ fn create_backup(
     let result = (|| {
         conn.execute("VACUUM INTO ?1", [target_text])?;
         let after = critical_counts(conn)?;
-        validate_backup(&target, before, after)?;
-        let size = file_size_i64(&target)?;
+        validate_backup(target, before, after)?;
+        let size = file_size_i64(target)?;
         record_log(conn, now, target_text, Some(size), is_auto, true, None)?;
         repo::setting::set(conn, "last_backup_at", now)?;
         prune_old_backups(conn, backup_dir, now)?;
-        Ok(target.clone())
+        Ok(target.to_path_buf())
     })();
 
     if result.is_err() && target.exists() {
-        let _ = fs::remove_file(&target);
+        let _ = fs::remove_file(target);
     }
     result
 }
@@ -121,12 +142,12 @@ fn create_backup(
 fn attempt_backup(
     conn: &Connection,
     backup_dir: &Path,
+    target: &Path,
     now: &str,
     is_auto: bool,
+    replace_existing: bool,
 ) -> AppResult<PathBuf> {
-    let day = local_day(now)?;
-    let target = backup_dir.join(format!("{BACKUP_FILE_PREFIX}{day}{BACKUP_FILE_SUFFIX}"));
-    match create_backup(conn, backup_dir, now, is_auto) {
+    match create_backup(conn, backup_dir, target, now, is_auto, replace_existing) {
         Ok(path) => Ok(path),
         Err(error) => {
             let size = target
@@ -148,27 +169,7 @@ fn attempt_backup(
 }
 
 fn validate_backup(path: &Path, before: CriticalCounts, after: CriticalCounts) -> AppResult<()> {
-    let backup = Connection::open_with_flags(
-        path,
-        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
-    )
-    .map_err(|err| backup_invalid("Yedek dosyası yeniden açılamadı.", err))?;
-
-    for table in EXPECTED_TABLES {
-        let exists: bool = backup
-            .query_row(
-                "SELECT EXISTS(SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = ?1)",
-                [table],
-                |row| row.get(0),
-            )
-            .map_err(|err| backup_invalid("Yedek tablosu doğrulanamadı.", err))?;
-        if !exists {
-            return Err(AppError::new(
-                "backup.missing_table",
-                "Yedek eksik oluşturuldu. Disk alanını kontrol edip yeniden deneyin.",
-            ));
-        }
-    }
+    let backup = open_and_validate_schema(path)?;
 
     let copied = critical_counts(&backup)?;
     // Fiziksel öğrenci ve defter satırları hard-delete edilmez. Yedek sürerken yeni
@@ -186,6 +187,144 @@ fn validate_backup(path: &Path, before: CriticalCounts, after: CriticalCounts) -
         ));
     }
     Ok(())
+}
+
+/// Geri yükleme adayı canlı veritabanından eski olabilir; bu yüzden satır sayısı
+/// eşitliği aranmaz. Şema, migration zinciri, bütünlük ve kritik tablolar okunur.
+pub fn validate_restore_candidate(path: &Path) -> AppResult<()> {
+    let backup = open_and_validate_schema(path)?;
+    let integrity: String = backup
+        .query_row("PRAGMA integrity_check", [], |row| row.get(0))
+        .map_err(|err| backup_invalid("Yedek bütünlüğü okunamadı.", err))?;
+    if integrity != "ok" {
+        return Err(AppError::new(
+            "backup.integrity",
+            "Seçilen yedek hasarlı. Başka bir yedek seçin.",
+        ));
+    }
+    let migration_count: i64 = backup
+        .query_row("SELECT COUNT(*) FROM schema_migration", [], |row| {
+            row.get(0)
+        })
+        .map_err(|err| backup_invalid("Yedek sürümü okunamadı.", err))?;
+    if migration_count != i64::try_from(db::migrate::MIGRATIONS.len()).unwrap_or(i64::MAX) {
+        return Err(AppError::new(
+            "backup.version",
+            "Seçilen yedek bu program sürümüyle uyumlu değil. Aynı programdan alınmış başka bir yedek seçin.",
+        ));
+    }
+    let _ = critical_counts(&backup)?;
+    Ok(())
+}
+
+pub fn copy_to_directory(source: &Path, destination_dir: &Path) -> AppResult<PathBuf> {
+    if !source.is_file() {
+        return Err(AppError::new(
+            "backup.copy_source",
+            "Kopyalanacak yedek bulunamadı. Listeden başka bir yedek seçin.",
+        ));
+    }
+    fs::create_dir_all(destination_dir).map_err(|err| {
+        eprintln!("[kurs] yedek hedef klasörü oluşturulamadı: {err}");
+        AppError::new(
+            "backup.copy_directory",
+            "Seçilen klasöre erişilemedi. USB belleğin bağlı olduğunu ve klasör iznini kontrol edin.",
+        )
+    })?;
+    let file_name = source
+        .file_stem()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| {
+            AppError::new(
+                "backup.copy_name",
+                "Yedek dosyasının adı okunamadı. Listeden başka bir yedek seçin.",
+            )
+        })?;
+    let suffix = source
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("db");
+    let dotted_suffix = format!(".{suffix}");
+    let target = unique_target(destination_dir, file_name, &dotted_suffix);
+    fs::copy(source, &target).map_err(|err| {
+        eprintln!("[kurs] yedek dış klasöre kopyalanamadı: {err}");
+        AppError::new(
+            "backup.copy",
+            "Yedek seçilen klasöre kopyalanamadı. Disk alanını ve yazma iznini kontrol edin.",
+        )
+    })?;
+    Ok(target)
+}
+
+pub fn register_existing_success(
+    conn: &Connection,
+    path: &Path,
+    now: &str,
+    is_auto: bool,
+) -> AppResult<()> {
+    let path_text = path.to_str().ok_or_else(|| {
+        AppError::new(
+            "backup.path",
+            "Kurtarma yedeğinin yolu okunamadı. Yedek klasörünü açıp dosyanın adını kontrol edin.",
+        )
+    })?;
+    record_log(
+        conn,
+        now,
+        path_text,
+        Some(file_size_i64(path)?),
+        is_auto,
+        true,
+        None,
+    )?;
+    repo::setting::set(conn, "last_backup_at", now)
+}
+
+pub(crate) fn remove_sqlite_sidecars(db_path: &Path) -> AppResult<()> {
+    for suffix in ["-wal", "-shm"] {
+        let path = sidecar_path(db_path, suffix);
+        if path.exists() {
+            fs::remove_file(&path).map_err(|err| {
+                eprintln!("[kurs] SQLite yan dosyası kaldırılamadı ({}): {err}", path.display());
+                AppError::new(
+                    "backup.restore_sidecar",
+                    "Eski veritabanı yan dosyaları temizlenemedi. Programı kapatıp yeniden deneyin.",
+                )
+            })?;
+        }
+    }
+    Ok(())
+}
+
+fn sidecar_path(db_path: &Path, suffix: &str) -> PathBuf {
+    let mut name = db_path.as_os_str().to_os_string();
+    name.push(suffix);
+    PathBuf::from(name)
+}
+
+fn open_and_validate_schema(path: &Path) -> AppResult<Connection> {
+    let backup = Connection::open_with_flags(
+        path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .map_err(|err| backup_invalid("Yedek dosyası yeniden açılamadı.", err))?;
+
+    for table in EXPECTED_TABLES {
+        let exists: bool = backup
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = ?1)",
+                [table],
+                |row| row.get(0),
+            )
+            .map_err(|err| backup_invalid("Yedek tablosu doğrulanamadı.", err))?;
+        if !exists {
+            return Err(AppError::new(
+                "backup.missing_table",
+                "Yedek eksik oluşturuldu. Başka bir yedek seçin veya yeniden yedek alın.",
+            ));
+        }
+    }
+    Ok(backup)
 }
 
 fn critical_counts(conn: &Connection) -> AppResult<CriticalCounts> {
@@ -278,6 +417,43 @@ fn local_day(now: &str) -> AppResult<&str> {
     Ok(day)
 }
 
+fn file_stamp(now: &str) -> AppResult<String> {
+    local_day(now)?;
+    let time = now.get(11..16).ok_or_else(|| {
+        AppError::new(
+            "backup.date",
+            "Yedek saati okunamadı. Programı kapatıp yeniden açın.",
+        )
+    })?;
+    if !time.chars().enumerate().all(|(index, ch)| {
+        if index == 2 {
+            ch == ':'
+        } else {
+            ch.is_ascii_digit()
+        }
+    }) {
+        return Err(AppError::new(
+            "backup.date",
+            "Yedek saati okunamadı. Programı kapatıp yeniden açın.",
+        ));
+    }
+    Ok(format!("{}-{}", &now[..10], time.replace(':', "")))
+}
+
+fn unique_target(directory: &Path, stem: &str, suffix: &str) -> PathBuf {
+    let first = directory.join(format!("{stem}{suffix}"));
+    if !first.exists() {
+        return first;
+    }
+    for number in 2..=10_000 {
+        let candidate = directory.join(format!("{stem}-{number}{suffix}"));
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+    directory.join(format!("{stem}-son{suffix}"))
+}
+
 fn file_size_i64(path: &Path) -> AppResult<i64> {
     let bytes = path
         .metadata()
@@ -304,6 +480,14 @@ fn backup_io(message: &str, detail: impl std::fmt::Display) -> AppError {
     AppError::new("backup.io", message)
 }
 
+fn backup_directory_error(err: std::io::Error) -> AppError {
+    eprintln!("[kurs] yedek klasörü oluşturulamadı: {err}");
+    AppError::new(
+        "backup.directory",
+        "Yedek klasörü oluşturulamadı. Belgeler klasörünün yazma iznini ve disk alanını kontrol edin.",
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -314,6 +498,19 @@ mod tests {
         assert_eq!(
             path,
             Path::new("Belgeler").join("Kurs Takip").join("Yedekler")
+        );
+    }
+
+    #[test]
+    fn wal_ve_shm_yollari_string_birlestirmeden_kurulur() {
+        let db_path = Path::new("veri").join("kurs.db");
+        assert_eq!(
+            sidecar_path(&db_path, "-wal"),
+            Path::new("veri").join("kurs.db-wal")
+        );
+        assert_eq!(
+            sidecar_path(&db_path, "-shm"),
+            Path::new("veri").join("kurs.db-shm")
         );
     }
 

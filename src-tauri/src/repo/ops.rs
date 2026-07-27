@@ -121,3 +121,26 @@ pub fn mark_backup_pruned(conn: &Connection, file_path: &str, now: &str) -> AppR
     )?;
     Ok(())
 }
+
+pub fn recent_backup_logs(conn: &Connection) -> AppResult<Vec<BackupLog>> {
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {cols} FROM backup_log \
+         WHERE deleted_at IS NULL ORDER BY taken_at DESC, id DESC LIMIT 30",
+        cols = BackupLog::COLUMNS
+    ))?;
+    let rows = stmt.query_map([], BackupLog::from_row)?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row?);
+    }
+    Ok(out)
+}
+
+pub fn is_successful_backup_path(conn: &Connection, file_path: &str) -> AppResult<bool> {
+    Ok(conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM backup_log \
+         WHERE file_path = ?1 AND ok = 1 AND deleted_at IS NULL)",
+        [file_path],
+        |row| row.get(0),
+    )?)
+}

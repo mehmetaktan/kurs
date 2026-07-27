@@ -553,6 +553,7 @@ export const tr = {
       teachers: 'Öğretmenler',
       closedDays: 'Tatil günleri',
       general: 'Genel',
+      backup: 'Yedekleme',
     },
     priceRules: {
       heading: 'Fiyat tarifeleri',
@@ -1010,7 +1011,11 @@ export const tr = {
     },
     backup: {
       heading: 'Yedekleme',
-      soon: 'Yedekleme durumu son fazda bu şeritte görünecek.',
+      empty: 'Henüz başarılı yedek yok.',
+      automatic: 'Son yedek otomatik alındı.',
+      manual: 'Son yedek elle alındı.',
+      delayed: 'gündür yedek alınmadı.',
+      action: 'Şimdi yedekle',
     },
   },
 
@@ -1196,6 +1201,76 @@ export const tr = {
       doneSkippedPrefix: '·',
       doneSkippedSuffix: 'ders zaten programdaydı.',
       nothing: 'Yeni ders eklenmedi; hepsi zaten programdaydı.',
+    },
+  },
+
+  backup: {
+    heading: 'Yedekleme',
+    lead:
+      'Veriler her gün Belgeler klasörüne otomatik yedeklenir. Bilgisayar arızasına karşı düzenli olarak USB belleğe veya bulut klasörüne de kopyalayın.',
+    history: 'Son yedeklemeler',
+    actions: {
+      openFolder: 'Yedek klasörünü aç',
+      restore: 'Yedekten geri yükle',
+      create: 'Şimdi yedekle',
+      working: 'Yedekleniyor…',
+      copy: 'Başka klasöre kopyala',
+    },
+    directory: {
+      label: 'Yedek klasörü',
+      hint: 'Belgeler altında tutulur; son 30 yedek saklanır.',
+    },
+    warnDays: {
+      label: 'Kaç gün sonra uyarı verilsin',
+      hint: '1 ile 30 gün arasında yazın.',
+      error: 'Uyarı günü 1 ile 30 arasında olmalı. Değeri düzeltip yeniden deneyin.',
+    },
+    table: {
+      label: 'Yedekleme geçmişi',
+      countSuffix: 'kayıt',
+      date: 'Tarih',
+      kind: 'Tür',
+      automatic: 'Otomatik',
+      manual: 'Elle',
+      size: 'Boyut',
+      status: 'Durum',
+      success: 'Başarılı',
+      failed: 'Başarısız',
+      action: 'İşlem',
+    },
+    empty: {
+      title: 'Henüz yedek alınmadı',
+      body: 'Şimdi yedekle düğmesine basın; sonraki günlerde otomatik yedekler burada görünür.',
+    },
+    dialog: {
+      restoreTitle: 'Geri yüklenecek yedeği seçin',
+      databaseFiles: 'Kurs Takip yedekleri',
+      copyTitle: 'Yedeğin kopyalanacağı klasörü seçin',
+    },
+    restore: {
+      firstTitle: 'Bu yedek geri yüklensin mi?',
+      firstDescription:
+        'Program önce bugünkü verilerinizi otomatik olarak yedekleyecek, ardından seçtiğiniz yedeğe dönecek.',
+      firstConfirm: 'Yedeği kontrol etmeye devam et',
+      firstHint: 'Henüz hiçbir veri değişmeyecek.',
+      secondTitle: 'Mevcut verilerin yerine yedek konsun mu?',
+      secondDescription:
+        'Bu işlem ekrandaki öğrenci, ders ve tahsilatları seçtiğiniz yedeğin tarihindeki hâline döndürür.',
+      secondConfirm: 'Yedeği geri yükle',
+      secondHint: 'İşlemden önce alınan kurtarma yedeği Belgeler klasöründe kalacak.',
+    },
+    messages: {
+      created: 'Yedek başarıyla alındı.',
+      copied: 'Yedek seçilen klasöre kopyalandı.',
+      restored: 'Yedek geri yüklendi.',
+    },
+    errors: {
+      openDirectory:
+        'Yedek klasörü açılamadı. Belgeler klasörünü Dosya Gezgini üzerinden açmayı deneyin.',
+    },
+    units: {
+      kilobyte: 'KB',
+      megabyte: 'MB',
     },
   },
 

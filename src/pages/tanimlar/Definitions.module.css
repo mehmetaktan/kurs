@@ -158,3 +158,73 @@
 .muted {
   color: var(--color-text-muted);
 }
+
+/* ── Yedekleme (E19) ─────────────────────────────────────────────────────── */
+
+.backupActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+.backupError {
+  padding-bottom: var(--space-4);
+}
+
+.backupSettings {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(220px, 1fr);
+  gap: var(--space-4);
+  max-width: 920px;
+  padding-bottom: var(--space-5);
+}
+
+.backupLabel {
+  display: block;
+  margin-bottom: var(--space-2);
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+  letter-spacing: var(--letter-spacing-caps);
+  text-transform: uppercase;
+}
+
+.backupPath {
+  display: block;
+  overflow-wrap: anywhere;
+  margin-bottom: var(--space-2);
+  font-size: var(--font-size-meta);
+}
+
+.backupHistory {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.backupFailure {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  min-width: 0;
+}
+
+.backupFailure small {
+  overflow: hidden;
+  color: var(--color-danger);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (width < 900px) {
+  .sectionHead {
+    flex-direction: column;
+  }
+
+  .backupActions {
+    justify-content: flex-start;
+  }
+
+  .backupSettings {
+    grid-template-columns: 1fr;
+  }
+}

@@ -20,6 +20,7 @@ pub mod text;
 #[cfg(feature = "seed")]
 pub mod seed;
 
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -98,6 +99,100 @@ impl AppState {
             Err(err) => Err(err.clone()),
         }
     }
+
+    /// ADR-019 geri yükleme: aday önce doğrulanır, canlı veritabanı `VACUUM INTO`
+    /// ile güvene alınır, bağlantı kapatılır ve eski `-wal` / `-shm` temizlenir.
+    pub fn restore_from_backup(&self, source: &Path, now: &str) -> AppResult<PathBuf> {
+        backup::validate_restore_candidate(source)?;
+        let backup_dir = self.backup_dir.clone()?;
+        let incoming = self.db_path.with_extension("restore-incoming.db");
+        if incoming.exists() {
+            fs::remove_file(&incoming)
+                .map_err(|err| AppError::internal("restore_stale_incoming", err))?;
+        }
+        fs::copy(source, &incoming).map_err(|err| {
+            eprintln!("[kurs] geri yükleme adayı hazırlanamadı: {err}");
+            AppError::new(
+                "backup.restore_copy",
+                "Yedek geri yükleme için hazırlanamadı. Disk alanını ve dosya iznini kontrol edin.",
+            )
+        })?;
+        if let Err(error) = backup::validate_restore_candidate(&incoming) {
+            let _ = fs::remove_file(&incoming);
+            return Err(error);
+        }
+
+        let mut guard = self
+            .db
+            .lock()
+            .map_err(|err| AppError::internal("db_mutex_poisoned", err))?;
+        let placeholder = AppError::new(
+            "backup.restoring",
+            "Yedek geri yükleniyor. İşlem tamamlanana kadar bekleyin.",
+        );
+        let current = std::mem::replace(&mut *guard, Err(placeholder));
+        let current = match current {
+            Ok(conn) => conn,
+            Err(error) => {
+                let _ = fs::remove_file(&incoming);
+                *guard = Err(error.clone());
+                return Err(error);
+            }
+        };
+
+        let safety = match backup::create_pre_restore_backup(&current, &backup_dir, now) {
+            Ok(path) => path,
+            Err(error) => {
+                let _ = fs::remove_file(&incoming);
+                *guard = Ok(current);
+                return Err(error);
+            }
+        };
+        drop(current);
+
+        if let Err(error) = backup::remove_sqlite_sidecars(&self.db_path) {
+            let _ = fs::remove_file(&incoming);
+            *guard = db::open(&self.db_path);
+            return Err(error);
+        }
+
+        let rollback = self.db_path.with_extension(format!(
+            "restore-rollback-{}.db",
+            now.replace(['-', ':', ' '], "")
+        ));
+        if let Err(error) = fs::rename(&self.db_path, &rollback) {
+            let _ = fs::remove_file(&incoming);
+            *guard = db::open(&self.db_path);
+            return Err(AppError::internal("restore_rename_live", error));
+        }
+        if let Err(error) = fs::rename(&incoming, &self.db_path) {
+            let _ = fs::rename(&rollback, &self.db_path);
+            *guard = db::open(&self.db_path);
+            return Err(AppError::internal("restore_rename_incoming", error));
+        }
+
+        let reopened = db::open(&self.db_path).and_then(|conn| {
+            db::migrate::run(&conn)?;
+            backup::register_existing_success(&conn, &safety, now, true)?;
+            Ok(conn)
+        });
+        match reopened {
+            Ok(conn) => {
+                *guard = Ok(conn);
+                if let Err(err) = fs::remove_file(&rollback) {
+                    eprintln!("[kurs] geçici geri yükleme dosyası kaldırılamadı: {err}");
+                }
+                Ok(safety)
+            }
+            Err(error) => {
+                let _ = fs::remove_file(&self.db_path);
+                let _ = backup::remove_sqlite_sidecars(&self.db_path);
+                let _ = fs::rename(&rollback, &self.db_path);
+                *guard = db::open(&self.db_path);
+                Err(error)
+            }
+        }
+    }
 }
 
 /// Açılış bakımı: eksik seansların üretimi (§1.14) ve vade tahakkuku (ADR-015).
@@ -144,6 +239,7 @@ fn log_startup(conn: &Connection, db_path: &Path, applied_now: &[i64]) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             // Yol string birleştirmeyle kurulmaz → Tauri path API (CLAUDE.md > Windows).
@@ -181,6 +277,10 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::app_status,
+            commands::backup_status,
+            commands::create_backup_now,
+            commands::copy_backup_to,
+            commands::restore_backup,
             commands::list_settings,
             commands::list_students,
             commands::search_students,

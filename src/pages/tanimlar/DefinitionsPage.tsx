@@ -5,13 +5,14 @@ import { PageHeader } from '../../shell/PageHeader'
 import { Tabs } from '../../ui'
 import type { TabItem } from '../../ui'
 import { ClosedDaysTab } from './ClosedDaysTab'
+import { BackupTab } from './BackupTab'
 import { GeneralTab } from './GeneralTab'
 import { PriceRulesTab } from './PriceRulesTab'
 import { SubjectsTab } from './SubjectsTab'
 import { TeachersTab } from './TeachersTab'
 import styles from './Definitions.module.css'
 
-type DefinitionsTab = 'subjects' | 'prices' | 'teachers' | 'closedDays' | 'general'
+type DefinitionsTab = 'subjects' | 'prices' | 'teachers' | 'closedDays' | 'general' | 'backup'
 
 /**
  * Tanımlar — E7 (branşlar), **öğretmenler (ADR-037)**, E8 (tatil / kapalı günler)
@@ -33,6 +34,7 @@ export function DefinitionsPage() {
     { value: 'teachers', label: tr.definitions.tabs.teachers },
     { value: 'closedDays', label: tr.definitions.tabs.closedDays },
     { value: 'general', label: tr.definitions.tabs.general },
+    { value: 'backup', label: tr.definitions.tabs.backup },
   ]
 
   return (
@@ -47,6 +49,7 @@ export function DefinitionsPage() {
         {tab === 'teachers' && <TeachersTab />}
         {tab === 'closedDays' && <ClosedDaysTab />}
         {tab === 'general' && <GeneralTab />}
+        {tab === 'backup' && <BackupTab />}
       </PageContent>
     </>
   )

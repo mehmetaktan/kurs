@@ -88,6 +88,14 @@
   text-wrap: pretty;
 }
 
+.backupDelayed {
+  margin: var(--space-2) 0;
+  font-size: var(--font-size-meta);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-prose);
+  color: var(--color-warn-text);
+}
+
 .debtorList { display: grid; margin-top: var(--space-2); }
 .debtorRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-1) var(--space-2); padding: var(--space-2) 0; border-top: 1px solid var(--color-border-subtle); }
 .debtorRow > span { overflow: hidden; font-weight: var(--font-weight-semibold); text-overflow: ellipsis; white-space: nowrap; }

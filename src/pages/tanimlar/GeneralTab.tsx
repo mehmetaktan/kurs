@@ -170,23 +170,15 @@ export function GeneralTab() {
         </SettingGroup>
 
         <SettingGroup title={t.groups.other}>
-          <div className={styles.formPair}>
-            <Select
-              label={t.keys.rowDensity}
-              value={values.row_density ?? 'comfortable'}
-              options={[
-                { value: 'comfortable', label: t.density.comfortable },
-                { value: 'compact', label: t.density.compact },
-              ]}
-              onChange={(event) => void save('row_density', event.target.value)}
-            />
-            <NumberSetting
-              label={t.keys.backupWarnDays}
-              hint={t.hints.backupWarnDays}
-              value={values.backup_warn_days ?? ''}
-              onCommit={(value) => void save('backup_warn_days', value)}
-            />
-          </div>
+          <Select
+            label={t.keys.rowDensity}
+            value={values.row_density ?? 'comfortable'}
+            options={[
+              { value: 'comfortable', label: t.density.comfortable },
+              { value: 'compact', label: t.density.compact },
+            ]}
+            onChange={(event) => void save('row_density', event.target.value)}
+          />
         </SettingGroup>
       </div>
     </section>
