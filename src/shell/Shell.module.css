@@ -2,7 +2,7 @@
 
 .shell {
   display: flex;
-  min-width: var(--measure-app-min-width);
+  min-width: min(100vw, var(--measure-app-min-width));
   height: 100vh;
   overflow: hidden;
 }
