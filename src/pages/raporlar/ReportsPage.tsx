@@ -202,20 +202,20 @@ export function ReportsPage() {
     {
       key: 'month',
       header: tr.reports.monthly.table.month,
-      width: 'minmax(180px, 1fr)',
+      width: 'minmax(120px, 1fr)',
       render: (row) => formatReportMonth(row.month),
     },
     {
       key: 'count',
       header: tr.reports.monthly.table.count,
-      width: '160px',
+      width: 'minmax(120px, 0.8fr)',
       align: 'end',
       render: (row) => <span className={styles.number}>{row.collectionCount}</span>,
     },
     {
       key: 'amount',
       header: tr.reports.monthly.table.amount,
-      width: '180px',
+      width: 'minmax(140px, 0.9fr)',
       align: 'end',
       render: (row) => (
         <strong className={styles.number}>{formatLira(row.collectedKurus)}</strong>
@@ -226,7 +226,7 @@ export function ReportsPage() {
     {
       key: 'subject',
       header: tr.reports.subjects.table.subject,
-      width: 'minmax(220px, 1fr)',
+      width: 'minmax(160px, 1fr)',
       render: (row) => (
         <span className={styles.subjectName}>
           {row.subjectName}
@@ -237,7 +237,7 @@ export function ReportsPage() {
     {
       key: 'count',
       header: tr.reports.subjects.table.count,
-      width: '180px',
+      width: 'minmax(130px, 0.55fr)',
       align: 'end',
       render: (row) => <strong className={styles.number}>{row.processedSessionCount}</strong>,
     },

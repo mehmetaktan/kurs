@@ -60,7 +60,12 @@
   min-width: 0;
 }
 
-@media (width < 1100px) {
+/*
+ * Pencere 1280px iken kenar çubuğu ve sayfa boşlukları iki tabloya yaklaşık 490'ar
+ * piksel bırakıyor. Windows font metrikleri de hesaba katıldığında tablolar bu eşiğin
+ * altında yan yana sıkışmasın; tek kolona geçsin.
+ */
+@media (width < 1360px) {
   .reportTables {
     grid-template-columns: 1fr;
   }

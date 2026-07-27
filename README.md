@@ -9,7 +9,16 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/mehmetaktan/kurs/releases"><strong>Windows için indir</strong></a>
+  <a href="https://github.com/mehmetaktan/kurs/releases/latest"><strong>Windows için indir</strong></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/mehmetaktan/kurs/actions/workflows/ci.yml">
+    <img src="https://github.com/mehmetaktan/kurs/actions/workflows/ci.yml/badge.svg" alt="CI durumu">
+  </a>
+  <a href="https://github.com/mehmetaktan/kurs/releases/latest">
+    <img src="https://img.shields.io/github/v/release/mehmetaktan/kurs?label=s%C3%BCr%C3%BCm" alt="En son sürüm">
+  </a>
 </p>
 
 Kurs Takip, küçük özel ders kurslarının günlük işlerini tek bir yerde yönetmesi için
@@ -32,12 +41,13 @@ gerektirmez; bilgiler yalnızca kullanılan bilgisayarda saklanır.
 
 ## İndirme ve kurulum
 
-En güncel Windows kurulum dosyasına
-[GitHub Releases sayfasından](https://github.com/mehmetaktan/kurs/releases)
-ulaşabilirsiniz. İndirdiğiniz `.msi` dosyasını açıp kurulum adımlarını izlemeniz
-yeterlidir.
+En güncel 64-bit Windows kurulum dosyasını
+[son sürüm sayfasından](https://github.com/mehmetaktan/kurs/releases/latest)
+indirebilirsiniz. İndirdiğiniz `.msi` dosyasını açıp kurulum adımlarını izlemeniz
+yeterlidir. Kurulum paketi WebView2'yi çevrimdışı kurabilecek şekilde hazırlanmıştır.
 
-> Henüz bir sürüm görünmüyorsa yayınlanmış kurulum paketi bulunmuyor demektir.
+Adım adım yardım için [kurulum kılavuzunu](https://github.com/mehmetaktan/kurs/blob/main/docs/KURULUM.md)
+inceleyebilirsiniz.
 
 ## Verileriniz sizde kalır
 
@@ -63,5 +73,7 @@ npm run check
 
 Windows kurulum paketi GitHub Actions üzerinde derlenir.
 
-Kurs sahibi için [kurulum kılavuzu](docs/KURULUM.md) ve
-[kullanım kılavuzu](docs/KULLANIM-KILAVUZU.md) depoda bulunur.
+Kurs sahibi için
+[kurulum kılavuzu](https://github.com/mehmetaktan/kurs/blob/main/docs/KURULUM.md) ve
+[kullanım kılavuzu](https://github.com/mehmetaktan/kurs/blob/main/docs/KULLANIM-KILAVUZU.md)
+depoda bulunur.
