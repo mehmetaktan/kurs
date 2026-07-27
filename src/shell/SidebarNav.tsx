@@ -64,7 +64,7 @@ export function SidebarNav({ currentPath, debtorCount }: SidebarNavProps) {
       <div className={styles.footer}>
         {tr.app.versionPrefix} {APP_VERSION}
         {tr.units.separator}
-        {tr.app.versionLocal}
+        {tr.app.versionPublisher}
       </div>
     </aside>
   )

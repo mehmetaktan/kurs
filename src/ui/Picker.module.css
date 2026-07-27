@@ -19,7 +19,9 @@
   position: absolute;
   top: calc(100% + var(--space-1));
   left: 0;
-  z-index: var(--z-sticky);
+  /* Yapışkan tablo başlığının üstünde kalmalı; ikisi aynı katmandaysa DOM'da sonra
+     gelen başlık ay seçimini ve takvim günlerini örter. */
+  z-index: var(--z-calendar-header);
   padding: var(--space-3);
   background: var(--color-surface-card);
   border: 1px solid var(--color-border-default);

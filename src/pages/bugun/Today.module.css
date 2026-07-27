@@ -15,7 +15,13 @@
   max-width: var(--measure-content-max);
 }
 
-@media (width < 1100px) {
+/*
+ * Ders tablosunun beş kolonu (özellikle Yoklama + Eylem) yaklaşık 766px ister.
+ * Kenar çubuğu açıkken 1500px altındaki pencerelerde ders kolonu bunun altına düşer
+ * ve sağdaki Ertele/İptal/Sil düğmeleri kırpılır. Yan özetleri alta alarak tablonun
+ * kullanılabilir genişliği koruyoruz.
+ */
+@media (width < 1500px) {
   .layout {
     grid-template-columns: 1fr;
   }

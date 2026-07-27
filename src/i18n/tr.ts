@@ -18,10 +18,9 @@ export const tr = {
     // config'ten gelir. Faz 3'te burada `'DersTakip'` yazıyordu — hiçbir yerde
     // karşılığı olmayan dördüncü bir ad.
     brand: 'Kurs Takip',
-    // Alt bilgi: "Sürüm <numara> · Yerel". Sayı APP_VERSION'dan, kelimeler buradan.
-    // "Yerel" kasıtlı: kullanıcıya verinin buluta gitmediğini söyler (EKRANLAR.md).
+    // Alt bilgi: "Sürüm <numara> · AktanSoft". Sayı APP_VERSION'dan, kelimeler buradan.
     versionPrefix: 'Sürüm',
-    versionLocal: 'Yerel',
+    versionPublisher: 'AktanSoft',
     skipToContent: 'İçeriğe geç',
   },
 
