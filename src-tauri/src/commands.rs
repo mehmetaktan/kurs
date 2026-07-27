@@ -18,6 +18,7 @@ use crate::model::{
 };
 use crate::repo::attendance::{
     AttendanceDetail, MakeupDebtRow, SaveAttendanceInput, SaveAttendanceReport,
+    StudentLessonOverview,
 };
 use crate::repo::finance::{
     PackageCloseMode, PackageCloseReport, PackageOverview, PackageSaleInput,
@@ -708,6 +709,16 @@ pub fn save_makeup_session(
 #[tauri::command]
 pub fn makeup_debts(state: State<'_, AppState>) -> AppResult<Vec<MakeupDebtRow>> {
     state.with_conn(repo::attendance::makeup_debt_rows)
+}
+
+/// Öğrenci detayı > Dersler: geçmiş, devam özeti ve açık telafiler tek projeksiyonda.
+#[tauri::command]
+pub fn student_lesson_overview(
+    state: State<'_, AppState>,
+    student_id: i64,
+    now: String,
+) -> AppResult<StudentLessonOverview> {
+    state.with_conn(|conn| repo::attendance::student_lesson_overview(conn, student_id, &now))
 }
 
 /// Haftalık program tanımlı mı — Bugün ekranının iki boş durumunu ayırır (R1.7).

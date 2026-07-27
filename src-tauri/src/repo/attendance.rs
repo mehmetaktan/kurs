@@ -6,7 +6,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::{Months, NaiveDate, NaiveDateTime};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
@@ -422,6 +422,202 @@ pub struct MakeupDebtRow {
     pub student_id: i64,
     pub full_name: String,
     pub pending_count: i64,
+}
+
+/// Öğrenci detayındaki ders geçmişinin bir satırı.
+///
+/// `status`, şemadaki beş yoklama değerinden biridir. İptal edilen seans için yoklama
+/// satırı hiç oluşmamış olsa da geçmişte `cancelled` döner; diğer yoklamasız geçmiş
+/// seanslar `pending` kalır.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StudentLessonRow {
+    pub session_id: i64,
+    pub starts_at: String,
+    pub ends_at: String,
+    pub subject_name: String,
+    pub group_name: Option<String>,
+    pub status: String,
+    pub is_makeup: bool,
+}
+
+/// Henüz `done` durumundaki canlı bir telafiyle kapanmamış mazeretli yoklama.
+///
+/// Planlanmış telafi varsa tarihi gelir; hiç planlanmamış veya yalnızca iptal edilmiş
+/// telafi varsa iki `makeup_*` alanı da boştur. Kaynak yoklama başına tek satır döner.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StudentPendingMakeupRow {
+    pub attendance_id: i64,
+    pub source_starts_at: String,
+    pub subject_name: String,
+    pub makeup_session_id: Option<i64>,
+    pub makeup_starts_at: Option<String>,
+}
+
+/// Öğrenci detayı > Dersler sekmesinin tek salt-okunur projeksiyonu.
+///
+/// Devam yüzdesi:
+/// - pay: `present`
+/// - payda: `present + excused + unexcused`
+/// - `pending` ve `cancelled` geçmişte görünür ama paydaya girmez.
+///
+/// Devamsızlık dağılımı `local_now` tarihinden üç takvim ayı geriye uzanan kapalı
+/// aralıkta yalnızca `excused` ve `unexcused` sonuçlarını sayar.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StudentLessonOverview {
+    pub lessons: Vec<StudentLessonRow>,
+    pub attendance_percentage: Option<i64>,
+    pub attendance_eligible_count: i64,
+    pub present_count: i64,
+    pub absence_window_start: String,
+    pub excused_absences: i64,
+    pub unexcused_absences: i64,
+    pub pending_makeups: Vec<StudentPendingMakeupRow>,
+}
+
+/// Öğrencinin geçmiş dersleri, devam özeti ve açık telafi borçları.
+///
+/// `now`, doğrudan arayüzün `local_now` komutundan aldığı yerel duvar saati damgasıdır.
+/// Böylece bugün henüz bitmemiş bir ders geçmişe girmez ve üç aylık pencere başka bir
+/// saat kaynağından hesaplanmaz (ADR-029).
+pub fn student_lesson_overview(
+    conn: &Connection,
+    student_id: i64,
+    now: &str,
+) -> AppResult<StudentLessonOverview> {
+    let now = parse_student_lessons_now(now)?;
+    // Öğrenci arşivlenmiş olsa da geçmişi görünür; yalnızca gerçekten bilinmeyen id hata.
+    let _: crate::model::Student = crate::repo::require(conn, student_id)?;
+
+    let now_text = now.format("%Y-%m-%d %H:%M").to_string();
+    let mut stmt = conn.prepare(
+        "SELECT se.id, se.starts_at, se.ends_at, sub.name, g.name, \
+                CASE WHEN se.status = 'cancelled' THEN 'cancelled' \
+                     ELSE COALESCE(a.status, 'pending') END, \
+                se.is_makeup \
+         FROM session se \
+         JOIN subject sub ON sub.id = se.subject_id \
+         LEFT JOIN study_group g ON g.id = se.study_group_id \
+         LEFT JOIN attendance a ON a.session_id = se.id AND a.student_id = ?1 \
+                                  AND a.deleted_at IS NULL \
+         WHERE se.deleted_at IS NULL AND se.ends_at <= ?2 \
+           AND (se.student_id = ?1 OR EXISTS ( \
+                SELECT 1 FROM enrollment e \
+                WHERE e.student_id = ?1 AND e.study_group_id = se.study_group_id \
+                  AND e.deleted_at IS NULL \
+                  AND e.start_on <= se.session_date \
+                  AND (e.end_on IS NULL OR se.session_date <= e.end_on) \
+           )) \
+         ORDER BY se.starts_at DESC, se.id DESC",
+    )?;
+    let mapped = stmt.query_map(params![student_id, now_text], |row| {
+        Ok(StudentLessonRow {
+            session_id: row.get(0)?,
+            starts_at: row.get(1)?,
+            ends_at: row.get(2)?,
+            subject_name: row.get(3)?,
+            group_name: row.get(4)?,
+            status: row.get(5)?,
+            is_makeup: row.get(6)?,
+        })
+    })?;
+    let mut lessons = Vec::new();
+    for row in mapped {
+        lessons.push(row?);
+    }
+
+    let attendance_eligible_count = lessons
+        .iter()
+        .filter(|row| matches!(row.status.as_str(), "present" | "excused" | "unexcused"))
+        .count() as i64;
+    let present_count = lessons.iter().filter(|row| row.status == "present").count() as i64;
+    let attendance_percentage = (attendance_eligible_count > 0).then(|| {
+        // Tam sayı ve yarım yukarı yuvarlama: 2 / 3 => %67. Float gerektirmez.
+        (present_count * 100 + attendance_eligible_count / 2) / attendance_eligible_count
+    });
+
+    let window_start = now
+        .date()
+        .checked_sub_months(Months::new(3))
+        .ok_or_else(|| {
+            AppError::new(
+                "studentLessons.window",
+                "Üç aylık ders aralığı hesaplanamadı. Ekranı yenileyip tekrar deneyin.",
+            )
+        })?;
+    let window_start_text = window_start.format("%Y-%m-%d").to_string();
+    let (excused_absences, unexcused_absences) = lessons
+        .iter()
+        .filter(|row| row.starts_at.as_str() >= window_start_text.as_str())
+        .fold((0_i64, 0_i64), |(excused, unexcused), row| {
+            match row.status.as_str() {
+                "excused" => (excused + 1, unexcused),
+                "unexcused" => (excused, unexcused + 1),
+                _ => (excused, unexcused),
+            }
+        });
+
+    Ok(StudentLessonOverview {
+        lessons,
+        attendance_percentage,
+        attendance_eligible_count,
+        present_count,
+        absence_window_start: window_start_text,
+        excused_absences,
+        unexcused_absences,
+        pending_makeups: student_pending_makeups(conn, student_id)?,
+    })
+}
+
+fn student_pending_makeups(
+    conn: &Connection,
+    student_id: i64,
+) -> AppResult<Vec<StudentPendingMakeupRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT a.id, source.starts_at, sub.name, makeup.id, makeup.starts_at \
+         FROM attendance a \
+         JOIN session source ON source.id = a.session_id AND source.deleted_at IS NULL \
+         JOIN subject sub ON sub.id = source.subject_id \
+         LEFT JOIN session makeup ON makeup.id = ( \
+             SELECT m.id FROM session m \
+             WHERE m.makeup_for_attendance_id = a.id AND m.is_makeup = 1 \
+               AND m.deleted_at IS NULL AND m.status <> 'cancelled' \
+             ORDER BY m.starts_at, m.id LIMIT 1 \
+         ) \
+         WHERE a.student_id = ?1 AND a.deleted_at IS NULL AND a.status = 'excused' \
+           AND NOT EXISTS ( \
+             SELECT 1 FROM session done_makeup \
+             WHERE done_makeup.makeup_for_attendance_id = a.id \
+               AND done_makeup.is_makeup = 1 AND done_makeup.deleted_at IS NULL \
+               AND done_makeup.status = 'done' \
+           ) \
+         ORDER BY source.starts_at DESC, a.id DESC",
+    )?;
+    let rows = stmt.query_map([student_id], |row| {
+        Ok(StudentPendingMakeupRow {
+            attendance_id: row.get(0)?,
+            source_starts_at: row.get(1)?,
+            subject_name: row.get(2)?,
+            makeup_session_id: row.get(3)?,
+            makeup_starts_at: row.get(4)?,
+        })
+    })?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row?);
+    }
+    Ok(out)
+}
+
+fn parse_student_lessons_now(value: &str) -> AppResult<NaiveDateTime> {
+    NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M").map_err(|_| {
+        AppError::new(
+            "studentLessons.now",
+            "Ders geçmişinin tarihi okunamadı. Ekranı yenileyip tekrar deneyin.",
+        )
+    })
 }
 
 pub fn makeup_debt_rows(conn: &Connection) -> AppResult<Vec<MakeupDebtRow>> {

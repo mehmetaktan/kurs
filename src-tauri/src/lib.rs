@@ -217,6 +217,7 @@ pub fn run() {
             commands::save_attendance,
             commands::save_makeup_session,
             commands::makeup_debts,
+            commands::student_lesson_overview,
             commands::has_schedule,
             commands::is_closed_day,
             commands::save_session,

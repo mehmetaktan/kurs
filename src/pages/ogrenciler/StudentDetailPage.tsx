@@ -36,6 +36,7 @@ import {
   useToast,
 } from '../../ui'
 import { StudentForm } from './StudentForm'
+import { StudentLessonsTab } from './StudentLessonsTab'
 import { PackageSaleModal } from './PackageSaleModal'
 import { StatementPanel } from '../odemeler/StatementPanel'
 import styles from './Students.module.css'
@@ -235,13 +236,7 @@ export function StudentDetailPage({ studentId }: { studentId: number }) {
             />
           )}
 
-          {/* Faz 6 ve Faz 8 — boş bir sekme değil, ne zaman geleceğini söyleyen kart. */}
-          {tab === 'lessons' && (
-            <EmptyState
-              title={tr.students.detail.soon.lessonsTitle}
-              body={tr.students.detail.soon.lessonsBody}
-            />
-          )}
+          {tab === 'lessons' && <StudentLessonsTab studentId={student.id} />}
           {tab === 'payments' && <StatementPanel studentId={student.id} />}
 
           {tab === 'notes' && (

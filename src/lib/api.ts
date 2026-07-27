@@ -981,6 +981,50 @@ export function fetchMakeupDebts(): Promise<MakeupDebtRow[]> {
   return call<MakeupDebtRow[]>('makeup_debts')
 }
 
+export interface StudentLessonRow {
+  sessionId: number
+  startsAt: string
+  endsAt: string
+  subjectName: string
+  groupName: string | null
+  status: AttendanceStatus
+  isMakeup: boolean
+}
+
+export interface StudentPendingMakeupRow {
+  attendanceId: number
+  sourceStartsAt: string
+  subjectName: string
+  makeupSessionId: number | null
+  makeupStartsAt: string | null
+}
+
+/**
+ * Öğrenci detayı > Dersler projeksiyonu.
+ *
+ * Yüzdenin paydası yalnızca `present + excused + unexcused`; `pending` ve
+ * `cancelled` geçmişte görünür ama orana girmez. Devamsızlık penceresi `now`
+ * tarihinden üç takvim ayı geriye uzanır ve iki ucu da kapsar.
+ */
+export interface StudentLessonOverview {
+  lessons: StudentLessonRow[]
+  attendancePercentage: number | null
+  attendanceEligibleCount: number
+  presentCount: number
+  absenceWindowStart: string
+  excusedAbsences: number
+  unexcusedAbsences: number
+  pendingMakeups: StudentPendingMakeupRow[]
+}
+
+/** `now`, `local_now` komutunun döndürdüğü yerel duvar saati damgasıdır. */
+export function fetchStudentLessonOverview(
+  studentId: number,
+  now: string,
+): Promise<StudentLessonOverview> {
+  return call<StudentLessonOverview>('student_lesson_overview', { studentId, now })
+}
+
 /**
  * Haftalık program tanımlı mı — Bugün ekranının **iki** boş durumunu ayırır (R1.7).
  * Boş bir gün listesi iki durumu da üretiyor; ayrımı başka bir şey veremiyor.
