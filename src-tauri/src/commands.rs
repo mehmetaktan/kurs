@@ -31,9 +31,9 @@ use crate::repo::reports::{
 };
 use crate::repo::roster::{StudentDetail, StudentInput, StudentQuery, StudentRow};
 use crate::repo::schedule::{
-    ApplyTemplateReport, Capacity, ClosedDayInput, Conflict, DaySessionRow, DeleteReport,
-    GroupDetail, GroupInput, GroupQuery, GroupRow, MakeupSessionInput, RescheduleReport,
-    RescheduleScope, SaveSessionReport, SessionInput, SessionScope, SubjectInput, TemplatePreview,
+    Capacity, ClosedDayInput, Conflict, DaySessionRow, DeleteReport, GroupDetail, GroupInput,
+    GroupQuery, GroupRow, MakeupSessionInput, RescheduleReport, RescheduleScope, SaveSessionReport,
+    SessionInput, SessionScope, SubjectInput,
 };
 use crate::{db, repo, AppState};
 
@@ -872,34 +872,6 @@ pub fn save_session(
     input: SessionInput,
 ) -> AppResult<SaveSessionReport> {
     state.with_conn(|conn| repo::schedule::save_session(conn, &input, clock::today_local()))
-}
-
-/// Şablondan oluştur — **önizleme**. Yazmaz; onay bu listeden sonra istenir (E6).
-#[tauri::command]
-pub fn template_preview(
-    state: State<'_, AppState>,
-    source_day: String,
-    apply_from: String,
-) -> AppResult<TemplatePreview> {
-    state.with_conn(|conn| {
-        let source = parse_day(&source_day)?;
-        let from = parse_day(&apply_from)?;
-        repo::schedule::template_preview(conn, source, from)
-    })
-}
-
-/// Önizlenen haftayı haftalık şablona çevirir ve seansları üretir.
-#[tauri::command]
-pub fn apply_template(
-    state: State<'_, AppState>,
-    source_day: String,
-    apply_from: String,
-) -> AppResult<ApplyTemplateReport> {
-    state.with_conn(|conn| {
-        let source = parse_day(&source_day)?;
-        let from = parse_day(&apply_from)?;
-        repo::schedule::apply_template(conn, source, from, clock::today_local())
-    })
 }
 
 fn parse_day(raw: &str) -> AppResult<chrono::NaiveDate> {

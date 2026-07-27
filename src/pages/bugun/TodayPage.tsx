@@ -39,7 +39,6 @@ import type { Column } from '../../ui'
 import { AttendanceDrawer } from '../dersler/AttendanceDrawer'
 import { SessionActions, type SessionAction } from '../dersler/SessionActions'
 import { SessionForm } from '../dersler/SessionForm'
-import { TemplateModal } from '../dersler/TemplateModal'
 import { subjectColorOf } from '../tanimlar/palette'
 import { sortTrBy } from '../../lib/sortTr'
 import {
@@ -51,6 +50,7 @@ import {
 } from './today'
 import styles from './Today.module.css'
 import { sortDebtors, visibleReceivableKurus } from '../odemeler/debtors'
+import { canTakeAttendance } from '../dersler/attendancePolicy'
 
 /**
  * EKRANLAR.md §1 — açılış ekranı. Kurs sahibi her sabah bunu açıyor.
@@ -80,7 +80,6 @@ export function TodayPage() {
   const toast = useToast()
 
   const [formOpen, setFormOpen] = useState(false)
-  const [templateOpen, setTemplateOpen] = useState(false)
   const [editing, setEditing] = useState<DaySessionRow | null>(null)
   const [action, setAction] = useState<{ row: DaySessionRow; kind: SessionAction } | null>(null)
   const [attendanceRow, setAttendanceRow] = useState<DaySessionRow | null>(null)
@@ -143,6 +142,21 @@ export function TodayPage() {
     void load()
   }, [load])
 
+  useEffect(() => {
+    const refreshClock = () => void fetchLocalNow().then(setNow).catch(() => undefined)
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') refreshClock()
+    }
+    window.addEventListener('focus', refreshClock)
+    document.addEventListener('visibilitychange', onVisibility)
+    const timer = window.setInterval(refreshClock, 60_000)
+    return () => {
+      window.removeEventListener('focus', refreshClock)
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.clearInterval(timer)
+    }
+  }, [])
+
   const today = now?.slice(0, 10) ?? null
   const split = useMemo(() => splitByNow(rows ?? [], now ?? ''), [rows, now])
   const pending = useMemo(() => pendingAttendanceCount(rows ?? [], now ?? ''), [rows, now])
@@ -171,7 +185,6 @@ export function TodayPage() {
 
   const refresh = () => {
     setFormOpen(false)
-    setTemplateOpen(false)
     setAction(null)
     setEditing(null)
     setAttendanceRow(null)
@@ -247,7 +260,6 @@ export function TodayPage() {
               <TodayEmptyState
                 hasSchedule={hasSchedule}
                 onCreate={openNew}
-                onTemplate={() => setTemplateOpen(true)}
               />
             )}
 
@@ -315,14 +327,6 @@ export function TodayPage() {
         />
       )}
 
-      {today !== null && (
-        <TemplateModal
-          open={templateOpen}
-          today={today}
-          onClose={() => setTemplateOpen(false)}
-          onApplied={refresh}
-        />
-      )}
 
       {today !== null && action !== null && (
         <SessionActions
@@ -660,14 +664,18 @@ function AttendanceCell({
       </Button>
     )
   }
-  if (isPendingAttendance(row, now)) {
+  if (canTakeAttendance(row, now)) {
     return (
-      <Button variant="warning" size="small" onClick={() => onOpen(row)}>
+      <Button variant={isPendingAttendance(row, now) ? 'warning' : 'secondary'} size="small" onClick={() => onOpen(row)}>
         {tr.attendance.open}
       </Button>
     )
   }
-  return <span className={styles.muted}>{tr.today.lessons.attendanceWaiting}</span>
+  return (
+    <Button size="small" disabled title={tr.attendance.startsWhenLessonStarts}>
+      {tr.today.lessons.attendanceWaiting}
+    </Button>
+  )
 }
 
 /**
@@ -681,11 +689,9 @@ function AttendanceCell({
 function TodayEmptyState({
   hasSchedule,
   onCreate,
-  onTemplate,
 }: {
   hasSchedule: boolean
   onCreate: () => void
-  onTemplate: () => void
 }) {
   if (hasSchedule) {
     return (
@@ -707,7 +713,6 @@ function TodayEmptyState({
           {tr.today.lessons.noScheduleAction}
         </Button>
       }
-      secondaryAction={<Button onClick={onTemplate}>{tr.today.fromTemplate}</Button>}
     />
   )
 }

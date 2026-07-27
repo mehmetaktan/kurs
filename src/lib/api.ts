@@ -1195,8 +1195,6 @@ export function fetchIsClosedDay(day: string): Promise<boolean> {
 }
 
 /** `'once'` tek bir seans, `'weekly'` bir şablon yazar ve seansları üretir. */
-export type SessionRepeat = 'once' | 'weekly'
-
 export interface SessionInput {
   /** Dolu = mevcut **tek** dersi düzenle. Şablon düzenleme grup formunda (E5). */
   id: number | null
@@ -1210,7 +1208,6 @@ export interface SessionInput {
   /** `'HH:MM'` */
   startTime: string
   durationMin: number
-  repeat: SessionRepeat
 }
 
 export interface SaveSessionReport {
@@ -1226,52 +1223,6 @@ export interface SaveSessionReport {
  */
 export function saveSession(input: SessionInput): Promise<SaveSessionReport> {
   return call<SaveSessionReport>('save_session', { input })
-}
-
-export interface TemplateSlot {
-  /** 1 = Pazartesi … 7 = Pazar */
-  weekday: number
-  startTime: string
-  durationMin: number
-  subjectId: number
-  studyGroupId: number | null
-  studentId: number | null
-  teacherId: number | null
-  /** `Matematik · Grup A` */
-  label: string
-  /** Uygulanırsa bu dersin düşeceği **ilk** tarih. */
-  firstOn: string
-  /** Şablonu zaten var; uygulanınca atlanır — önizleme bunu söyler, satırı gizlemez. */
-  alreadyPlanned: boolean
-}
-
-export interface TemplatePreview {
-  weekStart: string
-  weekEnd: string
-  applyFrom: string
-  slots: TemplateSlot[]
-}
-
-/** Önizleme **yazmaz**; onay bu listeden sonra istenir (E6). */
-export function fetchTemplatePreview(
-  sourceDay: string,
-  applyFrom: string,
-): Promise<TemplatePreview> {
-  return call<TemplatePreview>('template_preview', { sourceDay, applyFrom })
-}
-
-export interface ApplyTemplateReport {
-  seriesCreated: number
-  /** Zaten şablonu olduğu için atlananlar — sessiz değil, sayılıyor. */
-  skipped: number
-  sessionsCreated: number
-}
-
-export function applyTemplate(
-  sourceDay: string,
-  applyFrom: string,
-): Promise<ApplyTemplateReport> {
-  return call<ApplyTemplateReport>('apply_template', { sourceDay, applyFrom })
 }
 
 // ─── Faz 5C — takvim ──────────────────────────────────────────────────────────

@@ -156,7 +156,6 @@ export function SessionForm({
           day: session.startsAt.slice(0, 10),
           startTime: session.startsAt.slice(11, 16),
           durationMin: String(minutesBetween(session.startsAt, session.endsAt)),
-          repeat: 'once',
         })
       } else if (makeup) {
         setDraft({
@@ -164,7 +163,6 @@ export function SessionForm({
           kind: 'solo',
           subjectId: String(makeup.subjectId),
           studentId: String(makeup.studentId),
-          repeat: 'once',
         })
       } else {
         const only = nextSubjects.length === 1 ? String(nextSubjects[0]!.id) : ''
@@ -270,7 +268,10 @@ export function SessionForm({
       studyGroupId: value,
       subjectId: group ? String(group.subjectId) : draft.subjectId,
     })
-    if (group) setDurationTouched(false)
+    if (group) {
+      setTeacherId(group.teacherId)
+      setDurationTouched(false)
+    }
   }
 
   const persist = useCallback(async () => {
@@ -291,7 +292,7 @@ export function SessionForm({
           ? report.created === 0
             ? tr.makeup.alreadyPlanned
             : tr.makeup.saved
-          : savedMessage(report.created, draft.repeat, editing),
+          : savedMessage(editing),
       )
       onSaved()
     } catch (err) {
@@ -453,6 +454,7 @@ export function SessionForm({
               error={errors['session.subjectId']}
               value={draft.subjectId}
               options={subjectOptions}
+              disabled={draft.kind === 'group' && draft.studyGroupId !== ''}
               onChange={(event) => {
                 patch({ subjectId: event.target.value })
                 setDurationTouched(false)
@@ -468,6 +470,7 @@ export function SessionForm({
             hint={tr.sessions.form.teacherHint}
             value={teacherId === null ? '' : String(teacherId)}
             options={teacherOptions}
+            disabled={draft.kind === 'group' && draft.studyGroupId !== ''}
             onChange={(event) => {
               setTeacherId(event.target.value === '' ? null : Number(event.target.value))
               setConflicts(null)
@@ -504,32 +507,14 @@ export function SessionForm({
 
           {isPast && <p className={styles.warn}>{tr.sessions.form.pastWarning}</p>}
 
-          {!editing && !makeup && (
-            <SegmentedControl
-              label={tr.sessions.form.repeat}
-              value={draft.repeat}
-              options={[
-                { value: 'once', label: tr.sessions.form.repeatOnce },
-                { value: 'weekly', label: tr.sessions.form.repeatWeekly },
-              ]}
-              onChange={(repeat) => patch({ repeat })}
-            />
-          )}
-          {!editing && !makeup && draft.repeat === 'weekly' && (
-            <p className={styles.hint}>{tr.sessions.form.repeatWeeklyHint}</p>
-          )}
         </div>
       )}
     </Modal>
   )
 }
 
-function savedMessage(created: number, repeat: string, editing: boolean): string {
-  if (editing) return tr.sessions.form.savedEdit
-  if (repeat === 'weekly') {
-    return `${tr.sessions.form.savedWeeklyPrefix} ${created} ${tr.sessions.form.savedWeeklySuffix}`
-  }
-  return tr.sessions.form.savedOnce
+function savedMessage(editing: boolean): string {
+  return editing ? tr.sessions.form.savedEdit : tr.sessions.form.savedOnce
 }
 
 /** `'2026-04-01 16:00'` çiftinden dakika farkı — düzenlemede süre alanının kaynağı. */

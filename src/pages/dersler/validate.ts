@@ -17,7 +17,7 @@
  * soruyor; son söz yine Rust'ta (K-2).
  */
 import { tr } from '../../i18n/tr'
-import type { SessionInput, SessionRepeat } from '../../lib/api'
+import type { SessionInput } from '../../lib/api'
 
 export type FieldErrors = Record<string, string>
 
@@ -36,7 +36,6 @@ export interface SessionDraft {
   /** `'HH:MM'` */
   startTime: string | null
   durationMin: string
-  repeat: SessionRepeat
 }
 
 export function emptySessionDraft(day: string): SessionDraft {
@@ -49,7 +48,6 @@ export function emptySessionDraft(day: string): SessionDraft {
     day,
     startTime: null,
     durationMin: '',
-    repeat: 'once',
   }
 }
 
@@ -104,7 +102,6 @@ export function toSessionInput(draft: SessionDraft, teacherId: number | null): S
     day: draft.day ?? '',
     startTime: draft.startTime ?? '',
     durationMin: Number(draft.durationMin),
-    repeat: draft.repeat,
   }
 }
 

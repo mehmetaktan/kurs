@@ -361,8 +361,6 @@ pub fn run() {
             commands::has_schedule,
             commands::is_closed_day,
             commands::save_session,
-            commands::template_preview,
-            commands::apply_template,
             // Faz 5C — takvim
             commands::range_sessions,
             commands::closed_days,

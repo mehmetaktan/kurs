@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DaySessionRow } from '../../lib/api'
 import { DELETE_SCOPES, removedMessage, SessionActions } from './SessionActions'
 import { SessionForm } from './SessionForm'
-import { appliedMessage } from './TemplateModal'
 import { slotBounds, validateSession, type SessionDraft } from './validate'
 
 /**
@@ -199,7 +198,7 @@ describe('SessionForm — çakışma uyarısı', () => {
       '2026-07-27 16:00',
       '2026-07-27 17:00',
       null,
-      null,
+      undefined,
     )
   })
 })
@@ -346,20 +345,6 @@ describe('removedMessage', () => {
   })
 })
 
-describe('appliedMessage', () => {
-  it('atlanan dersleri sessizce yutmaz', () => {
-    const message = appliedMessage({ seriesCreated: 3, skipped: 1, sessionsCreated: 40 })
-    expect(message).toContain('3')
-    expect(message).toContain('1')
-  })
-
-  it('hiç yeni şablon açılmadıysa bunu söyler', () => {
-    expect(appliedMessage({ seriesCreated: 0, skipped: 2, sessionsCreated: 0 })).toContain(
-      'zaten programdaydı',
-    )
-  })
-})
-
 // ---------------------------------------------------------------------------
 // Doğrulama — Rust ikizinin arayüz tarafı
 // ---------------------------------------------------------------------------
@@ -374,7 +359,6 @@ function draft(patch: Partial<SessionDraft> = {}): SessionDraft {
     day: '2026-07-27',
     startTime: '16:00',
     durationMin: '60',
-    repeat: 'once',
     ...patch,
   }
 }

@@ -14,8 +14,7 @@ use common::TODAY;
 use kurs_takip_lib::model::*;
 use kurs_takip_lib::repo;
 use kurs_takip_lib::repo::schedule::{
-    self, GroupInput, GroupQuery, SessionInput, SessionRepeat, SessionScope, SubjectInput,
-    WeeklySlot,
+    self, GroupInput, GroupQuery, SessionInput, SessionScope, SubjectInput, WeeklySlot,
 };
 use rusqlite::Connection;
 
@@ -115,6 +114,38 @@ fn sessions_of(conn: &Connection, series_id: i64) -> Vec<String> {
         .expect("sorgu çalışmalı")
         .collect::<rusqlite::Result<_>>()
         .expect("satırlar okunmalı")
+}
+
+fn add_group_member(
+    conn: &Connection,
+    group_id: i64,
+    student_id: i64,
+    start_on: &str,
+) -> kurs_takip_lib::error::AppResult<i64> {
+    let subject_id: i64 = conn
+        .query_row(
+            "SELECT subject_id FROM study_group WHERE id = ?1",
+            [group_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM price_rule WHERE subject_id = ?1 AND is_group = 1",
+            [subject_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    if count == 0 {
+        conn.execute(
+            "INSERT INTO price_rule \
+             (name, subject_id, is_group, pricing_model, unit_price, valid_from) \
+             VALUES ('Grup tarifesi', ?1, 1, 'per_session', 25000, '2020-01-01')",
+            [subject_id],
+        )
+        .unwrap();
+    }
+    schedule::add_group_member(conn, group_id, student_id, start_on)
 }
 
 fn set_weekly_closed(conn: &Connection, value: &str) {
@@ -724,7 +755,7 @@ fn sadece_bu_ders_iptal_edilir_ve_geri_gelmez() {
 }
 
 #[test]
-fn bu_ve_sonraki_dersler_seriyi_kapatir_gecmisi_bozmaz() {
+fn grup_serisinde_bu_ve_sonraki_backendde_reddedilir() {
     let conn = common::conn();
     let (_, _, series_id) = tuesday_group(&conn);
     schedule::generate_sessions(&conn, today()).expect("üretim");
@@ -738,43 +769,14 @@ fn bu_ve_sonraki_dersler_seriyi_kapatir_gecmisi_bozmaz() {
         )
         .expect("seans bulunmalı");
 
-    let report =
-        schedule::delete_sessions(&conn, pivot, SessionScope::Following).expect("silme çalışmalı");
-
-    assert!(report.series_closed);
-    assert_eq!(report.removed, 15, "14 Nisan dahil sonraki her ders düşer");
-
-    let kalan = sessions_of(&conn, series_id);
-    assert_eq!(
-        kalan,
-        vec![
-            "2026-03-31 16:00".to_string(),
-            "2026-04-07 16:00".to_string(),
-        ],
-        "geçmiş dersler yerinde kalır (R3.9)"
-    );
-
-    let ends_on: Option<String> = conn
-        .query_row(
-            "SELECT ends_on FROM session_series WHERE id = ?1",
-            [series_id],
-            |row| row.get(0),
-        )
-        .expect("şablon okunmalı");
-    assert_eq!(
-        ends_on.as_deref(),
-        Some("2026-04-13"),
-        "pivotun bir günü öncesi"
-    );
-
-    // Seri kapandığı için üretim silinen dersleri geri getirmez.
-    let again = schedule::generate_sessions(&conn, today()).expect("üretim");
-    assert_eq!(again.created, 0);
-    assert_eq!(sessions_of(&conn, series_id).len(), 2);
+    let err = schedule::delete_sessions(&conn, pivot, SessionScope::Following)
+        .expect_err("grup programı yalnız grup ekranından değişir");
+    assert_eq!(err.code, "group_series_managed_in_group");
+    assert_eq!(sessions_of(&conn, series_id).len(), 17);
 }
 
 #[test]
-fn tum_seri_silinince_sablon_arsivlenir() {
+fn grup_serisinde_tum_seri_backendde_reddedilir() {
     let conn = common::conn();
     let (_, _, series_id) = tuesday_group(&conn);
     schedule::generate_sessions(&conn, today()).expect("üretim");
@@ -786,18 +788,13 @@ fn tum_seri_silinince_sablon_arsivlenir() {
         )
         .expect("seans bulunmalı");
 
-    let report = schedule::delete_sessions(&conn, any, SessionScope::All).expect("silme çalışmalı");
-
-    assert!(report.series_closed);
-    assert_eq!(report.removed, 17);
-    assert!(sessions_of(&conn, series_id).is_empty());
-
-    let again = schedule::generate_sessions(&conn, today()).expect("üretim");
-    assert_eq!(again.created, 0, "arşivlenmiş şablon üretmez");
+    let err = schedule::delete_sessions(&conn, any, SessionScope::All)
+        .expect_err("grup programı yalnız grup ekranından değişir");
+    assert_eq!(err.code, "group_series_managed_in_group");
 }
 
 #[test]
-fn islenmis_ders_hicbir_kapsamda_silinmez() {
+fn islenmis_grup_dersi_genis_kapsamda_da_reddedilir() {
     let conn = common::conn();
     let (_, _, series_id) = tuesday_group(&conn);
     schedule::generate_sessions(&conn, today()).expect("üretim");
@@ -817,13 +814,9 @@ fn islenmis_ders_hicbir_kapsamda_silinmez() {
             |row| row.get(0),
         )
         .expect("seans bulunmalı");
-    schedule::delete_sessions(&conn, any, SessionScope::All).expect("silme çalışmalı");
-
-    assert_eq!(
-        sessions_of(&conn, series_id),
-        vec!["2026-03-31 16:00".to_string()],
-        "yoklaması alınmış ders yerinde kalır"
-    );
+    let err = schedule::delete_sessions(&conn, any, SessionScope::All)
+        .expect_err("grup serisi buradan silinmez");
+    assert_eq!(err.code, "group_series_managed_in_group");
 }
 
 #[test]
@@ -895,8 +888,8 @@ fn gruba_sonradan_katilan_ogrenci_onceki_seanslarda_gorunmez() {
     let erken = common::student(&conn, "Elif Yılmaz");
     let gec = common::student(&conn, "Burak Kaya");
 
-    schedule::add_group_member(&conn, group_id, erken, "2026-02-01").expect("üye eklenmeli");
-    schedule::add_group_member(&conn, group_id, gec, "2026-03-15").expect("üye eklenmeli");
+    add_group_member(&conn, group_id, erken, "2026-02-01").expect("üye eklenmeli");
+    add_group_member(&conn, group_id, gec, "2026-03-15").expect("üye eklenmeli");
 
     let subat =
         repo::academic::group_members_on(&conn, group_id, "2026-02-10").expect("üyeler okunmalı");
@@ -932,8 +925,7 @@ fn gruptan_ayrilan_ogrencinin_kaydi_silinmez() {
     let subject_id = common::subject(&conn, "Matematik");
     let group_id = common::group(&conn, "Grup A", subject_id);
     let student_id = common::student(&conn, "Elif Yılmaz");
-    let enrollment_id =
-        schedule::add_group_member(&conn, group_id, student_id, "2026-02-01").expect("üye");
+    let enrollment_id = add_group_member(&conn, group_id, student_id, "2026-02-01").expect("üye");
 
     schedule::end_group_membership(&conn, enrollment_id, "2026-05-20").expect("ayrılış");
 
@@ -962,8 +954,7 @@ fn ayrilis_tarihi_katilimdan_once_olamaz() {
     let subject_id = common::subject(&conn, "Matematik");
     let group_id = common::group(&conn, "Grup A", subject_id);
     let student_id = common::student(&conn, "Elif Yılmaz");
-    let enrollment_id =
-        schedule::add_group_member(&conn, group_id, student_id, "2026-02-01").expect("üye");
+    let enrollment_id = add_group_member(&conn, group_id, student_id, "2026-02-01").expect("üye");
 
     let err = schedule::end_group_membership(&conn, enrollment_id, "2026-01-01")
         .expect_err("reddedilmeli");
@@ -986,7 +977,7 @@ fn kapasite_asimi_engellenmez() {
         let student_id = common::student(&conn, name);
         // PRD S2 / K-8: kapasite bir HEDEFTİR, kısıt değil. Şemada CHECK/trigger yok,
         // repository de engellemiyor; uyarı arayüzün onay diyaloğu.
-        schedule::add_group_member(&conn, group_id, student_id, TODAY)
+        add_group_member(&conn, group_id, student_id, TODAY)
             .unwrap_or_else(|err| panic!("{name} eklenebilmeliydi: {err}"));
     }
 
@@ -1002,8 +993,8 @@ fn ayni_brans_icin_ikinci_acik_kayit_reddedilir() {
     let group_id = common::group(&conn, "Grup A", subject_id);
     let student_id = common::student(&conn, "Elif Yılmaz");
 
-    schedule::add_group_member(&conn, group_id, student_id, "2026-02-01").expect("ilk kayıt");
-    let err = schedule::add_group_member(&conn, group_id, student_id, "2026-03-01")
+    add_group_member(&conn, group_id, student_id, "2026-02-01").expect("ilk kayıt");
+    let err = add_group_member(&conn, group_id, student_id, "2026-03-01")
         .expect_err("K-22: çakışan açık kayıt engellenir");
 
     assert_eq!(err.code, "enrollment_overlap");
@@ -1016,12 +1007,11 @@ fn ayrildiktan_sonra_gruba_geri_donebilir() {
     let group_id = common::group(&conn, "Grup A", subject_id);
     let student_id = common::student(&conn, "Elif Yılmaz");
 
-    let first = schedule::add_group_member(&conn, group_id, student_id, "2026-02-01").unwrap();
+    let first = add_group_member(&conn, group_id, student_id, "2026-02-01").unwrap();
     schedule::end_group_membership(&conn, first, "2026-05-20").unwrap();
 
     // Aralıklar çakışmadığı sürece ikinci kayıt serbest (§1.9).
-    schedule::add_group_member(&conn, group_id, student_id, "2026-09-01")
-        .expect("dönüş kaydı açılmalı");
+    add_group_member(&conn, group_id, student_id, "2026-09-01").expect("dönüş kaydı açılmalı");
 }
 
 // ===========================================================================
@@ -1036,7 +1026,7 @@ fn grup_satiri_doluluk_ve_haftalik_programi_tasir() {
     series(&conn, group_id, subject_id, SALI, "16:00", TODAY, None);
     series(&conn, group_id, subject_id, PERSEMBE, "18:00", TODAY, None);
     let student_id = common::student(&conn, "Elif Yılmaz");
-    schedule::add_group_member(&conn, group_id, student_id, "2026-02-01").unwrap();
+    add_group_member(&conn, group_id, student_id, "2026-02-01").unwrap();
     schedule::generate_sessions(&conn, today()).unwrap();
 
     let rows = schedule::group_rows(
@@ -1066,8 +1056,8 @@ fn ayrilmis_uye_dolulukta_sayilmaz_listede_kalir() {
     let group_id = common::group(&conn, "Grup A", subject_id);
     let kalan = common::student(&conn, "Elif Yılmaz");
     let ayrilan = common::student(&conn, "Burak Kaya");
-    schedule::add_group_member(&conn, group_id, kalan, "2026-02-01").unwrap();
-    let bitmis = schedule::add_group_member(&conn, group_id, ayrilan, "2026-02-01").unwrap();
+    add_group_member(&conn, group_id, kalan, "2026-02-01").unwrap();
+    let bitmis = add_group_member(&conn, group_id, ayrilan, "2026-02-01").unwrap();
     schedule::end_group_membership(&conn, bitmis, "2026-03-01").unwrap();
 
     let detail = schedule::group_detail(&conn, group_id, Some(TODAY.into())).expect("detay");
@@ -1089,7 +1079,7 @@ fn arsivlenmis_ogrenci_dolulukta_sayilmaz() {
     let subject_id = common::subject(&conn, "Matematik");
     let group_id = common::group(&conn, "Grup A", subject_id);
     let student_id = common::student(&conn, "Elif Yılmaz");
-    schedule::add_group_member(&conn, group_id, student_id, "2026-02-01").unwrap();
+    add_group_member(&conn, group_id, student_id, "2026-02-01").unwrap();
     repo::archive::<Student>(&conn, student_id).unwrap();
 
     let capacity = schedule::group_capacity(&conn, group_id, TODAY).unwrap();
@@ -1141,7 +1131,7 @@ fn grup_notlari_uyelerin_notlarindan_derlenir() {
     let group_id = common::group(&conn, "Grup A", subject_id);
     let uye = common::student(&conn, "Elif Yılmaz");
     let yabanci = common::student(&conn, "Mehmet Aslan");
-    schedule::add_group_member(&conn, group_id, uye, "2026-02-01").unwrap();
+    add_group_member(&conn, group_id, uye, "2026-02-01").unwrap();
 
     repo::roster::add_note(
         &conn,
@@ -1538,7 +1528,7 @@ fn iptal_edilmis_ders_listede_kalir_durumuyla() {
 // save_session — E3
 // ---------------------------------------------------------------------------
 
-fn group_input(group_id: i64, subject_id: i64, day: &str, repeat: SessionRepeat) -> SessionInput {
+fn group_input(group_id: i64, subject_id: i64, day: &str) -> SessionInput {
     SessionInput {
         id: None,
         subject_id,
@@ -1548,7 +1538,6 @@ fn group_input(group_id: i64, subject_id: i64, day: &str, repeat: SessionRepeat)
         day: day.into(),
         start_time: "16:00".into(),
         duration_min: 60,
-        repeat,
     }
 }
 
@@ -1561,7 +1550,7 @@ fn tatil_gunune_ders_eklenemez() {
 
     let err = schedule::save_session(
         &conn,
-        &group_input(group_id, subject_id, "2026-04-07", SessionRepeat::Once),
+        &group_input(group_id, subject_id, "2026-04-07"),
         today(),
     )
     .expect_err("K-2: tatile ders bırakılamaz");
@@ -1583,7 +1572,7 @@ fn haftalik_kapali_gune_de_ders_eklenemez() {
     // Migration'ın başlangıç değeri Pazar; 2026-04-05 bir Pazar.
     let err = schedule::save_session(
         &conn,
-        &group_input(group_id, subject_id, "2026-04-05", SessionRepeat::Once),
+        &group_input(group_id, subject_id, "2026-04-05"),
         today(),
     )
     .expect_err("haftalık kapalı gün de engeller");
@@ -1599,7 +1588,7 @@ fn tek_seferlik_ders_sablon_acmaz() {
 
     let report = schedule::save_session(
         &conn,
-        &group_input(group_id, subject_id, "2026-04-01", SessionRepeat::Once),
+        &group_input(group_id, subject_id, "2026-04-01"),
         today(),
     )
     .expect("ders yazılmalı");
@@ -1615,30 +1604,23 @@ fn tek_seferlik_ders_sablon_acmaz() {
 }
 
 #[test]
-fn haftalik_ders_sablon_acar_ve_seanslari_uretir() {
+fn takvimden_eklenen_ders_daima_tek_seferliktir() {
     let conn = common::conn();
     let subject_id = common::subject(&conn, "Matematik");
     let group_id = common::group(&conn, "Grup A", subject_id);
 
-    // 2026-04-02 bir Perşembe; ufkun sonuna kadar 16 perşembe var.
     let report = schedule::save_session(
         &conn,
-        &group_input(group_id, subject_id, "2026-04-02", SessionRepeat::Weekly),
+        &group_input(group_id, subject_id, "2026-04-02"),
         today(),
     )
-    .expect("şablon açılmalı");
-
-    let series_id = report.series_id.expect("şablon id'si dönmeli");
-    assert_eq!(report.created, 16);
-
-    let series: SessionSeries = repo::require(&conn, series_id).unwrap();
-    assert_eq!(series.weekday, 4, "gün seçilen tarihten türetilir");
-    assert_eq!(series.starts_on, "2026-04-02");
-    assert!(series.ends_on.is_none(), "süresiz");
-
-    let days = sessions_of(&conn, series_id);
-    assert_eq!(days.first().unwrap(), "2026-04-02 16:00");
-    assert_eq!(days.last().unwrap(), "2026-07-16 16:00");
+    .expect("tek ders yazılmalı");
+    assert_eq!(report.created, 1);
+    assert!(report.series_id.is_none());
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM session_series", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(count, 0);
 }
 
 #[test]
@@ -1648,12 +1630,12 @@ fn hedefi_belirsiz_ders_reddedilir() {
     let group_id = common::group(&conn, "Grup A", subject_id);
     let student_id = common::student(&conn, "Elif Yılmaz");
 
-    let mut ikisi_de = group_input(group_id, subject_id, "2026-04-01", SessionRepeat::Once);
+    let mut ikisi_de = group_input(group_id, subject_id, "2026-04-01");
     ikisi_de.student_id = Some(student_id);
     let err = schedule::save_session(&conn, &ikisi_de, today()).expect_err("ADR-012 dışlayıcı");
     assert_eq!(err.code, "session.target");
 
-    let mut hicbiri = group_input(group_id, subject_id, "2026-04-01", SessionRepeat::Once);
+    let mut hicbiri = group_input(group_id, subject_id, "2026-04-01");
     hicbiri.study_group_id = None;
     let err = schedule::save_session(&conn, &hicbiri, today()).expect_err("biri dolu olmalı");
     assert_eq!(err.code, "session.target");
@@ -1672,7 +1654,7 @@ fn yoklamasi_alinmis_ders_duzenlenemez() {
     )
     .expect("yoklama damgası yazılmalı");
 
-    let mut input = group_input(group_id, subject_id, "2026-04-01", SessionRepeat::Once);
+    let mut input = group_input(group_id, subject_id, "2026-04-01");
     input.id = Some(session_id);
 
     // R3.13 — `reschedule_session` ile aynı kural, aynı mesaj.
@@ -1687,7 +1669,7 @@ fn ders_duzenlenince_saat_ve_sure_degisir() {
     let group_id = common::group(&conn, "Grup A", subject_id);
     let session_id = common::group_session(&conn, group_id, subject_id, TODAY);
 
-    let mut input = group_input(group_id, subject_id, "2026-04-01", SessionRepeat::Once);
+    let mut input = group_input(group_id, subject_id, "2026-04-01");
     input.id = Some(session_id);
     input.start_time = "09:30".into();
     input.duration_min = 90;
@@ -1783,30 +1765,14 @@ fn iptal_edilmis_ve_telafi_dersi_sablona_girmez() {
 }
 
 #[test]
-fn sablon_uygulaninca_seri_acilir_ve_seanslar_uretilir() {
+fn sablon_uygulama_yolu_yeni_seri_acamaz() {
     let conn = common::conn();
     source_week(&conn);
 
-    let report = schedule::apply_template(&conn, day(TODAY), day(APPLY_FROM), today())
-        .expect("şablon uygulanmalı");
-
-    assert_eq!(report.series_created, 2);
-    assert_eq!(report.skipped, 0);
-    assert!(report.sessions_created > 0, "seanslar üretilmeli");
-
-    let series = repo::list_live::<SessionSeries>(&conn).unwrap();
-    assert_eq!(series.len(), 2);
-    assert!(
-        series.iter().all(|s| s.starts_on == APPLY_FROM),
-        "şablonlar uygulama tarihinden başlar"
-    );
-
-    // Üretim uygulama tarihinden önceye yazmaz: kaynak haftada yeni seans doğmamalı.
-    assert_eq!(
-        schedule::day_rows(&conn, TODAY).unwrap().len(),
-        1,
-        "kaynak haftadaki ders sayısı değişmemeli"
-    );
+    let err = schedule::apply_template(&conn, day(TODAY), day(APPLY_FROM), today())
+        .expect_err("şablon yolu kapalı");
+    assert_eq!(err.code, "template_disabled");
+    assert!(repo::list_live::<SessionSeries>(&conn).unwrap().is_empty());
 }
 
 #[test]
@@ -1827,11 +1793,10 @@ fn zaten_sablonu_olan_ders_atlanir() {
         "önizleme durumu SÖYLER, satırı gizlemez"
     );
 
-    let report = schedule::apply_template(&conn, day(TODAY), day(APPLY_FROM), today()).unwrap();
-
-    assert_eq!(report.series_created, 1, "yalnızca perşembe yazılır");
-    assert_eq!(report.skipped, 1, "atlama sessiz değil, sayılıyor");
-    assert_eq!(repo::list_live::<SessionSeries>(&conn).unwrap().len(), 2);
+    let err = schedule::apply_template(&conn, day(TODAY), day(APPLY_FROM), today())
+        .expect_err("şablon yolu kapalı");
+    assert_eq!(err.code, "template_disabled");
+    assert_eq!(repo::list_live::<SessionSeries>(&conn).unwrap().len(), 1);
 }
 
 // ===========================================================================
@@ -1932,17 +1897,41 @@ fn tek_ders_tasindiginda_sablon_degismez() {
         )
         .unwrap();
     assert_eq!(template, (SALI, "16:00".to_string()), "şablon yerinde");
+    let original: Session = repo::require(&conn, id).unwrap();
+    assert_eq!(original.status, "cancelled");
+    assert!(original.cancel_reason.is_some());
+    let replacement: (Option<i64>, String, Option<i64>) = conn
+        .query_row(
+            "SELECT series_id, starts_at, study_group_id FROM session \
+             WHERE id <> ?1 AND starts_at = '2026-04-09 18:00' AND deleted_at IS NULL",
+            [id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .unwrap();
+    assert_eq!(
+        replacement,
+        (None, "2026-04-09 18:00".into(), original.study_group_id)
+    );
+    schedule::generate_sessions(&conn, today()).unwrap();
+    let old_slot_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM session WHERE series_id = ?1 \
+             AND starts_at = '2026-04-07 16:00' AND deleted_at IS NULL",
+            [series_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(old_slot_count, 1, "iptal satırı üreticiyi durdurur");
 }
 
 #[test]
-fn bu_ve_sonraki_dersler_sablonu_yeni_gune_tasir() {
+fn grup_serisi_bu_ve_sonraki_tasimayi_reddeder() {
     let conn = common::conn();
     let (_, _, series_id) = tuesday_group(&conn);
     schedule::generate_sessions(&conn, today()).expect("üretim");
     let pivot = session_id_at(&conn, series_id, "2026-04-07 16:00");
 
-    // Salı 16:00 → Perşembe 18:00, 7 Nisan'dan itibaren.
-    let report = schedule::reschedule_sessions(
+    let err = schedule::reschedule_sessions(
         &conn,
         pivot,
         "2026-04-09 18:00",
@@ -1950,39 +1939,9 @@ fn bu_ve_sonraki_dersler_sablonu_yeni_gune_tasir() {
         schedule::RescheduleScope::Following,
         today(),
     )
-    .expect("taşıma çalışmalı");
-
-    let new_series_id = report.series_id.expect("yeni şablon açılmalı");
-    assert_ne!(new_series_id, series_id);
-
-    // Eski şablon pivotun bir gün öncesinde kapanır; GEÇMİŞ dersler ona bağlı kalır.
-    let old_end: Option<String> = conn
-        .query_row(
-            "SELECT ends_on FROM session_series WHERE id = ?1",
-            [series_id],
-            |row| row.get(0),
-        )
-        .unwrap();
-    assert_eq!(old_end.as_deref(), Some("2026-04-06"));
-
-    let kalan = sessions_of(&conn, series_id);
-    assert_eq!(
-        kalan,
-        vec!["2026-03-31 16:00".to_string()],
-        "pivottan önceki tek ders yerinde, sonrakiler yeni şablona geçti"
-    );
-
-    let yeni = sessions_of(&conn, new_series_id);
-    assert_eq!(yeni.first().map(String::as_str), Some("2026-04-09 18:00"));
-    assert!(
-        yeni.iter().all(|stamp| stamp.ends_with("18:00")),
-        "hepsi yeni saatte: {yeni:?}"
-    );
-    assert_eq!(
-        report.moved as usize,
-        yeni.len(),
-        "sayı gerçekten sayılıyor"
-    );
+    .expect_err("grup programı yalnız grup ekranından değişir");
+    assert_eq!(err.code, "group_series_managed_in_group");
+    assert_eq!(repo::list_live::<SessionSeries>(&conn).unwrap().len(), 1);
 }
 
 #[test]
@@ -2038,7 +1997,7 @@ fn yoklamasi_alinmis_ders_kapsamli_tasimada_da_reddedilir() {
     )
     .expect_err("R3.13: taşınmamalı");
 
-    assert_eq!(err.code, "session_locked");
+    assert_eq!(err.code, "group_series_managed_in_group");
     assert_eq!(
         repo::list_live::<SessionSeries>(&conn).unwrap().len(),
         1,

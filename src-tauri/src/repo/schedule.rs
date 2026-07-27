@@ -181,6 +181,17 @@ fn solo_unit_price(
     starts_at: &str,
 ) -> AppResult<Option<i64>> {
     let day = &starts_at[..10];
+    let package_enrollment: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM enrollment \
+         WHERE student_id = ?1 AND subject_id = ?2 AND study_group_id IS NULL \
+           AND pricing_model = 'package' AND deleted_at IS NULL \
+           AND start_on <= ?3 AND (end_on IS NULL OR ?3 <= end_on)",
+        params![student_id, subject_id, day],
+        |row| row.get(0),
+    )?;
+    if package_enrollment > 0 {
+        return Ok(None);
+    }
     let mut stmt = conn.prepare(
         "SELECT unit_price FROM enrollment \
          WHERE student_id = ?1 AND subject_id = ?2 AND study_group_id IS NULL \
@@ -191,8 +202,20 @@ fn solo_unit_price(
     )?;
     let mut rows = stmt.query_map(params![student_id, subject_id, day], |row| row.get(0))?;
     match rows.next() {
-        Some(row) => Ok(Some(row?)),
-        None => Ok(None),
+        Some(row) => {
+            let price = row?;
+            if price <= 0 {
+                Err(AppError::new(
+                    "price_missing",
+                    "Öğrencinin ders başı ücreti eksik. Kaydındaki tarifeyi düzeltip tekrar deneyin.",
+                ))
+            } else {
+                Ok(Some(price))
+            }
+        }
+        None => Ok(Some(
+            repo::finance::resolve_tariff(conn, subject_id, false, day)?.unit_price,
+        )),
     }
 }
 
@@ -470,6 +493,15 @@ pub fn delete_sessions(
     scope: SessionScope,
 ) -> AppResult<DeleteReport> {
     let session: crate::model::Session = repo::require(conn, session_id)?;
+    if scope != SessionScope::Only
+        && session.series_id.is_some()
+        && session.study_group_id.is_some()
+    {
+        return Err(AppError::new(
+            "group_series_managed_in_group",
+            "Grup programının tamamı buradan değiştirilemez. Grup ekranını açıp çalışma programını düzenleyin.",
+        ));
+    }
     let mut report = DeleteReport::default();
 
     match (scope, session.series_id) {
@@ -658,10 +690,28 @@ pub fn reschedule_sessions(
     today: NaiveDate,
 ) -> AppResult<RescheduleReport> {
     let session: crate::model::Session = repo::require(conn, session_id)?;
+    if scope == RescheduleScope::Following
+        && session.series_id.is_some()
+        && session.study_group_id.is_some()
+    {
+        return Err(AppError::new(
+            "group_series_managed_in_group",
+            "Grup programının sonraki dersleri buradan değiştirilemez. Grup ekranını açıp çalışma programını düzenleyin.",
+        ));
+    }
 
     let series_id = match (scope, session.series_id) {
         // Şablonsuz ders "sonraki dersler"i olmayan bir derstir; kapsam tek derse iner.
         // `delete_sessions`'daki `(_, None)` kolunun aynısı.
+        (RescheduleScope::Only, Some(_))
+            if session.study_group_id.is_some() && session.starts_at != starts_at =>
+        {
+            move_group_occurrence(conn, &session, starts_at, duration_min)?;
+            return Ok(RescheduleReport {
+                series_id: None,
+                moved: 1,
+            });
+        }
         (RescheduleScope::Only, _) | (_, None) => {
             reschedule_session(conn, session_id, starts_at, duration_min)?;
             return Ok(RescheduleReport {
@@ -727,6 +777,51 @@ pub fn reschedule_sessions(
             series_id: Some(new_series_id),
             moved,
         })
+    })
+}
+
+/// Grup serisindeki tek bir ders başka başlangıca taşındığında eski slot yerinde iptal
+/// kalır; aksi halde üretici o slotu yeniden oluştururdu. Yeni satır şablonsuzdur.
+fn move_group_occurrence(
+    conn: &Connection,
+    session: &crate::model::Session,
+    starts_at: &str,
+    duration_min: i64,
+) -> AppResult<()> {
+    if session.attendance_taken_at.is_some() {
+        return Err(AppError::new(
+            "session_locked",
+            "Bu dersin yoklaması alınmış; ders taşınamaz. Önce yoklamayı geri alın ya da yeni bir telafi dersi planlayın.",
+        ));
+    }
+    let day = parse_date(&starts_at[..10.min(starts_at.len())])?;
+    reject_closed_day(conn, day)?;
+    let time = starts_at[10.min(starts_at.len())..].trim();
+    let (starts, ends) = slot_bounds(day, time, duration_min)?;
+    repo::in_transaction(conn, |conn| {
+        conn.execute(
+            "UPDATE session SET status = 'cancelled', cancel_reason = ?2, updated_at = ?3 \
+             WHERE id = ?1 AND deleted_at IS NULL",
+            params![
+                session.id,
+                "Grup programındaki bu ders başka bir zamana taşındı.",
+                clock::now_local()
+            ],
+        )?;
+        let mut replacement = session.clone();
+        replacement.id = None;
+        replacement.series_id = None;
+        replacement.starts_at = starts;
+        replacement.ends_at = ends;
+        replacement.session_date = None;
+        replacement.kind = None;
+        replacement.status = "planned".into();
+        replacement.cancel_reason = None;
+        replacement.created_at = None;
+        replacement.updated_at = None;
+        replacement.deleted_at = None;
+        repo::academic::insert_session(conn, &replacement)?;
+        Ok(())
     })
 }
 
@@ -871,17 +966,6 @@ pub fn session_rows_between(
 // Ders ekle / düzenle — E3
 // ===========================================================================
 
-/// Tekrar kuralı. `Once` tek bir `session` satırı, `Weekly` bir `session_series` yazar.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum SessionRepeat {
-    /// Tek seferlik ders — `series_id` boş kalır, üretim ona dokunmaz.
-    #[default]
-    Once,
-    /// Haftalık şablon; seanslar ufka kadar üretilir (§1.14).
-    Weekly,
-}
-
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionInput {
@@ -901,8 +985,6 @@ pub struct SessionInput {
     /// `'HH:MM'`
     pub start_time: String,
     pub duration_min: i64,
-    #[serde(default)]
-    pub repeat: SessionRepeat,
 }
 
 /// Mazeretli bir yoklamadan açılan tek seferlik telafi dersi.
@@ -949,8 +1031,15 @@ pub struct SaveSessionReport {
 pub fn save_session(
     conn: &Connection,
     input: &SessionInput,
-    today: NaiveDate,
+    _today: NaiveDate,
 ) -> AppResult<SaveSessionReport> {
+    let mut normalized = input.clone();
+    if let Some(group_id) = input.study_group_id {
+        let group: StudyGroup = repo::require(conn, group_id)?;
+        normalized.subject_id = group.subject_id;
+        normalized.teacher_id = group.teacher_id;
+    }
+    let input = &normalized;
     validate_session(input)?;
 
     let day = parse_date(input.day.trim())?;
@@ -964,8 +1053,8 @@ pub fn save_session(
 
     let (starts_at, ends_at) = slot_bounds(day, input.start_time.trim(), input.duration_min)?;
 
-    repo::in_transaction(conn, |conn| match (input.id, input.repeat) {
-        (Some(id), _) => {
+    repo::in_transaction(conn, |conn| match input.id {
+        Some(id) => {
             update_single_session(conn, id, input, &starts_at, &ends_at)?;
             Ok(SaveSessionReport {
                 session_id: Some(id),
@@ -973,38 +1062,12 @@ pub fn save_session(
                 created: 0,
             })
         }
-        (None, SessionRepeat::Once) => {
+        None => {
             let id = insert_single_session(conn, input, &starts_at, &ends_at, None)?;
             Ok(SaveSessionReport {
                 session_id: Some(id),
                 series_id: None,
                 created: 1,
-            })
-        }
-        (None, SessionRepeat::Weekly) => {
-            let series_id = repo::academic::insert_session_series(
-                conn,
-                &SessionSeries {
-                    id: None,
-                    study_group_id: input.study_group_id,
-                    student_id: input.student_id,
-                    subject_id: input.subject_id,
-                    teacher_id: input.teacher_id,
-                    weekday: day.weekday().number_from_monday() as i64,
-                    start_time: input.start_time.trim().to_string(),
-                    duration_min: input.duration_min,
-                    starts_on: clock::date_string(day),
-                    ends_on: None,
-                    created_at: None,
-                    updated_at: None,
-                    deleted_at: None,
-                },
-            )?;
-            let report = generate_sessions(conn, today)?;
-            Ok(SaveSessionReport {
-                session_id: None,
-                series_id: Some(series_id),
-                created: report.created,
             })
         }
     })
@@ -1088,7 +1151,6 @@ pub fn save_makeup_session(
             day: input.day.trim().to_string(),
             start_time: input.start_time.trim().to_string(),
             duration_min: input.duration_min,
-            repeat: SessionRepeat::Once,
         };
         validate_session(&session)?;
         let session_id = insert_single_session(
@@ -1146,9 +1208,10 @@ fn insert_single_session(
 ) -> AppResult<i64> {
     // Birebirde ücret snapshot'ı kayıttan kopyalanır (ADR-006); grupta `NULL` kalır —
     // `insert_from_series` ile aynı gerekçe, sıfır yazmak "bedava" demek olurdu (§5).
-    let unit_price = match input.student_id {
-        Some(student_id) => solo_unit_price(conn, student_id, input.subject_id, starts_at)?,
-        None => None,
+    let unit_price = match (makeup_for_attendance_id, input.student_id) {
+        (Some(_), _) => None,
+        (None, Some(student_id)) => solo_unit_price(conn, student_id, input.subject_id, starts_at)?,
+        (None, None) => None,
     };
 
     repo::academic::insert_session(
@@ -1316,45 +1379,15 @@ pub fn template_preview(
 /// Şablonu zaten olan ders **atlanır** ve rapor bunu sayıyor: sessizce atlamak,
 /// kullanıcının "12 ders" beklerken 7 ders görmesi demek olurdu.
 pub fn apply_template(
-    conn: &Connection,
-    source_day: NaiveDate,
-    apply_from: NaiveDate,
-    today: NaiveDate,
+    _conn: &Connection,
+    _source_day: NaiveDate,
+    _apply_from: NaiveDate,
+    _today: NaiveDate,
 ) -> AppResult<ApplyTemplateReport> {
-    let preview = template_preview(conn, source_day, apply_from)?;
-
-    repo::in_transaction(conn, |conn| {
-        let mut report = ApplyTemplateReport::default();
-
-        for slot in &preview.slots {
-            if slot.already_planned {
-                report.skipped += 1;
-                continue;
-            }
-            repo::academic::insert_session_series(
-                conn,
-                &SessionSeries {
-                    id: None,
-                    study_group_id: slot.study_group_id,
-                    student_id: slot.student_id,
-                    subject_id: slot.subject_id,
-                    teacher_id: slot.teacher_id,
-                    weekday: slot.weekday,
-                    start_time: slot.start_time.clone(),
-                    duration_min: slot.duration_min,
-                    starts_on: clock::date_string(apply_from),
-                    ends_on: None,
-                    created_at: None,
-                    updated_at: None,
-                    deleted_at: None,
-                },
-            )?;
-            report.series_created += 1;
-        }
-
-        report.sessions_created = generate_sessions(conn, today)?.created;
-        Ok(report)
-    })
+    Err(AppError::new(
+        "template_disabled",
+        "Haftalık program yalnızca Grup ekranındaki çalışma programından oluşturulabilir.",
+    ))
 }
 
 /// `apply_from` tarihinde hâlâ geçerli olan şablonların `(hedef, gün, saat)` anahtarları.
@@ -1487,7 +1520,7 @@ pub fn group_rows(conn: &Connection, query: &GroupQuery) -> AppResult<Vec<GroupR
 
     // Haftalık program satır başına ayrı sorgu açılmıyor (N+1): tek sorguda alınıp
     // Rust'ta eşleniyor — `roster.rs`'teki `enrollment_tags` kalıbı.
-    let weekly = weekly_index(conn)?;
+    let weekly = weekly_index(conn, &today)?;
 
     let mut stmt = conn.prepare(
         "SELECT g.id, g.name, g.subject_id, sub.name, sub.color, g.teacher_id, t.full_name, \
@@ -1501,6 +1534,7 @@ pub fn group_rows(conn: &Connection, query: &GroupQuery) -> AppResult<Vec<GroupR
                      FROM enrollment e \
                      JOIN student s ON s.id = e.student_id AND s.deleted_at IS NULL \
                      WHERE e.deleted_at IS NULL AND e.study_group_id IS NOT NULL \
+                       AND e.status = 'active' \
                        AND e.start_on <= ?1 AND (e.end_on IS NULL OR ?1 <= e.end_on) \
                      GROUP BY e.study_group_id ) m ON m.study_group_id = g.id \
          LEFT JOIN ( SELECT study_group_id, MIN(starts_at) AS next_at \
@@ -1565,14 +1599,15 @@ fn filter_groups(rows: Vec<GroupRow>, query: &GroupQuery) -> Vec<GroupRow> {
         .collect()
 }
 
-fn weekly_index(conn: &Connection) -> AppResult<HashMap<i64, Vec<WeeklySlot>>> {
+fn weekly_index(conn: &Connection, today: &str) -> AppResult<HashMap<i64, Vec<WeeklySlot>>> {
     let mut stmt = conn.prepare(
         "SELECT study_group_id, id, weekday, start_time, duration_min \
          FROM session_series \
          WHERE deleted_at IS NULL AND study_group_id IS NOT NULL \
+           AND (ends_on IS NULL OR ends_on >= ?1) \
          ORDER BY weekday, start_time",
     )?;
-    let rows = stmt.query_map([], |row| {
+    let rows = stmt.query_map([today], |row| {
         Ok((
             row.get::<_, i64>(0)?,
             WeeklySlot {
@@ -1706,7 +1741,8 @@ pub fn group_detail(
 fn group_members(conn: &Connection, group_id: i64, today: &str) -> AppResult<Vec<GroupMember>> {
     let mut stmt = conn.prepare(
         "SELECT e.id, e.student_id, s.full_name, e.start_on, e.end_on, \
-                (e.start_on <= ?2 AND (e.end_on IS NULL OR ?2 <= e.end_on)) AS is_current \
+                (e.status = 'active' AND e.start_on <= ?2 \
+                 AND (e.end_on IS NULL OR ?2 <= e.end_on)) AS is_current \
          FROM enrollment e \
          JOIN student s ON s.id = e.student_id AND s.deleted_at IS NULL \
          WHERE e.study_group_id = ?1 AND e.deleted_at IS NULL \
@@ -1870,25 +1906,30 @@ fn sync_series(
     input: &GroupInput,
     today: NaiveDate,
 ) -> AppResult<()> {
-    let existing = weekly_index(conn)?
-        .get(&group_id)
-        .cloned()
-        .unwrap_or_default();
-
+    let existing = repo::list_live::<SessionSeries>(conn)?
+        .into_iter()
+        .filter(|series| series.study_group_id == Some(group_id))
+        .collect::<Vec<_>>();
+    let today_text = clock::date_string(today);
     let kept: Vec<i64> = input.weekly.iter().filter_map(|slot| slot.id).collect();
-    for slot in &existing {
-        let Some(id) = slot.id else { continue };
+
+    for old in &existing {
+        let Some(id) = old.id else { continue };
         if !kept.contains(&id) {
+            reject_processed_series_change(conn, id, &today_text, false)?;
+            close_series_before(conn, id, &today_text)?;
             repo::archive::<SessionSeries>(conn, id)?;
-            archive_unprocessed(conn, id, Some(&clock::date_string(today)))?;
+            archive_unprocessed(conn, id, Some(&today_text))?;
         }
     }
 
-    let starts_on = trimmed(&input.starts_on).unwrap_or_else(|| clock::date_string(today));
+    let group_start = trimmed(&input.starts_on).unwrap_or_else(|| today_text.clone());
+    let starts_on = group_start.max(today_text.clone());
+    let new_end = trimmed(&input.ends_on);
 
     for slot in &input.weekly {
-        let series = SessionSeries {
-            id: slot.id,
+        let candidate = SessionSeries {
+            id: None,
             study_group_id: Some(group_id),
             student_id: None,
             subject_id: input.subject_id,
@@ -1897,20 +1938,78 @@ fn sync_series(
             start_time: slot.start_time.trim().to_string(),
             duration_min: slot.duration_min,
             starts_on: starts_on.clone(),
-            ends_on: trimmed(&input.ends_on),
+            ends_on: new_end.clone(),
             created_at: None,
             updated_at: None,
             deleted_at: None,
         };
-        match slot.id {
-            Some(id) => repo::academic::update_session_series(conn, id, &series)?,
-            None => {
-                repo::academic::insert_session_series(conn, &series)?;
+        if let Some(id) = slot.id {
+            let old = existing
+                .iter()
+                .find(|series| series.id == Some(id))
+                .ok_or_else(|| {
+                    AppError::new(
+                    "series_not_found",
+                    "Çalışma programı satırı bulunamadı. Grup ekranını yenileyip tekrar deneyin.",
+                )
+                })?;
+            let changed = old.weekday != candidate.weekday
+                || old.start_time != candidate.start_time
+                || old.duration_min != candidate.duration_min
+                || old.subject_id != candidate.subject_id
+                || old.teacher_id != candidate.teacher_id;
+            if changed {
+                reject_processed_series_change(conn, id, &today_text, false)?;
+                close_series_before(conn, id, &today_text)?;
+                archive_unprocessed(conn, id, Some(&today_text))?;
+                repo::academic::insert_session_series(conn, &candidate)?;
+            } else {
+                if let Some(end) = new_end.as_deref() {
+                    reject_processed_series_change(conn, id, end, true)?;
+                }
+                let mut unchanged = old.clone();
+                unchanged.ends_on = new_end.clone();
+                repo::academic::update_session_series(conn, id, &unchanged)?;
+                if let Some(end) = new_end.as_deref() {
+                    archive_unprocessed_after(conn, id, end)?;
+                }
             }
+        } else {
+            repo::academic::insert_session_series(conn, &candidate)?;
         }
     }
-
     Ok(())
+}
+
+fn reject_processed_series_change(
+    conn: &Connection,
+    series_id: i64,
+    boundary: &str,
+    strictly_after: bool,
+) -> AppResult<()> {
+    let operator = if strictly_after { ">" } else { ">=" };
+    let sql = format!(
+        "SELECT COUNT(*) FROM session WHERE series_id = ?1 AND deleted_at IS NULL \
+         AND session_date {operator} ?2 AND (attendance_taken_at IS NOT NULL OR status = 'done')"
+    );
+    let count: i64 = conn.query_row(&sql, params![series_id, boundary], |row| row.get(0))?;
+    if count > 0 {
+        return Err(AppError::new(
+            "group_schedule_processed",
+            "Etkilenen derslerden birinin yoklaması alınmış. Önce yoklamayı geri alın veya program değişikliğini daha sonraki bir tarihten uygulayın.",
+        ));
+    }
+    Ok(())
+}
+
+fn archive_unprocessed_after(conn: &Connection, series_id: i64, end: &str) -> AppResult<i64> {
+    let changed = conn.execute(
+        "UPDATE session SET deleted_at = ?3, updated_at = ?3 \
+         WHERE series_id = ?1 AND session_date > ?2 AND deleted_at IS NULL \
+           AND attendance_taken_at IS NULL AND status <> 'done'",
+        params![series_id, end, clock::now_local()],
+    )?;
+    Ok(changed as i64)
 }
 
 /// Alan doğrulaması. Arayüzde bir ikizi var (anında geri bildirim için); **son söz
@@ -1983,7 +2082,14 @@ pub fn group_capacity(conn: &Connection, group_id: i64, today: &str) -> AppResul
         [group_id],
         |row| row.get(0),
     )?;
-    let member_count = repo::academic::group_members_on(conn, group_id, today)?.len() as i64;
+    let member_count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM enrollment e \
+         JOIN student s ON s.id = e.student_id AND s.deleted_at IS NULL \
+         WHERE e.study_group_id = ?1 AND e.deleted_at IS NULL AND e.status = 'active' \
+           AND e.start_on <= ?2 AND (e.end_on IS NULL OR ?2 <= e.end_on)",
+        params![group_id, today],
+        |row| row.get(0),
+    )?;
     Ok(Capacity {
         member_count,
         capacity,
@@ -2008,6 +2114,7 @@ pub fn add_group_member(
     start_on: &str,
 ) -> AppResult<i64> {
     let group: StudyGroup = repo::require(conn, group_id)?;
+    let tariff = repo::finance::resolve_tariff(conn, group.subject_id, true, start_on.trim())?;
 
     repo::academic::insert_enrollment(
         conn,
@@ -2017,12 +2124,9 @@ pub fn add_group_member(
             study_group_id: Some(group_id),
             subject_id: group.subject_id,
             teacher_id: group.teacher_id,
-            price_rule_id: None,
-            // Tarife Faz 7'de. `per_session` + 0 ₺ bugünün doğru ifadesi: kayıt açık,
-            // fiyatı henüz tanımlı değil. Yoklama tahakkuku Faz 6'da bu alanı okuyacak
-            // ve `resolve_unit_price` sıfırı bulursa kullanıcıya soracak (§5).
+            price_rule_id: Some(tariff.price_rule_id),
             pricing_model: "per_session".into(),
-            unit_price: 0,
+            unit_price: tariff.unit_price,
             start_on: start_on.trim().to_string(),
             end_on: None,
             status: "active".into(),
@@ -2041,6 +2145,15 @@ pub fn add_group_member(
 pub fn end_group_membership(conn: &Connection, enrollment_id: i64, end_on: &str) -> AppResult<()> {
     let enrollment: Enrollment = repo::require(conn, enrollment_id)?;
     let end = end_on.trim();
+    if enrollment.status == "closed" && enrollment.end_on.as_deref() == Some(end) {
+        return Ok(());
+    }
+    if enrollment.status != "active" {
+        return Err(AppError::new(
+            "enrollment_closed",
+            "Bu öğrencinin grup kaydı zaten kapalı. Listeyi yenileyip durumu kontrol edin.",
+        ));
+    }
     if end < enrollment.start_on.as_str() {
         return Err(AppError::new(
             "enrollment.endOn",
