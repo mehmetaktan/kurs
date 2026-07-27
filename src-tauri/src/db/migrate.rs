@@ -35,6 +35,11 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "003_package_usage_reversal_chain",
         sql: include_str!("../../migrations/003_package_usage_reversal_chain.sql"),
     },
+    Migration {
+        version: 4,
+        name: "004_weekly_recurrence",
+        sql: include_str!("../../migrations/004_weekly_recurrence.sql"),
+    },
 ];
 
 /// `schema_migration` tablosu ilk migration'dan ÖNCE var olmak zorunda — hangi
@@ -159,10 +164,11 @@ mod tests {
 
     #[test]
     fn migration_dosyalari_gomulu_ve_bos_degil() {
-        assert_eq!(MIGRATIONS.len(), 3);
+        assert_eq!(MIGRATIONS.len(), 4);
         assert!(MIGRATIONS[0].sql.contains("CREATE TABLE ledger_entry"));
         assert!(MIGRATIONS[1].sql.contains("CREATE VIEW v_ledger_effective"));
         assert!(MIGRATIONS[2].sql.contains("ux_pkgusage_head"));
+        assert!(MIGRATIONS[3].sql.contains("weekdays_mask"));
 
         // Sürüm numaraları 1'den başlayarak boşluksuz artar: `run` sırayla uyguluyor,
         // atlanan bir numara sessizce uygulanmamış bir migration demek olurdu.
@@ -189,14 +195,14 @@ mod tests {
         let conn = db::open_in_memory().unwrap();
 
         let first = run(&conn).unwrap();
-        assert_eq!(first.applied_now, vec![1, 2, 3]);
+        assert_eq!(first.applied_now, vec![1, 2, 3, 4]);
 
         let second = run(&conn).unwrap();
         assert!(
             second.applied_now.is_empty(),
             "ikinci çalıştırma yeniden uygulamamalı"
         );
-        assert_eq!(second.all_applied, vec![1, 2, 3]);
+        assert_eq!(second.all_applied, vec![1, 2, 3, 4]);
     }
 
     #[test]
