@@ -25,7 +25,10 @@ use crate::repo::finance::{
     PaymentAllocationInput, PaymentInput, PaymentReport, PriceRuleInput,
 };
 use crate::repo::people::TeacherInput;
-use crate::repo::reports::{AbsenceFilterOptions, AbsenceReportQuery, AbsenceReportRow};
+use crate::repo::reports::{
+    AbsenceFilterOptions, AbsenceReportQuery, AbsenceReportRow, MonthlyCollectionRow,
+    ReportOverview, SubjectLessonRow,
+};
 use crate::repo::roster::{StudentDetail, StudentInput, StudentQuery, StudentRow};
 use crate::repo::schedule::{
     ApplyTemplateReport, Capacity, ClosedDayInput, Conflict, DaySessionRow, DeleteReport,
@@ -725,6 +728,23 @@ pub fn student_lesson_overview(
 // ---------------------------------------------------------------------------
 // Faz 6 §5 — devamsızlık raporu
 // ---------------------------------------------------------------------------
+
+#[tauri::command]
+pub fn report_overview(state: State<'_, AppState>, now: String) -> AppResult<ReportOverview> {
+    state.with_conn(|conn| repo::reports::overview(conn, &now))
+}
+
+#[tauri::command]
+pub fn monthly_collection_report(
+    state: State<'_, AppState>,
+) -> AppResult<Vec<MonthlyCollectionRow>> {
+    state.with_conn(repo::reports::monthly_collections)
+}
+
+#[tauri::command]
+pub fn subject_lesson_report(state: State<'_, AppState>) -> AppResult<Vec<SubjectLessonRow>> {
+    state.with_conn(repo::reports::subject_lessons)
+}
 
 #[tauri::command]
 pub fn absence_report(

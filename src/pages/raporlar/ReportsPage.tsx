@@ -4,11 +4,18 @@ import {
   fetchAbsenceReport,
   fetchAbsenceReportOptions,
   fetchLocalNow,
+  fetchMonthlyCollectionReport,
+  fetchReportOverview,
+  fetchSubjectLessonReport,
   type AbsenceGroupOption,
   type AbsenceReportRow,
   type AbsenceSubjectOption,
   type AppError,
+  type MonthlyCollectionRow,
+  type ReportOverview,
+  type SubjectLessonRow,
 } from '../../lib/api'
+import { formatLira, monthNameTr } from '../../lib/format'
 import { paginate } from '../../lib/paginate'
 import { sortTrBy } from '../../lib/sortTr'
 import { PageContent } from '../../shell/AppShell'
@@ -25,10 +32,18 @@ import {
   SearchInput,
   SectionHeader,
   Select,
+  StatCard,
+  StatStrip,
   Table,
   type Column,
 } from '../../ui'
-import { absenceTotal, reportRangeError, sortAbsenceRows } from './reports'
+import {
+  absenceTotal,
+  reportRangeError,
+  sortAbsenceRows,
+  sortMonthlyCollections,
+  sortSubjectLessons,
+} from './reports'
 import styles from './Reports.module.css'
 
 const SEARCH_DEBOUNCE_MS = 150
@@ -45,6 +60,11 @@ export function ReportsPage() {
   const [today, setToday] = useState('')
   const [subjects, setSubjects] = useState<AbsenceSubjectOption[]>([])
   const [groups, setGroups] = useState<AbsenceGroupOption[]>([])
+  const [overview, setOverview] = useState<ReportOverview | null>(null)
+  const [overviewError, setOverviewError] = useState<AppError | null>(null)
+  const [monthlyRows, setMonthlyRows] = useState<MonthlyCollectionRow[] | null>(null)
+  const [subjectRows, setSubjectRows] = useState<SubjectLessonRow[] | null>(null)
+  const [overviewPage, setOverviewPage] = useState({ monthly: 1, subjects: 1 })
 
   const [from, setFrom] = useState<string | null>(null)
   const [to, setTo] = useState<string | null>(null)
@@ -55,7 +75,30 @@ export function ReportsPage() {
   const [page, setPage] = useState(1)
   const initializationGeneration = useRef(0)
   const reportGeneration = useRef(0)
+  const overviewGeneration = useRef(0)
   const rangeErrorId = useId()
+
+  const loadOverview = useCallback(async (stamp: string) => {
+    const generation = ++overviewGeneration.current
+    setOverview(null)
+    setMonthlyRows(null)
+    setSubjectRows(null)
+    setOverviewError(null)
+    try {
+      const [nextOverview, nextMonthly, nextSubjects] = await Promise.all([
+        fetchReportOverview(stamp),
+        fetchMonthlyCollectionReport(),
+        fetchSubjectLessonReport(),
+      ])
+      if (generation !== overviewGeneration.current) return
+      setOverview(nextOverview)
+      setMonthlyRows(nextMonthly)
+      setSubjectRows(nextSubjects)
+    } catch (caught) {
+      if (generation !== overviewGeneration.current) return
+      setOverviewError(caught as AppError)
+    }
+  }, [])
 
   const initialize = useCallback(async () => {
     const generation = ++initializationGeneration.current
@@ -72,18 +115,20 @@ export function ReportsPage() {
       setSubjects(options.subjects)
       setGroups(options.groups)
       setInitialized(true)
+      void loadOverview(now)
     } catch (caught) {
       if (generation !== initializationGeneration.current) return
       setRows(null)
       setError(caught as AppError)
     }
-  }, [])
+  }, [loadOverview])
 
   useEffect(() => {
     void initialize()
     return () => {
       initializationGeneration.current += 1
       reportGeneration.current += 1
+      overviewGeneration.current += 1
     }
   }, [initialize])
 
@@ -145,6 +190,58 @@ export function ReportsPage() {
     () => groups.filter((group) => subjectId === null || group.subjectId === subjectId),
     [groups, subjectId],
   )
+  const monthly = useMemo(
+    () => paginate(sortMonthlyCollections(monthlyRows ?? []), overviewPage.monthly),
+    [monthlyRows, overviewPage.monthly],
+  )
+  const subjectLessons = useMemo(
+    () => paginate(sortSubjectLessons(subjectRows ?? []), overviewPage.subjects),
+    [overviewPage.subjects, subjectRows],
+  )
+  const monthlyColumns: readonly Column<MonthlyCollectionRow>[] = [
+    {
+      key: 'month',
+      header: tr.reports.monthly.table.month,
+      width: 'minmax(180px, 1fr)',
+      render: (row) => formatReportMonth(row.month),
+    },
+    {
+      key: 'count',
+      header: tr.reports.monthly.table.count,
+      width: '160px',
+      align: 'end',
+      render: (row) => <span className={styles.number}>{row.collectionCount}</span>,
+    },
+    {
+      key: 'amount',
+      header: tr.reports.monthly.table.amount,
+      width: '180px',
+      align: 'end',
+      render: (row) => (
+        <strong className={styles.number}>{formatLira(row.collectedKurus)}</strong>
+      ),
+    },
+  ]
+  const subjectColumns: readonly Column<SubjectLessonRow>[] = [
+    {
+      key: 'subject',
+      header: tr.reports.subjects.table.subject,
+      width: 'minmax(220px, 1fr)',
+      render: (row) => (
+        <span className={styles.subjectName}>
+          {row.subjectName}
+          {row.archived && <Badge tone="neutral">{tr.reports.absence.table.archived}</Badge>}
+        </span>
+      ),
+    },
+    {
+      key: 'count',
+      header: tr.reports.subjects.table.count,
+      width: '180px',
+      align: 'end',
+      render: (row) => <strong className={styles.number}>{row.processedSessionCount}</strong>,
+    },
+  ]
 
   const clearFilters = () => {
     setSearch('')
@@ -209,6 +306,125 @@ export function ReportsPage() {
         }
       />
       <PageContent>
+        <section className={styles.overview}>
+          {overview === null && !overviewError && <LoadingState />}
+          {overviewError && (
+            <ErrorState
+              message={overviewError.message}
+              onRetry={() => today && void loadOverview(`${today} 00:00`)}
+            />
+          )}
+          {overview !== null && (
+            <StatStrip>
+              <StatCard
+                label={tr.reports.summary.collected}
+                value={overview.collectionCount === 0 ? null : formatLira(overview.collectedKurus)}
+                caption={
+                  overview.collectionCount === 0
+                    ? tr.reports.summary.noCollection
+                    : `${formatReportMonth(overview.month)}${tr.units.separator}${overview.collectionCount} ${tr.reports.summary.collectionSuffix}`
+                }
+              />
+              <StatCard
+                label={tr.reports.summary.processed}
+                value={
+                  overview.processedSessionCount === 0
+                    ? null
+                    : String(overview.processedSessionCount)
+                }
+                caption={
+                  overview.processedSessionCount === 0
+                    ? tr.reports.summary.noProcessed
+                    : tr.reports.summary.allProcessed
+                }
+              />
+              <StatCard
+                label={tr.reports.summary.attendance}
+                value={
+                  overview.attendancePercentage === null
+                    ? null
+                    : `%${overview.attendancePercentage}`
+                }
+                caption={
+                  overview.attendancePercentage === null
+                    ? tr.reports.summary.noAttendance
+                    : tr.reports.summary.allAttendance
+                }
+              />
+              <StatCard
+                label={tr.reports.summary.activeStudents}
+                value={
+                  overview.activeStudentCount === 0 ? null : String(overview.activeStudentCount)
+                }
+                caption={
+                  overview.activeStudentCount === 0
+                    ? tr.reports.summary.noActiveStudents
+                    : tr.reports.summary.activeStudentsCaption
+                }
+              />
+            </StatStrip>
+          )}
+
+          {overview !== null && monthlyRows !== null && subjectRows !== null && (
+            <div className={styles.reportTables}>
+              <section className={styles.section}>
+                <SectionHeader
+                  title={tr.reports.monthly.title}
+                  meta={tr.reports.monthly.description}
+                />
+                <Table
+                  label={tr.reports.monthly.table.label}
+                  columns={monthlyColumns}
+                  rows={monthly.rows}
+                  rowKey={(row) => row.month}
+                  emptyState={
+                    <EmptyState
+                      title={tr.reports.monthly.empty}
+                      body={tr.reports.monthly.emptyBody}
+                    />
+                  }
+                />
+                {monthly.pageCount > 1 && (
+                  <Pagination
+                    page={monthly.page}
+                    pageCount={monthly.pageCount}
+                    onChange={(next) =>
+                      setOverviewPage((current) => ({ ...current, monthly: next }))
+                    }
+                  />
+                )}
+              </section>
+              <section className={styles.section}>
+                <SectionHeader
+                  title={tr.reports.subjects.title}
+                  meta={tr.reports.subjects.description}
+                />
+                <Table
+                  label={tr.reports.subjects.table.label}
+                  columns={subjectColumns}
+                  rows={subjectLessons.rows}
+                  rowKey={(row) => row.subjectId}
+                  emptyState={
+                    <EmptyState
+                      title={tr.reports.subjects.empty}
+                      body={tr.reports.subjects.emptyBody}
+                    />
+                  }
+                />
+                {subjectLessons.pageCount > 1 && (
+                  <Pagination
+                    page={subjectLessons.page}
+                    pageCount={subjectLessons.pageCount}
+                    onChange={(next) =>
+                      setOverviewPage((current) => ({ ...current, subjects: next }))
+                    }
+                  />
+                )}
+              </section>
+            </div>
+          )}
+        </section>
+
         <section className={styles.section}>
           <SectionHeader
             title={tr.reports.absence.title}
@@ -329,4 +545,13 @@ function filterOptionLabel(option: { name: string; archived: boolean }): string 
   return option.archived
     ? `${option.name}${tr.units.separator}${tr.reports.absence.table.archived}`
     : option.name
+}
+
+function formatReportMonth(value: string): string {
+  const [year, month] = value.split('-')
+  const monthNumber = Number(month)
+  if (!year || !Number.isInteger(monthNumber) || monthNumber < 1 || monthNumber > 12) {
+    return value
+  }
+  return `${monthNameTr(monthNumber)} ${year}`
 }

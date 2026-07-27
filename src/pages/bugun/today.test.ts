@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import type { DaySessionRow } from '../../lib/api'
-import { isPendingAttendance, pendingAttendanceCount, sortByStart, splitByNow } from './today'
+import type { DaySessionRow, StudentRow } from '../../lib/api'
+import {
+  isPendingAttendance,
+  lowPackageRows,
+  pendingAttendanceCount,
+  sortByStart,
+  splitByNow,
+} from './today'
 
 /**
  * Bugün ekranının iki gereksinimi burada sınanıyor: saat sırası (R1.1) ve "şimdi"
@@ -123,5 +129,49 @@ describe('pendingAttendanceCount', () => {
       AKSAM,
     ]
     expect(pendingAttendanceCount(rows, NOW)).toBe(1)
+  })
+})
+
+describe('lowPackageRows', () => {
+  const student = (
+    id: number,
+    fullName: string,
+    remainingLessons: number | null,
+    extra: Partial<StudentRow> = {},
+  ): StudentRow => ({
+    id,
+    fullName,
+    school: null,
+    grade: null,
+    phone: null,
+    isActive: true,
+    archived: false,
+    guardianName: null,
+    guardianPhone: null,
+    guardianCount: 0,
+    balanceKurus: 0,
+    debtKurus: 0,
+    oldestDueOn: null,
+    remainingLessons,
+    processedLessons: 0,
+    attendedLessons: 0,
+    lastSessionDate: null,
+    subjectIds: [],
+    groupIds: [],
+    ...extra,
+  })
+
+  it('yalnız canlı 1–2 derslik paketleri kalan hak ve Türkçe ada göre sıralar', () => {
+    const rows = [
+      student(1, 'İpek', 2),
+      student(2, 'Çınar', 1),
+      student(3, 'Ada', 3),
+      student(4, 'Biten', 0),
+      student(5, 'Arşiv', 1, { archived: true }),
+      student(6, 'Pasif', 1, { isActive: false }),
+      student(7, 'Paketsiz', null),
+    ]
+
+    expect(lowPackageRows(rows).map((item) => item.id)).toEqual([2, 1])
   })
 })

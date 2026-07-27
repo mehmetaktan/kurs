@@ -7,6 +7,44 @@
  * sıkışıyor.
  */
 
+.summary {
+  display: grid;
+  gap: var(--space-3);
+  max-width: var(--measure-content-max);
+  margin-bottom: var(--space-5);
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.summaryButton {
+  min-width: 0;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+
+.summaryButton > div {
+  box-sizing: border-box;
+  height: 100%;
+}
+
+.summaryButton:hover > div {
+  border-color: var(--color-border-strong);
+}
+
+.summaryButton:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-10);
+}
+
 .layout {
   display: grid;
   grid-template-columns: 1.7fr minmax(322px, 0.9fr);
@@ -60,6 +98,23 @@
 .makeupRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2); padding: var(--space-2) 0; border-top: 1px solid var(--color-border-subtle); }
 .makeupRow > span { overflow: hidden; font-weight: var(--font-weight-semibold); text-overflow: ellipsis; white-space: nowrap; }
 .makeupRow > strong { color: var(--color-warn-text); font-variant-numeric: tabular-nums; }
+
+.packageList { display: grid; margin-top: var(--space-2); }
+.packageRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2); padding: var(--space-2) 0; border-top: 1px solid var(--color-border-subtle); }
+.packageRow > span { overflow: hidden; font-weight: var(--font-weight-semibold); text-overflow: ellipsis; white-space: nowrap; }
+.packageRow > strong { color: var(--color-warn-text); font-variant-numeric: tabular-nums; }
+
+@media (width < 1200px) {
+  .summaryGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (width < 760px) {
+  .summaryGrid {
+    grid-template-columns: 1fr;
+  }
+}
 
 /* ── Bölüm başlığındaki sayaç ─────────────────────────────────────────────── */
 

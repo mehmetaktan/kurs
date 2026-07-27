@@ -9,7 +9,9 @@
  * çağrılmıyor. Yoksa testler makinenin saatine bağlanırdı ve §0'ın SQLite için koyduğu
  * kural arayüzde delinmiş olurdu.
  */
-import type { DaySessionRow } from '../../lib/api'
+import type { DaySessionRow, StudentRow } from '../../lib/api'
+import { compareTr } from '../../lib/sortTr'
+import { LOW_PACKAGE_THRESHOLD } from '../ogrenciler/filters'
 
 export interface DaySplit {
   /** Bitmiş dersler, saat sırasıyla. */
@@ -55,4 +57,23 @@ export function isPendingAttendance(row: DaySessionRow, now: string): boolean {
 /** Başlıkta yazan sayı (R1.2: "başlıkta sayılır"). */
 export function pendingAttendanceCount(rows: readonly DaySessionRow[], now: string): number {
   return rows.filter((row) => isPendingAttendance(row, now)).length
+}
+
+/** Bugün yan paneli: yalnız canlı ve hakkı gerçekten 1–2 arasında kalan paketler. */
+export function lowPackageRows(rows: readonly StudentRow[]): StudentRow[] {
+  return rows
+    .filter(
+      (row) =>
+        !row.archived &&
+        row.isActive &&
+        row.remainingLessons !== null &&
+        row.remainingLessons > 0 &&
+        row.remainingLessons <= LOW_PACKAGE_THRESHOLD,
+    )
+    .sort(
+      (a, b) =>
+        (a.remainingLessons ?? 0) - (b.remainingLessons ?? 0) ||
+        compareTr(a.fullName, b.fullName) ||
+        a.id - b.id,
+    )
 }

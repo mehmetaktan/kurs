@@ -1025,6 +1025,49 @@ export function fetchStudentLessonOverview(
   return call<StudentLessonOverview>('student_lesson_overview', { studentId, now })
 }
 
+// ─── Faz 10 §0 — rapor özeti ve tabloları ───────────────────────────────────
+
+export interface ReportOverview {
+  /** `YYYY-MM` */
+  month: string
+  collectedKurus: number
+  collectionCount: number
+  processedSessionCount: number
+  attendancePresentCount: number
+  attendanceEligibleCount: number
+  attendancePercentage: number | null
+  activeStudentCount: number
+  totalReceivableKurus: number
+  debtorCount: number
+  ledgerEntryCount: number
+}
+
+export interface MonthlyCollectionRow {
+  /** `YYYY-MM` */
+  month: string
+  collectedKurus: number
+  collectionCount: number
+}
+
+export interface SubjectLessonRow {
+  subjectId: number
+  subjectName: string
+  archived: boolean
+  processedSessionCount: number
+}
+
+export function fetchReportOverview(now: string): Promise<ReportOverview> {
+  return call<ReportOverview>('report_overview', { now })
+}
+
+export function fetchMonthlyCollectionReport(): Promise<MonthlyCollectionRow[]> {
+  return call<MonthlyCollectionRow[]>('monthly_collection_report')
+}
+
+export function fetchSubjectLessonReport(): Promise<SubjectLessonRow[]> {
+  return call<SubjectLessonRow[]>('subject_lesson_report')
+}
+
 // ─── Faz 6 §5 — devamsızlık raporu ──────────────────────────────────────────
 
 export interface AbsenceReportQuery {

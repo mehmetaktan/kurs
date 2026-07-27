@@ -8,6 +8,8 @@ const api = vi.hoisted(() => ({
   fetchHasSchedule: vi.fn(),
   fetchDebtorRows: vi.fn(),
   fetchMakeupDebts: vi.fn(),
+  fetchReportOverview: vi.fn(),
+  fetchStudentList: vi.fn(),
   fetchAttendanceDetail: vi.fn(),
   saveAttendance: vi.fn(),
 }))
@@ -28,6 +30,42 @@ beforeEach(() => {
   api.fetchMakeupDebts.mockResolvedValue([
     { studentId: 8, fullName: 'Zeynep Kaya', pendingCount: 2 },
   ])
+  api.fetchReportOverview.mockResolvedValue({
+    month: '2026-07',
+    collectedKurus: 300_000,
+    collectionCount: 2,
+    processedSessionCount: 12,
+    attendancePresentCount: 8,
+    attendanceEligibleCount: 10,
+    attendancePercentage: 80,
+    activeStudentCount: 2,
+    totalReceivableKurus: 120_000,
+    debtorCount: 1,
+    ledgerEntryCount: 8,
+  })
+  api.fetchStudentList.mockResolvedValue([
+    {
+      id: 9,
+      fullName: 'Çınar Ak',
+      school: null,
+      grade: null,
+      phone: null,
+      isActive: true,
+      archived: false,
+      guardianName: null,
+      guardianPhone: null,
+      guardianCount: 0,
+      balanceKurus: 0,
+      debtKurus: 0,
+      oldestDueOn: null,
+      remainingLessons: 2,
+      processedLessons: 0,
+      attendedLessons: 0,
+      lastSessionDate: null,
+      subjectIds: [],
+      groupIds: [],
+    },
+  ])
   api.fetchAttendanceDetail.mockResolvedValue({
     sessionId: 12,
     title: 'Grup A',
@@ -45,9 +83,9 @@ describe('Bugün borç özeti', () => {
   it('canlı borçluyu defter verisinden gösterir, arşivliyi dışarıda bırakır', async () => {
     render(<TodayPage />)
     expect(await screen.findByText('İpek Şahin')).toBeTruthy()
-    expect(screen.getByText('1.200,00 ₺')).toBeTruthy()
+    expect(screen.getAllByText('1.200,00 ₺')).toHaveLength(2)
     expect(screen.getByText('12 gün gecikti')).toBeTruthy()
-    expect(screen.getByText(/1 öğrenci/)).toBeTruthy()
+    expect(screen.getAllByText(/1 öğrenci/)).toHaveLength(2)
     expect(screen.queryByText('Arşiv Borçlu')).toBeNull()
     expect(api.fetchDebtorRows).toHaveBeenCalledWith({ search: null, filter: 'all', today: '2026-07-26' })
   })
@@ -58,6 +96,21 @@ describe('Bugün borç özeti', () => {
     expect(await screen.findByText('Zeynep Kaya')).toBeTruthy()
     expect(screen.getByText('2 bekliyor')).toBeTruthy()
     expect(screen.getByText('2 telafi')).toBeTruthy()
+  })
+
+  it('beş özet kartını ve biten paket listesini gösterip ilgili ekrana gider', async () => {
+    window.location.hash = ''
+    render(<TodayPage />)
+
+    expect(await screen.findByText('3.000,00 ₺')).toBeTruthy()
+    expect(screen.getByText('Çınar Ak')).toBeTruthy()
+    expect(screen.getByText('2 ders kaldı')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Bekleyen telafi · ilgili ekranı aç' })).toBeTruthy()
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Kursun toplam alacağı · ilgili ekranı aç' }),
+    )
+    expect(window.location.hash).toBe('#/odemeler')
   })
 })
 

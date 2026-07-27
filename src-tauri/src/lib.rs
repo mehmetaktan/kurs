@@ -218,7 +218,11 @@ pub fn run() {
             commands::save_makeup_session,
             commands::makeup_debts,
             commands::student_lesson_overview,
-            // Faz 6 §5 — devamsızlık raporu
+            // Faz 10 §0 — rapor özeti ve basit tablolar
+            commands::report_overview,
+            commands::monthly_collection_report,
+            commands::subject_lesson_report,
+            // Faz 6 §5 — devamsızlık raporu (Faz 10'da korunur)
             commands::absence_report,
             commands::absence_report_options,
             commands::has_schedule,

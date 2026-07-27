@@ -2,6 +2,7 @@ mod common;
 
 use kurs_takip_lib::model::{Attendance, Session, StudyGroup, Subject};
 use kurs_takip_lib::repo;
+use kurs_takip_lib::repo::finance::PaymentInput;
 use kurs_takip_lib::repo::reports::AbsenceReportQuery;
 
 fn session(
@@ -66,6 +67,29 @@ fn query(from: &str, to: &str) -> AbsenceReportQuery {
         subject_id: None,
         group_id: None,
     }
+}
+
+fn payment(
+    conn: &rusqlite::Connection,
+    student_id: i64,
+    paid_on: &str,
+    amount: i64,
+    receipt_no: &str,
+) -> i64 {
+    repo::finance::record_payment(
+        conn,
+        &PaymentInput {
+            student_id,
+            paid_on: paid_on.into(),
+            amount,
+            method: "cash".into(),
+            receipt_no: receipt_no.into(),
+            note: None,
+            allocations: vec![],
+        },
+    )
+    .expect("tahsilat kaydedilmeli")
+    .payment_id
 }
 
 #[test]
@@ -274,4 +298,91 @@ fn filtre_secenekleri_canlilari_ve_gecmiste_kullanilan_arsivlileri_getirir() {
     assert_eq!(historical_rows.len(), 1);
     assert_eq!(historical_rows[0].student_id, student_id);
     assert_eq!(historical_rows[0].excused_count, 1);
+}
+
+#[test]
+fn rapor_ozeti_para_ve_devam_hesaplarini_tam_sayiyla_yapar() {
+    let conn = common::conn();
+    let math = common::subject(&conn, "Matematik");
+    let student_id = common::student(&conn, "Deniz Kaya");
+
+    let march_payment = payment(&conn, student_id, "2026-03-10", 100_000, "2026-1");
+    let april_payment = payment(&conn, student_id, "2026-04-20", 50_000, "2026-2");
+    repo::finance::cancel_payment(&conn, april_payment, "2026-04-21")
+        .expect("tahsilat iptal edilmeli");
+    common::ledger(&conn, student_id, "2026-03-01", "adjustment", -150_000);
+
+    for (day, status) in [
+        ("2026-03-01", "present"),
+        ("2026-03-02", "excused"),
+        ("2026-03-03", "unexcused"),
+    ] {
+        let session_id = session(&conn, Some(student_id), None, math, day, "done");
+        mark(&conn, session_id, student_id, status);
+    }
+
+    let overview = repo::reports::overview(&conn, "2026-03-31 10:00").unwrap();
+    assert_eq!(overview.month, "2026-03");
+    assert_eq!(
+        (overview.collected_kurus, overview.collection_count),
+        (100_000, 1)
+    );
+    assert_eq!(overview.processed_session_count, 3);
+    assert_eq!(
+        (
+            overview.attendance_present_count,
+            overview.attendance_eligible_count,
+            overview.attendance_percentage,
+        ),
+        (1, 3, Some(33))
+    );
+    assert_eq!(overview.active_student_count, 1);
+    assert_eq!(overview.total_receivable_kurus, 50_000);
+    assert_eq!(overview.debtor_count, 1);
+    assert!(overview.ledger_entry_count >= 4);
+
+    let months = repo::reports::monthly_collections(&conn).unwrap();
+    assert_eq!(
+        months,
+        vec![repo::reports::MonthlyCollectionRow {
+            month: "2026-03".into(),
+            collected_kurus: 100_000,
+            collection_count: 1,
+        }]
+    );
+
+    // Kullanılmadı uyarısını önlerken testin niyetini de mühürler: Mart tahsilatı canlı.
+    assert!(march_payment > 0);
+}
+
+#[test]
+fn brans_raporu_grup_yoklamasi_kadar_cogalmaz_ve_arsivliyi_korur() {
+    let conn = common::conn();
+    let math = common::subject(&conn, "Matematik");
+    let physics = common::subject(&conn, "Fizik");
+    let group = common::group(&conn, "Grup A", math);
+    let first = common::student(&conn, "Ada Kaya");
+    let second = common::student(&conn, "Ece Kaya");
+    common::enrollment(&conn, first, Some(group), math, "2026-03-01", None).unwrap();
+    common::enrollment(&conn, second, Some(group), math, "2026-03-01", None).unwrap();
+
+    let group_session = session(&conn, None, Some(group), math, "2026-03-10", "done");
+    mark(&conn, group_session, first, "present");
+    mark(&conn, group_session, second, "present");
+    session(&conn, Some(first), None, physics, "2026-03-11", "planned");
+    repo::archive::<Subject>(&conn, math).unwrap();
+
+    let rows = repo::reports::subject_lessons(&conn).unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].subject_id, math);
+    assert_eq!(rows[0].processed_session_count, 1);
+    assert!(rows[0].archived);
+}
+
+#[test]
+fn rapor_ozeti_gecersiz_yerel_zamani_eylem_oneren_hatayla_reddeder() {
+    let conn = common::conn();
+    let error = repo::reports::overview(&conn, "31.03.2026").unwrap_err();
+    assert_eq!(error.code, "reports.absence.date");
+    assert!(error.message.contains("seçin"));
 }

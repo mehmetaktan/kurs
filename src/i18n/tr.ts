@@ -936,6 +936,26 @@ export const tr = {
   today: {
     newSession: 'Yeni ders',
     fromTemplate: 'Şablondan oluştur',
+    summary: {
+      label: 'Kurs özeti',
+      open: 'ilgili ekranı aç',
+      loading: 'Özet yükleniyor',
+      collected: 'Bu ay tahsil edilen',
+      currentMonth: 'İçinde bulunduğumuz ay',
+      noCollection: 'Bu ay henüz tahsilat yok',
+      receivable: 'Kursun toplam alacağı',
+      receivableCaption: 'Arşivlenmiş öğrenciler dahil',
+      debtors: 'Borçlu öğrenci',
+      debtorsCaption: 'Kurs genelindeki tüm borçlular',
+      noLedger: 'Henüz hesap hareketi yok',
+      makeups: 'Bekleyen telafi',
+      makeupsCaption: 'Tüm açık telafi borçları',
+      noMakeups: 'Bekleyen telafi yok',
+      lowPackages: 'Paketi bitmek üzere',
+      lowPackagesCaption: '1 veya 2 dersi kalan öğrenciler',
+      noLowPackages: 'Biten paket uyarısı yok',
+      noStudents: 'Henüz aktif öğrenci yok',
+    },
 
     lessons: {
       heading: 'Bugünkü dersler',
@@ -984,7 +1004,9 @@ export const tr = {
     },
     packages: {
       heading: 'Paketi bitmek üzere',
-      soon: 'Kalan ders uyarısı paket modülüyle birlikte gelecek.',
+      countSuffix: 'öğrenci',
+      rowSuffix: 'ders kaldı',
+      empty: 'Paketi bitmek üzere olan öğrenci yok.',
     },
     backup: {
       heading: 'Yedekleme',
@@ -1177,8 +1199,45 @@ export const tr = {
     },
   },
 
-  // Faz 6 §5 — Raporlar > Devamsızlık.
+  // Faz 10 §0 — Rapor özeti + Faz 6'dan korunan devamsızlık dökümü.
   reports: {
+    summary: {
+      collected: 'Bu ay tahsil edilen',
+      collectionSuffix: 'tahsilat',
+      noCollection: 'Bu ay henüz tahsilat yok',
+      processed: 'İşlenen ders',
+      allProcessed: 'Tüm işlenen dersler',
+      noProcessed: 'Henüz ders işlenmedi',
+      attendance: 'Devam oranı',
+      allAttendance: 'Tüm sonuç girilmiş dersler',
+      noAttendance: 'Henüz sonuç girilmiş ders yok',
+      activeStudents: 'Aktif öğrenci',
+      activeStudentsCaption: 'Bugün aktif olan kayıtlar',
+      noActiveStudents: 'Henüz aktif öğrenci yok',
+    },
+    monthly: {
+      title: 'Aylık tahsilat',
+      description: 'İptal edilmemiş tahsilatların aylara göre toplamı',
+      table: {
+        label: 'Aylık tahsilat dökümü',
+        month: 'Ay',
+        count: 'Tahsilat sayısı',
+        amount: 'Tahsil edilen',
+      },
+      empty: 'Bu dönem için tahsilat verisi yok',
+      emptyBody: 'İlk tahsilat kaydedildiğinde aylık döküm burada görünür.',
+    },
+    subjects: {
+      title: 'Branş bazında ders',
+      description: 'Tüm işlenmiş derslerin branşlara göre dağılımı',
+      table: {
+        label: 'Branş bazında işlenen dersler',
+        subject: 'Branş',
+        count: 'İşlenen ders',
+      },
+      empty: 'Bu dönem için ders verisi yok',
+      emptyBody: 'İlk ders işlenip yoklaması kaydedildiğinde dağılım burada görünür.',
+    },
     absence: {
       title: 'Devamsızlık raporu',
       description:

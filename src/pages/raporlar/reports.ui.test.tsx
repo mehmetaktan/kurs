@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ReportsPage } from './ReportsPage'
 
@@ -6,6 +6,9 @@ const api = vi.hoisted(() => ({
   fetchAbsenceReport: vi.fn(),
   fetchAbsenceReportOptions: vi.fn(),
   fetchLocalNow: vi.fn(),
+  fetchReportOverview: vi.fn(),
+  fetchMonthlyCollectionReport: vi.fn(),
+  fetchSubjectLessonReport: vi.fn(),
 }))
 vi.mock('../../lib/api', async (original) => ({ ...(await original()), ...api }))
 
@@ -49,6 +52,31 @@ beforeEach(() => {
       totalCount: 5,
     },
   ])
+  api.fetchReportOverview.mockReset().mockResolvedValue({
+    month: '2026-03',
+    collectedKurus: 325_000,
+    collectionCount: 4,
+    processedSessionCount: 18,
+    attendancePresentCount: 12,
+    attendanceEligibleCount: 15,
+    attendancePercentage: 80,
+    activeStudentCount: 9,
+    totalReceivableKurus: 120_000,
+    debtorCount: 2,
+    ledgerEntryCount: 20,
+  })
+  api.fetchMonthlyCollectionReport.mockReset().mockResolvedValue([
+    { month: '2026-02', collectedKurus: 200_000, collectionCount: 2 },
+    { month: '2026-03', collectedKurus: 325_000, collectionCount: 4 },
+  ])
+  api.fetchSubjectLessonReport.mockReset().mockResolvedValue([
+    {
+      subjectId: 1,
+      subjectName: 'Matematik',
+      archived: false,
+      processedSessionCount: 12,
+    },
+  ])
 })
 
 describe('Devamsızlık raporu ekranı', () => {
@@ -63,7 +91,8 @@ describe('Devamsızlık raporu ekranı', () => {
       subjectId: null,
       groupId: null,
     })
-    const dataRows = screen.getAllByRole('row').slice(1)
+    const absenceTable = screen.getByRole('table', { name: 'Devamsızlık sıralaması' })
+    const dataRows = within(absenceTable).getAllByRole('row').slice(1)
     expect(dataRows.map((item) => item.textContent)).toEqual([
       expect.stringContaining('Ahmet Kaya'),
       expect.stringContaining('Çınar Kaya'),
@@ -71,6 +100,21 @@ describe('Devamsızlık raporu ekranı', () => {
     ])
     expect(screen.getByText('Arşivlendi')).toBeTruthy()
     expect(screen.getByText('Toplam devamsızlık').parentElement?.textContent).toContain('11')
+  })
+
+  it('özet kartlarını, aylık tahsilatı ve branş derslerini mevcut devamsızlığın üstünde gösterir', async () => {
+    render(<ReportsPage />)
+
+    expect(await screen.findAllByText('3.250,00 ₺')).toHaveLength(2)
+    expect(screen.getByText('%80')).toBeTruthy()
+    expect(screen.getByText('18')).toBeTruthy()
+    expect(screen.getByText('9')).toBeTruthy()
+    const monthly = screen.getByRole('table', { name: 'Aylık tahsilat dökümü' })
+    expect(within(monthly).getByText('Mart 2026')).toBeTruthy()
+    expect(within(monthly).getByText('3.250,00 ₺')).toBeTruthy()
+    const subjects = screen.getByRole('table', { name: 'Branş bazında işlenen dersler' })
+    expect(within(subjects).getByText('Matematik')).toBeTruthy()
+    expect(api.fetchReportOverview).toHaveBeenCalledWith('2026-03-20 10:00')
   })
 
   it('branş ve bağımlı grup filtresini backend sorgusuna gönderir', async () => {

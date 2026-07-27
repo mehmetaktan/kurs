@@ -6,14 +6,20 @@ import {
   fetchHasSchedule,
   fetchLocalNow,
   fetchMakeupDebts,
+  fetchReportOverview,
+  fetchStudentList,
   type AppError,
   type DaySessionRow,
   type DebtorRow,
   type MakeupDebtRow,
+  type ReportOverview,
+  type StudentRow,
 } from '../../lib/api'
 import { formatDateWithWeekday, formatLira, formatTime } from '../../lib/format'
+import { navigate } from '../../lib/router'
 import { PageContent } from '../../shell/AppShell'
 import { PageHeader } from '../../shell/PageHeader'
+import { STUDENTS_PATH } from '../../shell/routes'
 import {
   Badge,
   Button,
@@ -22,6 +28,7 @@ import {
   ErrorState,
   LoadingState,
   SectionHeader,
+  StatCard,
   Table,
 } from '../../ui'
 import type { Column } from '../../ui'
@@ -31,7 +38,7 @@ import { SessionForm } from '../dersler/SessionForm'
 import { TemplateModal } from '../dersler/TemplateModal'
 import { subjectColorOf } from '../tanimlar/palette'
 import { sortTrBy } from '../../lib/sortTr'
-import { isPendingAttendance, pendingAttendanceCount, splitByNow } from './today'
+import { isPendingAttendance, lowPackageRows, pendingAttendanceCount, splitByNow } from './today'
 import styles from './Today.module.css'
 import { sortDebtors, visibleReceivableKurus } from '../odemeler/debtors'
 
@@ -53,6 +60,10 @@ export function TodayPage() {
   const [debtError, setDebtError] = useState<AppError | null>(null)
   const [makeupDebts, setMakeupDebts] = useState<MakeupDebtRow[] | null>(null)
   const [makeupError, setMakeupError] = useState<AppError | null>(null)
+  const [overview, setOverview] = useState<ReportOverview | null>(null)
+  const [overviewError, setOverviewError] = useState<AppError | null>(null)
+  const [students, setStudents] = useState<StudentRow[] | null>(null)
+  const [packageError, setPackageError] = useState<AppError | null>(null)
 
   const [formOpen, setFormOpen] = useState(false)
   const [templateOpen, setTemplateOpen] = useState(false)
@@ -64,8 +75,12 @@ export function TodayPage() {
     setError(null)
     setDebtError(null)
     setMakeupError(null)
+    setOverviewError(null)
+    setPackageError(null)
     setDebtors(null)
     setMakeupDebts(null)
+    setOverview(null)
+    setStudents(null)
     try {
       const stamp = await fetchLocalNow()
       setNow(stamp)
@@ -87,6 +102,16 @@ export function TodayPage() {
       } catch (err) {
         setMakeupError(err as AppError)
       }
+      try {
+        setOverview(await fetchReportOverview(stamp))
+      } catch (err) {
+        setOverviewError(err as AppError)
+      }
+      try {
+        setStudents(await fetchStudentList({ today: stamp.slice(0, 10) }))
+      } catch (err) {
+        setPackageError(err as AppError)
+      }
     } catch (err) {
       setError(err as AppError)
       setRows(null)
@@ -100,6 +125,7 @@ export function TodayPage() {
   const today = now?.slice(0, 10) ?? null
   const split = useMemo(() => splitByNow(rows ?? [], now ?? ''), [rows, now])
   const pending = useMemo(() => pendingAttendanceCount(rows ?? [], now ?? ''), [rows, now])
+  const endingPackages = useMemo(() => lowPackageRows(students ?? []), [students])
 
   const columns = useMemo(
     () =>
@@ -144,6 +170,14 @@ export function TodayPage() {
       />
 
       <PageContent>
+        <TodaySummary
+          overview={overview}
+          error={overviewError}
+          makeups={makeupDebts}
+          makeupError={makeupError}
+          endingPackages={students === null ? null : endingPackages}
+          packageError={packageError}
+        />
         <div className={styles.layout}>
           <section className={styles.lessons}>
             <SectionHeader
@@ -215,7 +249,7 @@ export function TodayPage() {
           <aside className={styles.side}>
             <DebtorSection rows={debtors} error={debtError} />
             <MakeupDebtSection rows={makeupDebts} error={makeupError} />
-            <SideSection title={tr.today.packages.heading} body={tr.today.packages.soon} />
+            <PackageSection rows={students === null ? null : endingPackages} error={packageError} />
             <SideSection title={tr.today.backup.heading} body={tr.today.backup.soon} />
           </aside>
         </div>
@@ -265,6 +299,141 @@ export function TodayPage() {
   )
 }
 
+function TodaySummary({
+  overview,
+  error,
+  makeups,
+  makeupError,
+  endingPackages,
+  packageError,
+}: {
+  overview: ReportOverview | null
+  error: AppError | null
+  makeups: MakeupDebtRow[] | null
+  makeupError: AppError | null
+  endingPackages: StudentRow[] | null
+  packageError: AppError | null
+}) {
+  const pendingMakeupCount =
+    makeups?.reduce((total, row) => total + row.pendingCount, 0) ?? null
+  const noStudents = overview !== null && overview.activeStudentCount === 0
+
+  return (
+    <section className={styles.summary} aria-label={tr.today.summary.label}>
+      <div className={styles.summaryGrid}>
+        <SummaryCard
+          path="/odemeler"
+          label={tr.today.summary.collected}
+          value={
+            overview === null || overview.collectionCount === 0
+              ? null
+              : formatLira(overview.collectedKurus)
+          }
+          caption={
+            overview === null
+              ? tr.today.summary.loading
+              : overview.collectionCount === 0
+                ? tr.today.summary.noCollection
+                : tr.today.summary.currentMonth
+          }
+        />
+        <SummaryCard
+          path="/odemeler"
+          label={tr.today.summary.receivable}
+          value={
+            overview === null || overview.ledgerEntryCount === 0
+              ? null
+              : formatLira(overview.totalReceivableKurus)
+          }
+          tone={overview !== null && overview.totalReceivableKurus > 0 ? 'danger' : 'default'}
+          caption={
+            overview === null
+              ? tr.today.summary.loading
+              : overview.ledgerEntryCount === 0
+                ? tr.today.summary.noLedger
+                : tr.today.summary.receivableCaption
+          }
+        />
+        <SummaryCard
+          path="/odemeler"
+          label={tr.today.summary.debtors}
+          value={
+            overview === null || overview.ledgerEntryCount === 0
+              ? null
+              : String(overview.debtorCount)
+          }
+          tone={overview !== null && overview.debtorCount > 0 ? 'danger' : 'default'}
+          caption={
+            overview === null
+              ? tr.today.summary.loading
+              : overview.ledgerEntryCount === 0
+                ? tr.today.summary.noLedger
+                : tr.today.summary.debtorsCaption
+          }
+        />
+        <SummaryCard
+          path={STUDENTS_PATH}
+          label={tr.today.summary.makeups}
+          value={pendingMakeupCount === null || noStudents ? null : String(pendingMakeupCount)}
+          tone={pendingMakeupCount !== null && pendingMakeupCount > 0 ? 'warn' : 'default'}
+          caption={
+            makeups === null
+              ? tr.today.summary.loading
+              : noStudents
+                ? tr.today.summary.noStudents
+                : pendingMakeupCount === 0
+                  ? tr.today.summary.noMakeups
+                  : tr.today.summary.makeupsCaption
+          }
+        />
+        <SummaryCard
+          path={STUDENTS_PATH}
+          label={tr.today.summary.lowPackages}
+          value={endingPackages === null || noStudents ? null : String(endingPackages.length)}
+          tone={endingPackages !== null && endingPackages.length > 0 ? 'warn' : 'default'}
+          caption={
+            endingPackages === null
+              ? tr.today.summary.loading
+              : noStudents
+                ? tr.today.summary.noStudents
+                : endingPackages.length === 0
+                  ? tr.today.summary.noLowPackages
+                  : tr.today.summary.lowPackagesCaption
+          }
+        />
+      </div>
+      {error && <ErrorState inline message={error.message} />}
+      {makeupError && <ErrorState inline message={makeupError.message} />}
+      {packageError && <ErrorState inline message={packageError.message} />}
+    </section>
+  )
+}
+
+function SummaryCard({
+  path,
+  label,
+  value,
+  caption,
+  tone = 'default',
+}: {
+  path: string
+  label: string
+  value: string | null
+  caption: string
+  tone?: 'default' | 'danger' | 'warn'
+}) {
+  return (
+    <button
+      type="button"
+      className={styles.summaryButton}
+      aria-label={`${label}${tr.units.separator}${tr.today.summary.open}`}
+      onClick={() => navigate(path)}
+    >
+      <StatCard label={label} value={value} caption={caption} tone={tone} />
+    </button>
+  )
+}
+
 function MakeupDebtSection({
   rows,
   error,
@@ -291,6 +460,40 @@ function MakeupDebtSection({
               <span>{row.fullName}</span>
               <strong>
                 {row.pendingCount} {tr.makeup.list.rowSuffix}
+              </strong>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function PackageSection({
+  rows,
+  error,
+}: {
+  rows: StudentRow[] | null
+  error: AppError | null
+}) {
+  return (
+    <Card className={styles.sideCard}>
+      <SectionHeader
+        title={tr.today.packages.heading}
+        meta={rows === null ? null : `${rows.length} ${tr.today.packages.countSuffix}`}
+      />
+      {rows === null && !error && <LoadingState inline />}
+      {error && <ErrorState inline message={error.message} />}
+      {rows !== null && !error && rows.length === 0 && (
+        <p className={styles.sideBody}>{tr.today.packages.empty}</p>
+      )}
+      {rows !== null && !error && rows.length > 0 && (
+        <div className={styles.packageList}>
+          {rows.map((row) => (
+            <div className={styles.packageRow} key={row.id}>
+              <span>{row.fullName}</span>
+              <strong>
+                {row.remainingLessons} {tr.today.packages.rowSuffix}
               </strong>
             </div>
           ))}
