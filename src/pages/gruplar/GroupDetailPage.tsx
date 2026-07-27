@@ -6,6 +6,7 @@ import {
   archiveGroup,
   endGroupMembership,
   fetchGroupDetail,
+  fetchLocalNow,
   fetchStudentList,
   restoreGroup,
   type AppError,
@@ -65,6 +66,7 @@ export function GroupDetailPage({ groupId }: { groupId: number }) {
   const [confirmArchive, setConfirmArchive] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const [removing, setRemoving] = useState<GroupMember | null>(null)
+  const [removeEndOn, setRemoveEndOn] = useState<string | null>(null)
   const toast = useToast()
 
   const load = useCallback(async () => {
@@ -80,6 +82,16 @@ export function GroupDetailPage({ groupId }: { groupId: number }) {
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    if (removing === null) {
+      setRemoveEndOn(null)
+      return
+    }
+    void fetchLocalNow()
+      .then((stamp) => setRemoveEndOn(stamp.slice(0, 10)))
+      .catch(() => setRemoveEndOn(null))
+  }, [removing])
 
   // `Esc` listeye döner. Diyalog ya da çekmece açıkken devreye girmez — onların kendi
   // `Esc`'i var ve önce onlar kapanmalı.
@@ -238,24 +250,41 @@ export function GroupDetailPage({ groupId }: { groupId: number }) {
         onError={setError}
       />
 
-      <ConfirmDialog
+      <Modal
         open={removing !== null}
         title={tr.groups.detail.members.remove_.title}
-        description={`${removing?.fullName ?? ''} ${tr.groups.detail.members.remove_.body}`}
-        confirmLabel={tr.groups.detail.members.remove_.confirm}
-        destructive
-        onConfirm={() => {
-          const target = removing
-          setRemoving(null)
-          if (target) {
-            void run(
-              () => endGroupMembership(target.enrollmentId),
-              tr.groups.detail.members.remove_.done,
-            )
-          }
-        }}
-        onCancel={() => setRemoving(null)}
-      />
+        onClose={() => setRemoving(null)}
+        actions={
+          <>
+            <Button onClick={() => setRemoving(null)}>{tr.actions.cancel}</Button>
+            <Button
+              variant="danger"
+              disabled={removeEndOn === null}
+              onClick={() => {
+                const target = removing
+                const endOn = removeEndOn
+                setRemoving(null)
+                if (target && endOn) {
+                  void run(
+                    () => endGroupMembership(target.enrollmentId, endOn),
+                    tr.groups.detail.members.remove_.done,
+                  )
+                }
+              }}
+            >
+              {tr.groups.detail.members.remove_.confirm}
+            </Button>
+          </>
+        }
+      >
+        <p>{`${removing?.fullName ?? ''} ${tr.groups.detail.members.remove_.body}`}</p>
+        <DatePicker
+          label={tr.groups.detail.members.remove_.lastDay}
+          value={removeEndOn}
+          onChange={setRemoveEndOn}
+        />
+        <p>{tr.groups.detail.members.remove_.lastDayHint}</p>
+      </Modal>
 
       <ConfirmDialog
         open={confirmArchive}

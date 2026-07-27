@@ -194,9 +194,25 @@ pub fn resolve_tariff_unit_price(
     is_group: bool,
     on_day: &str,
 ) -> AppResult<i64> {
+    Ok(resolve_tariff(conn, subject_id, is_group, on_day)?.unit_price)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TariffResolution {
+    pub price_rule_id: i64,
+    pub unit_price: i64,
+}
+
+/// Tarife kimliği ile kuruş snapshot'ını aynı sorgudan döndürür.
+pub fn resolve_tariff(
+    conn: &Connection,
+    subject_id: i64,
+    is_group: bool,
+    on_day: &str,
+) -> AppResult<TariffResolution> {
     parse_day(on_day, "priceRule.onDay")?;
-    conn.query_row(
-        "SELECT unit_price FROM price_rule \
+    let tariff = conn.query_row(
+        "SELECT id, unit_price FROM price_rule \
          WHERE deleted_at IS NULL AND pricing_model = 'per_session' \
            AND (subject_id = ?1 OR subject_id IS NULL) \
            AND (is_group = ?2 OR is_group IS NULL) \
@@ -204,7 +220,12 @@ pub fn resolve_tariff_unit_price(
          ORDER BY (subject_id IS NOT NULL) DESC, (is_group IS NOT NULL) DESC, \
                   valid_from DESC, id DESC LIMIT 1",
         params![subject_id, is_group, on_day],
-        |row| row.get(0),
+        |row| {
+            Ok(TariffResolution {
+                price_rule_id: row.get(0)?,
+                unit_price: row.get(1)?,
+            })
+        },
     )
     .map_err(|err| match err {
         rusqlite::Error::QueryReturnedNoRows => AppError::new(
@@ -212,7 +233,14 @@ pub fn resolve_tariff_unit_price(
             "Bu ders için geçerli bir tarife bulunamadı. Önce Tanımlar → Tarifeler bölümünden fiyat ekleyin.",
         ),
         other => other.into(),
-    })
+    })?;
+    if tariff.unit_price <= 0 {
+        return Err(AppError::new(
+            "price_rule_invalid",
+            "Geçerli tarifenin ders ücreti 0 TL. Tanımlar → Tarifeler bölümünden pozitif bir ders ücreti girin.",
+        ));
+    }
+    Ok(tariff)
 }
 
 /// Yoklama için ücret snapshot'ını açıkça çözer (`VERI-MODELI §5`). Önce o dersteki

@@ -1,6 +1,7 @@
 import type { DaySessionRow } from '../../lib/api'
 import { subjectColorOf } from '../tanimlar/palette'
 import { wallClockToDate } from './calendarDateAdapter'
+import { isAttendanceOverdue } from '../dersler/attendancePolicy'
 
 export interface CalendarAppointment {
   id: number
@@ -53,7 +54,7 @@ export function rowToAppointment(row: DaySessionRow, now: string): CalendarAppoi
     status: row.status,
     attendanceTaken: row.attendanceTaken,
     isPast,
-    attendanceMissing: isPast && !row.attendanceTaken && row.status !== 'cancelled',
+    attendanceMissing: isAttendanceOverdue(row, now),
     locked: row.attendanceTaken,
     conflict: false,
     row,

@@ -930,7 +930,9 @@ export const tr = {
           confirm: 'Yine de ekle',
           hint: 'Kapasite bir hedeftir; program eklemeyi engellemez.',
         },
-        remove_: {
+      remove_: {
+        lastDay: 'Son katıldığı gün',
+        lastDayHint: 'Bugün son günü seçilirse bugünkü derslerin yoklamasında görünmeye devam eder.',
           title: 'Öğrenci gruptan çıkarılsın mı?',
           body: 'için bugün ayrılış tarihi yazılacak. Geçmiş dersleri, yoklamaları ve borcu olduğu gibi kalır.',
           confirm: 'Gruptan çıkar',
@@ -1062,6 +1064,7 @@ export const tr = {
 
   // Faz 6 §1 — yoklama paneli (E9, PRD R2.1–R2.4).
   attendance: {
+    startsWhenLessonStarts: 'Ders başlayınca açılır',
     title: 'Yoklama',
     open: 'Yoklama al',
     edit: 'Yoklamayı aç',
@@ -1418,6 +1421,10 @@ export const tr = {
   // Takvim ekranı (EKRANLAR §2). Gün/ay ADLARI burada değil, `dates` altında: biri
   // ekranın metni, öteki uygulamanın her yerinde kullanılan sözlük.
   calendar: {
+    nativeForm: {
+      end: 'Bitiş',
+      invalid: 'Ders bilgileri eksik. Branş, öğrenci veya grup ile geçerli bir saat aralığı seçin.',
+    },
     views: {
       month: 'Ay',
       week: 'Hafta',

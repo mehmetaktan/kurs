@@ -13,6 +13,7 @@ import type { DaySessionRow, StudentRow } from '../../lib/api'
 import { isoToDate } from '../../lib/format'
 import { compareTr } from '../../lib/sortTr'
 import { LOW_PACKAGE_THRESHOLD } from '../ogrenciler/filters'
+import { isAttendanceOverdue } from '../dersler/attendancePolicy'
 
 export interface DaySplit {
   /** Bitmiş dersler, saat sırasıyla. */
@@ -52,7 +53,7 @@ export function splitByNow(rows: readonly DaySessionRow[], now: string): DaySpli
  * İptal edilmiş dersin yoklaması beklenmez: o gün ders yapılmadı (`VERI-MODELI §4`).
  */
 export function isPendingAttendance(row: DaySessionRow, now: string): boolean {
-  return row.endsAt <= now && !row.attendanceTaken && row.status !== 'cancelled'
+  return isAttendanceOverdue(row, now)
 }
 
 /** Başlıkta yazan sayı (R1.2: "başlıkta sayılır"). */

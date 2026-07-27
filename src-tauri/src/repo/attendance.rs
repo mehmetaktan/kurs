@@ -10,6 +10,7 @@ use chrono::{Months, NaiveDate, NaiveDateTime};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
+use crate::clock;
 use crate::error::{AppError, AppResult};
 use crate::model::Attendance;
 use crate::repo;
@@ -200,6 +201,13 @@ pub fn save_attendance(
     conn: &Connection,
     input: &SaveAttendanceInput,
 ) -> AppResult<SaveAttendanceReport> {
+    let session: crate::model::Session = repo::require(conn, input.session_id)?;
+    if clock::now_local() < session.starts_at {
+        return Err(AppError::new(
+            "attendance.notStarted",
+            "Ders henüz başlamadı. Yoklama ders başlayınca açılır.",
+        ));
+    }
     let marked_at = parse_marked_at(&input.marked_at)?;
     let today = marked_at.date().format("%Y-%m-%d").to_string();
     repo::in_transaction(conn, |conn| {
