@@ -8,38 +8,81 @@ import { CalendarPage } from './CalendarPage'
 
 const dx = vi.hoisted(() => ({
   props: null as Record<string, unknown> | null,
+  showAppointmentPopup: vi.fn(),
+  views: [] as Record<string, unknown>[],
+  resources: [] as Record<string, unknown>[],
+}))
+
+vi.mock('devextreme/data/array_store', () => ({
+  default: class MockArrayStore {
+    data: CalendarAppointment[]
+
+    constructor(options: { data: CalendarAppointment[] }) {
+      this.data = options.data
+    }
+
+    push(
+      changes: Array<{
+        type: 'insert' | 'update' | 'remove'
+        key?: number
+        data?: CalendarAppointment
+      }>,
+    ) {
+      const scrollable = document.querySelector<HTMLElement>(
+        '.dx-scheduler-date-table-scrollable .dx-scrollable-container',
+      )
+      if (scrollable !== null) {
+        scrollable.scrollTop = 0
+        scrollable.scrollLeft = 0
+      }
+      for (const change of changes) {
+        if (change.type === 'insert' && change.data !== undefined) {
+          this.data.push(change.data)
+        } else if (change.type === 'update' && change.data !== undefined) {
+          const index = this.data.findIndex((item) => item.id === change.key)
+          if (index >= 0) this.data[index] = change.data
+        } else if (change.type === 'remove') {
+          this.data = this.data.filter((item) => item.id !== change.key)
+        }
+      }
+    }
+  },
 }))
 
 vi.mock('devextreme-react/scheduler', () => ({
   default: (props: Record<string, unknown>) => {
     dx.props = props
-    const source = props.dataSource as {
-      store: { data: CalendarAppointment[] }
-    }
-    const click = props.onAppointmentClick as
-      | ((event: Record<string, unknown>) => void)
+    const initialized = props.onInitialized as
+      | ((event: { component: { showAppointmentPopup: typeof dx.showAppointmentPopup } }) => void)
       | undefined
+    initialized?.({
+      component: { showAppointmentPopup: dx.showAppointmentPopup },
+    })
+    const source = props.dataSource as { data: CalendarAppointment[] }
     return (
-      <div data-testid="scheduler-mock">
-        {source.store.data.map((item) => (
-          <button
-            key={item.id}
-            data-kind={item.kind}
-            onClick={() =>
-              click?.({
-                cancel: false,
-                appointmentData: item,
-              })
-            }
-          >
-            {item.text}
-          </button>
-        ))}
+      <div className="dx-scheduler-work-space" data-testid="scheduler-mock">
+        <div className="dx-scheduler-date-table-scrollable">
+          <div className="dx-scrollable-container" data-testid="scheduler-scroll">
+          {source.data.length === 0 ? String(props.noDataText) : null}
+          {source.data.map((item) => (
+            <button key={item.id} data-kind={item.kind}>
+              {item.text}
+            </button>
+          ))}
+          </div>
+        </div>
+        {props.children as React.ReactNode}
       </div>
     )
   },
-  Resource: () => null,
-  View: () => null,
+  Resource: (props: Record<string, unknown>) => {
+    dx.resources.push(props)
+    return null
+  },
+  View: (props: Record<string, unknown>) => {
+    dx.views.push(props)
+    return null
+  },
 }))
 
 vi.mock('devextreme/localization', () => ({
@@ -49,6 +92,7 @@ vi.mock('devextreme/localization', () => ({
 
 const api = vi.hoisted(() => ({
   fetchLocalNow: vi.fn(),
+  fetchSettings: vi.fn(),
   fetchRangeSessions: vi.fn(),
   fetchClosedDaysInRange: vi.fn(),
   fetchHasSchedule: vi.fn(),
@@ -112,12 +156,15 @@ function schedulerProps(): Record<string, unknown> {
 }
 
 function firstAppointment(): CalendarAppointment {
-  const source = schedulerProps().dataSource as {
-    store: { data: CalendarAppointment[] }
-  }
-  const item = source.store.data[0]
+  const source = schedulerProps().dataSource as { data: CalendarAppointment[] }
+  const item = source.data[0]
   if (item === undefined) throw new Error('Ders bulunamadı')
   return item
+}
+
+function appointmentData(): CalendarAppointment[] {
+  const source = schedulerProps().dataSource as { data: CalendarAppointment[] }
+  return source.data
 }
 
 async function updateAppointment(
@@ -141,8 +188,17 @@ async function updateAppointment(
 
 beforeEach(() => {
   dx.props = null
+  dx.showAppointmentPopup.mockReset()
+  dx.views = []
+  dx.resources = []
   Object.values(api).forEach((fn) => fn.mockReset())
   api.fetchLocalNow.mockResolvedValue(NOW)
+  api.fetchSettings.mockResolvedValue([
+    { key: 'day_start', value: '08:00' },
+    { key: 'day_end', value: '22:00' },
+    { key: 'slot_minutes', value: '30' },
+    { key: 'default_session_minutes', value: '60' },
+  ])
   api.fetchRangeSessions.mockResolvedValue([
     row({ id: 1, startsAt: '2026-07-22 16:00' }),
   ])
@@ -165,14 +221,134 @@ beforeEach(() => {
 })
 
 describe('DevExtreme Scheduler yüzeyi', () => {
-  it('haftayı varsayılan açar ve beş Türkçe görünümü sunar', async () => {
+  it('haftayı varsayılan açar ve DevExtreme araç çubuğunu kullanır', async () => {
     draw()
     await screen.findByTestId('scheduler-mock')
     expect(api.fetchRangeSessions).toHaveBeenCalledWith('2026-07-20', '2026-07-26')
-    for (const label of ['Hafta', 'Çalışma haftası', 'Gün', 'Ay', 'Ajanda']) {
-      expect(screen.getByRole('button', { name: label })).toBeTruthy()
+    expect(schedulerProps().currentView).toBe('week')
+    expect(schedulerProps().toolbar).toEqual({
+      visible: true,
+      multiline: true,
+      items: ['today', 'dateNavigator', 'viewSwitcher'],
+    })
+    expect(schedulerProps().editing).toMatchObject({
+      allowAdding: true,
+      allowDeleting: true,
+      allowUpdating: true,
+    })
+  })
+
+  it('çalışma düzenindeki saat ve hücre ayarlarını uygular', async () => {
+    api.fetchSettings.mockResolvedValue([
+      { key: 'day_start', value: '07:00' },
+      { key: 'day_end', value: '20:00' },
+      { key: 'slot_minutes', value: '15' },
+      { key: 'default_session_minutes', value: '45' },
+    ])
+    draw()
+    await screen.findByTestId('scheduler-mock')
+    expect(schedulerProps().startDayHour).toBe(7)
+    expect(schedulerProps().endDayHour).toBe(20)
+    expect(schedulerProps().cellDuration).toBe(15)
+    for (const type of ['week', 'workWeek', 'day']) {
+      expect(dx.views.find((item) => item.type === type)).toMatchObject({
+        cellDuration: 15,
+        startDayHour: 7,
+        endDayHour: 20,
+      })
     }
-    expect(screen.queryByText(/Today|Week|Month|Agenda/)).toBeNull()
+  })
+
+  it('üstteki Ders ekle düğmesi DevExtreme formunu açar', async () => {
+    draw()
+    await screen.findByTestId('scheduler-mock')
+    fireEvent.click(screen.getByRole('button', { name: '＋ Ders ekle' }))
+    expect(dx.showAppointmentPopup).toHaveBeenCalledWith(
+      {
+        startDate: wallClockToDate('2026-07-22 10:00'),
+        endDate: wallClockToDate('2026-07-22 11:00'),
+      },
+      true,
+    )
+  })
+
+  it('boş hücre ve ders çift tıklamasında DevExtreme formunu açıkça açar', async () => {
+    draw()
+    await screen.findByTestId('scheduler-mock')
+    const cellHandler = schedulerProps().onCellClick as (
+      event: Record<string, unknown>,
+    ) => void
+    const cellStart = wallClockToDate('2026-07-22 14:00')
+    const cellEnd = wallClockToDate('2026-07-22 14:30')
+    cellHandler({
+      cancel: false,
+      event: { detail: 2 },
+      component: { showAppointmentPopup: dx.showAppointmentPopup },
+      cellData: {
+        startDate: cellStart,
+        endDate: cellEnd,
+        groups: { teacherId: 3 },
+      },
+    })
+    expect(dx.showAppointmentPopup).toHaveBeenLastCalledWith(
+      {
+        startDate: cellStart,
+        endDate: cellEnd,
+        teacherId: 3,
+      },
+      true,
+    )
+
+    const appointmentHandler = schedulerProps().onAppointmentDblClick as (
+      event: Record<string, unknown>,
+    ) => void
+    const appointment = firstAppointment()
+    appointmentHandler({
+      cancel: false,
+      component: { showAppointmentPopup: dx.showAppointmentPopup },
+      appointmentData: appointment,
+      targetedAppointmentData: appointment,
+    })
+    expect(dx.showAppointmentPopup).toHaveBeenLastCalledWith(
+      appointment,
+      false,
+      appointment,
+    )
+  })
+
+  it('DevExtreme olayı tıklama sayısını taşımadığında da ikinci hücre tıklamasını tanır', async () => {
+    draw()
+    await screen.findByTestId('scheduler-mock')
+    const handler = schedulerProps().onCellClick as (
+      event: Record<string, unknown>,
+    ) => void
+    const cellData = {
+      startDate: wallClockToDate('2026-07-22 15:00'),
+      endDate: wallClockToDate('2026-07-22 15:30'),
+      groups: {},
+    }
+    const component = { showAppointmentPopup: dx.showAppointmentPopup }
+    handler({
+      cancel: false,
+      event: { detail: 1, timeStamp: 100 },
+      component,
+      cellData,
+    })
+    expect(dx.showAppointmentPopup).not.toHaveBeenCalled()
+    handler({
+      cancel: false,
+      event: { detail: 1, timeStamp: 350 },
+      component,
+      cellData,
+    })
+    expect(dx.showAppointmentPopup).toHaveBeenCalledWith(
+      {
+        startDate: cellData.startDate,
+        endDate: cellData.endDate,
+        teacherId: null,
+      },
+      true,
+    )
   })
 
   it('ilk açılışta görünümü şimdiye kaydırır ve yeniden çizimde sıçramaz', async () => {
@@ -212,29 +388,50 @@ describe('DevExtreme Scheduler yüzeyi', () => {
     fireEvent.click(screen.getByRole('button', { name: /Matematik2/ }))
     fireEvent.click(screen.getByRole('button', { name: /Bora Kaya1/ }))
     await waitFor(() =>
-      expect(screen.getAllByText('Matematik · Grup A')).toHaveLength(1),
+      expect(appointmentData().map((item) => item.id)).toEqual([2]),
     )
     fireEvent.click(
       screen.getByRole('button', { name: 'Tüm filtreleri temizle' }),
     )
     await waitFor(() =>
-      expect(screen.getAllByText(/Matematik · Grup A|Fizik · Grup A/)).toHaveLength(3),
+      expect(appointmentData()).toHaveLength(3),
     )
   })
 
-  it('tek tıklamada ayrıntıyı açar ve bütün mevcut iş akışlarını bağlar', async () => {
+  it('DevExtreme formuna bütün mevcut ders iş akışlarını bağlar', async () => {
     draw()
-    fireEvent.click(await screen.findByRole('button', { name: 'Matematik · Grup A' }))
-    await screen.findByText('Ders ayrıntısı')
-    for (const label of [
-      'Düzenle',
-      'Yoklama al',
-      'Ertele',
-      'İptal et',
-      'Arşivle',
-    ]) {
-      expect(screen.getByRole('button', { name: label })).toBeTruthy()
-    }
+    await screen.findByTestId('scheduler-mock')
+    const option = vi.fn()
+    const handler = schedulerProps().onAppointmentFormOpening as (
+      event: Record<string, unknown>,
+    ) => void
+    handler({
+      appointmentData: firstAppointment(),
+      form: { option, itemOption: vi.fn(), updateData: vi.fn() },
+      popup: { hide: vi.fn(), on: vi.fn() },
+    })
+    const itemsCall = option.mock.calls.find(([name]) => name === 'items')
+    expect(itemsCall?.[1]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          itemType: 'group',
+          items: expect.arrayContaining([
+            expect.objectContaining({
+              buttonOptions: expect.objectContaining({ text: 'Yoklama al' }),
+            }),
+            expect.objectContaining({
+              buttonOptions: expect.objectContaining({ text: 'Ertele' }),
+            }),
+            expect.objectContaining({
+              buttonOptions: expect.objectContaining({ text: 'İptal et' }),
+            }),
+            expect.objectContaining({
+              buttonOptions: expect.objectContaining({ text: 'Arşivle' }),
+            }),
+          ]),
+        }),
+      ]),
+    )
   })
 
   it('şablona bağlı taşıma için kapsam sorar', async () => {
@@ -276,6 +473,11 @@ describe('DevExtreme Scheduler yüzeyi', () => {
   it('tek ders taşımasını yazar ve geri aldırır', async () => {
     draw()
     await screen.findByTestId('scheduler-mock')
+    const stableBefore = schedulerProps()
+    const resourceBefore = dx.resources[dx.resources.length - 1]?.dataSource
+    const scrollable = screen.getByTestId('scheduler-scroll')
+    scrollable.scrollTop = 420
+    scrollable.scrollLeft = 35
     await updateAppointment('2026-07-23 16:30', '2026-07-23 17:30')
     await waitFor(() =>
       expect(api.rescheduleSession).toHaveBeenCalledWith(
@@ -285,8 +487,60 @@ describe('DevExtreme Scheduler yüzeyi', () => {
         'only',
       ),
     )
+    await waitFor(() => {
+      expect(scrollable.scrollTop).toBe(420)
+      expect(scrollable.scrollLeft).toBe(35)
+    })
+    expect(api.fetchRangeSessions).toHaveBeenCalledTimes(1)
+    const stableAfter = schedulerProps()
+    for (const option of [
+      'currentDate',
+      'currentView',
+      'appointmentDragging',
+      'dateCellRender',
+      'dataCellRender',
+      'timeCellRender',
+      'resourceCellRender',
+      'startDayHour',
+      'endDayHour',
+      'cellDuration',
+    ]) {
+      expect(stableAfter[option]).toBe(stableBefore[option])
+    }
+    expect(dx.resources[dx.resources.length - 1]?.dataSource).toBe(resourceBefore)
+    expect(
+      appointmentData().every(
+        (appointment) => !('recurrenceRule' in appointment),
+      ),
+    ).toBe(true)
     fireEvent.click(await screen.findByRole('button', { name: 'Geri al' }))
     await waitFor(() => expect(api.rescheduleSession).toHaveBeenCalledTimes(2))
+    expect(api.fetchRangeSessions).toHaveBeenCalledTimes(1)
+  })
+
+  it('aynı görünümde ayar dışı ders taşınınca saat sınırını daraltmaz', async () => {
+    api.fetchRangeSessions.mockResolvedValue([
+      row({
+        id: 1,
+        startsAt: '2026-07-22 01:00',
+        endsAt: '2026-07-22 02:00',
+        seriesId: null,
+      }),
+    ])
+    draw()
+    await screen.findByTestId('scheduler-mock')
+    expect(schedulerProps().startDayHour).toBe(1)
+
+    await updateAppointment('2026-07-22 10:00', '2026-07-22 11:00')
+    await waitFor(() =>
+      expect(api.rescheduleSession).toHaveBeenCalledWith(
+        1,
+        '2026-07-22 10:00',
+        60,
+        'only',
+      ),
+    )
+    expect(schedulerProps().startDayHour).toBe(1)
   })
 
   it('aynı öğretmen çakışmasında açık onay ister', async () => {
@@ -341,10 +595,11 @@ describe('DevExtreme Scheduler yüzeyi', () => {
 
 describe('boş durumlar', () => {
   it('ay görünümünde boş aralığı ayrı gösterir', async () => {
-    api.fetchRangeSessions.mockResolvedValue([])
     draw()
-    await screen.findByText('Bu aralıkta ders yok.')
-    fireEvent.click(screen.getByRole('button', { name: 'Ay' }))
+    await screen.findByTestId('scheduler-mock')
+    const handler = schedulerProps().onCurrentViewChange as (view: string) => void
+    api.fetchRangeSessions.mockResolvedValue([])
+    act(() => handler('month'))
     await screen.findByText('Bu aralıkta ders yok.')
   })
 

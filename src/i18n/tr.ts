@@ -1421,6 +1421,11 @@ export const tr = {
   // Takvim ekranı (EKRANLAR §2). Gün/ay ADLARI burada değil, `dates` altında: biri
   // ekranın metni, öteki uygulamanın her yerinde kullanılan sözlük.
   calendar: {
+    planUpdated: 'Ders planı güncellendi; ücret yoklama kaydedildiğinde işlenir.',
+    groupProgram: {
+      edit: 'Grup programını düzenle',
+      editHint: 'Bu ve sonraki dersleri Grup ekranındaki çalışma programından değiştirin.',
+    },
     nativeForm: {
       end: 'Bitiş',
       invalid: 'Ders bilgileri eksik. Branş, öğrenci veya grup ile geçerli bir saat aralığı seçin.',

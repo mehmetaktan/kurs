@@ -34,10 +34,12 @@ export function MoveDialog({
   pending,
   onClose,
   onConfirm,
+  onEditGroup,
 }: {
   pending: PendingMove
   onClose: () => void
   onConfirm: (scope: RescheduleScope) => void
+  onEditGroup: (groupId: number) => void
 }) {
   const resizing = pending.kind === 'resize'
   const copy = resizing ? tr.calendar.resize : tr.calendar.move
@@ -68,11 +70,19 @@ export function MoveDialog({
           tone="primary"
           onClick={() => onConfirm('only')}
         />
-        <ModalOption
-          title={copy.following}
-          hint={copy.followingHint}
-          onClick={() => onConfirm('following')}
-        />
+        {pending.row.studyGroupId === null ? (
+          <ModalOption
+            title={copy.following}
+            hint={copy.followingHint}
+            onClick={() => onConfirm('following')}
+          />
+        ) : (
+          <ModalOption
+            title={tr.calendar.groupProgram.edit}
+            hint={tr.calendar.groupProgram.editHint}
+            onClick={() => onEditGroup(pending.row.studyGroupId!)}
+          />
+        )}
       </div>
     </Modal>
   )

@@ -43,10 +43,12 @@ export function dateToTime(value: Date): string {
   return `${pad(value.getHours())}:${pad(value.getMinutes())}`
 }
 
-/** Takvimin 30 dakikalık hücresine en yakın duvar saati. */
-export function snapDateToHalfHour(value: Date): Date {
+/** Takvimin işletme ayarındaki hücre aralığına en yakın duvar saati. */
+export function snapDateToInterval(value: Date, intervalMinutes: number): Date {
   const minutes = value.getHours() * 60 + value.getMinutes()
-  const snapped = Math.round(minutes / 30) * 30
+  const interval =
+    Number.isInteger(intervalMinutes) && intervalMinutes > 0 ? intervalMinutes : 30
+  const snapped = Math.round(minutes / interval) * interval
   const result = new Date(
     value.getFullYear(),
     value.getMonth(),
@@ -57,6 +59,11 @@ export function snapDateToHalfHour(value: Date): Date {
     0,
   )
   return result
+}
+
+/** Eski çağıranlar için 30 dakikalık uyumluluk sarmalayıcısı. */
+export function snapDateToHalfHour(value: Date): Date {
+  return snapDateToInterval(value, 30)
 }
 
 export function durationMinutes(start: Date, end: Date): number {

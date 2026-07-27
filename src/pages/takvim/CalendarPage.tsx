@@ -1,29 +1,39 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Scheduler, { Resource, View } from 'devextreme-react/scheduler'
+import ArrayStore from 'devextreme/data/array_store'
 import { loadMessages, locale } from 'devextreme/localization'
 import trMessages from 'devextreme/localization/messages/tr.json'
+import { confirm } from 'devextreme/ui/dialog'
 import type {
-  AppointmentClickEvent,
+  AppointmentAddingEvent,
   AppointmentDblClickEvent,
+  AppointmentDeletingEvent,
   AppointmentFormOpeningEvent,
-  AppointmentTooltipShowingEvent,
   AppointmentUpdatingEvent,
   CellClickEvent,
   ContentReadyEvent,
+  SchedulerPredefinedToolbarItem,
 } from 'devextreme/ui/scheduler'
 import 'devextreme/dist/css/dx.light.css'
 import { tr } from '../../i18n/tr'
 import {
   fetchClosedDaysInRange,
   fetchHasSchedule,
+  fetchGroupList,
   fetchLocalNow,
   fetchRangeSessions,
+  fetchSettings,
   fetchSessionConflicts,
+  fetchStudentList,
+  fetchSubjects,
+  fetchTeachers,
   rescheduleSession,
+  saveSession,
   type AppError,
   type DaySessionRow,
 } from '../../lib/api'
 import { formatDate, formatDateWithWeekday, monthNameTr } from '../../lib/format'
+import { navigate } from '../../lib/router'
 import { PageContent } from '../../shell/AppShell'
 import { PageHeader } from '../../shell/PageHeader'
 import {
@@ -34,20 +44,18 @@ import {
   ErrorState,
   FilterChip,
   LoadingState,
-  SegmentedControl,
   useToast,
 } from '../../ui'
 import { AttendanceDrawer } from '../dersler/AttendanceDrawer'
 import { SessionActions, type SessionAction } from '../dersler/SessionActions'
 import { SessionForm } from '../dersler/SessionForm'
-import { TemplateModal } from '../dersler/TemplateModal'
-import { addDays, shiftMonth, weekStart } from './calendarGrid'
+import { addDays, weekStart } from './calendarGrid'
 import {
   dateToDay,
   dateToTime,
   dateToWallClock,
   durationMinutes,
-  snapDateToHalfHour,
+  snapDateToInterval,
   wallClockToDate,
 } from './calendarDateAdapter'
 import {
@@ -55,7 +63,6 @@ import {
   type CalendarAppointment,
 } from './appointments'
 import {
-  allDaysClosed,
   filterBySubjects,
   filterByTeachers,
   subjectChips,
@@ -64,10 +71,43 @@ import {
 import { MoveDialog, type PendingMove } from './MoveDialog'
 import { RequestGate } from './requestGate'
 import { SessionDetailPanel } from './SessionDetailPanel'
+import {
+  calendarSettingsOf,
+  visibleDayHours,
+  type CalendarSettings,
+} from './calendarSettings'
+import {
+  configureNativeAppointmentForm,
+  nativeDraftToSessionInput,
+  type CalendarCatalogs,
+  type NativeAppointmentDraft,
+} from './nativeAppointmentForm'
 import styles from './Calendar.module.css'
 
 loadMessages(trMessages)
 locale('tr')
+
+const SCHEDULER_TOOLBAR = {
+  visible: true,
+  multiline: true,
+  items: [
+    'today',
+    'dateNavigator',
+    'viewSwitcher',
+  ] as SchedulerPredefinedToolbarItem[],
+}
+
+const SCHEDULER_EDITING = {
+  allowAdding: true,
+  allowDeleting: true,
+  allowUpdating: true,
+  allowDragging: true,
+  allowResizing: true,
+  allowTimeZoneEditing: false,
+}
+
+const TEACHER_GROUP = ['teacherId']
+const NO_GROUPS: string[] = []
 
 type CalendarView = 'month' | 'week' | 'workWeek' | 'day' | 'agenda'
 
@@ -88,11 +128,17 @@ export function CalendarPage() {
   const [rows, setRows] = useState<DaySessionRow[] | null>(null)
   const [closed, setClosed] = useState<ReadonlySet<string>>(new Set())
   const [hasSchedule, setHasSchedule] = useState(true)
+  const [settings, setSettings] = useState<CalendarSettings | null>(null)
+  const [catalogs, setCatalogs] = useState<CalendarCatalogs>({
+    subjects: [],
+    groups: [],
+    students: [],
+    teachers: [],
+  })
   const [error, setError] = useState<AppError | null>(null)
   const [subjects, setSubjects] = useState<ReadonlySet<number>>(new Set())
   const [teachers, setTeachers] = useState<ReadonlySet<number>>(new Set())
   const [formOpen, setFormOpen] = useState(false)
-  const [templateOpen, setTemplateOpen] = useState(false)
   const [editing, setEditing] = useState<DaySessionRow | null>(null)
   const [draft, setDraft] = useState<{ day: string; startTime: string } | null>(null)
   const [detail, setDetail] = useState<DaySessionRow | null>(null)
@@ -104,15 +150,32 @@ export function CalendarPage() {
   const [conflict, setConflict] = useState<PendingUpdate | null>(null)
   const gate = useRef(new RequestGate())
   const loadedSpan = useRef<string | null>(null)
+  const nativeFormTarget = useRef<number | 'new' | null>(null)
+  const scheduler = useRef<AppointmentAddingEvent['component'] | null>(null)
+  const lastCellClick = useRef<{ key: string; timestamp: number } | null>(null)
   const toast = useToast()
 
   useEffect(() => {
     let active = true
-    void fetchLocalNow()
-      .then((stamp) => {
+    void Promise.all([
+      fetchLocalNow(),
+      fetchSettings(),
+      fetchSubjects(),
+      fetchGroupList(),
+      fetchStudentList(),
+      fetchTeachers(),
+    ])
+      .then(([stamp, settingRows, subjectRows, groupRows, studentRows, teacherRows]) => {
         if (!active) return
         setNow(stamp)
         setAnchor(stamp.slice(0, 10))
+        setSettings(calendarSettingsOf(settingRows))
+        setCatalogs({
+          subjects: subjectRows,
+          groups: groupRows.filter((row) => !row.archived && row.isActive),
+          students: studentRows.filter((row) => !row.archived && row.isActive),
+          teachers: teacherRows.filter((row) => row.isActive),
+        })
       })
       .catch((err) => {
         if (active) setError(err as AppError)
@@ -163,6 +226,21 @@ export function CalendarPage() {
     return () => gate.current.invalidate()
   }, [load])
 
+  useEffect(() => {
+    const refreshClock = () => void fetchLocalNow().then(setNow).catch(() => undefined)
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') refreshClock()
+    }
+    window.addEventListener('focus', refreshClock)
+    document.addEventListener('visibilitychange', onVisibility)
+    const timer = window.setInterval(refreshClock, 60_000)
+    return () => {
+      window.removeEventListener('focus', refreshClock)
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.clearInterval(timer)
+    }
+  }, [])
+
   const subjectRow = useMemo(() => subjectChips(rows ?? []), [rows])
   const teacherRow = useMemo(() => teacherChips(rows ?? []), [rows])
   const visible = useMemo(
@@ -175,16 +253,15 @@ export function CalendarPage() {
   )
   const resources = useMemo(
     () =>
-      teacherRow.map((teacher) => ({
+      catalogs.teachers.map((teacher) => ({
         id: teacher.id,
-        text: teacher.name,
+        text: teacher.fullName,
       })),
-    [teacherRow],
+    [catalogs.teachers],
   )
 
   const refresh = () => {
     setFormOpen(false)
-    setTemplateOpen(false)
     setEditing(null)
     setDraft(null)
     setDetail(null)
@@ -200,16 +277,44 @@ export function CalendarPage() {
     setTeachers(new Set())
   }
 
-  const step = (delta: number) => {
-    if (anchor === null) return
-    if (view === 'month') setAnchor(shiftMonth(anchor, delta))
-    else setAnchor(addDays(anchor, delta * stepDays(view)))
-  }
-
   const openNew = (day?: string, startTime = '09:00') => {
     setEditing(null)
     setDraft(day === undefined ? null : { day, startTime })
     setFormOpen(true)
+  }
+
+  const openNativeNew = () => {
+    if (
+      scheduler.current === null ||
+      settings === null ||
+      anchor === null ||
+      now === null
+    ) {
+      openNew()
+      return
+    }
+    const today = now.slice(0, 10)
+    const day =
+      span !== null && today >= span[0] && today <= span[1] ? today : anchor
+    const startTime =
+      day === today
+        ? dateToTime(
+            snapDateToInterval(
+              wallClockToDate(now),
+              settings.slotMinutes,
+            ),
+          )
+        : settings.dayStart
+    const startDate = wallClockToDate(`${day} ${startTime}`)
+    scheduler.current.showAppointmentPopup(
+      {
+        startDate,
+        endDate: new Date(
+          startDate.getTime() + settings.defaultSessionMinutes * 60_000,
+        ),
+      },
+      true,
+    )
   }
 
   const beginUpdate = async (pending: PendingUpdate) => {
@@ -218,8 +323,9 @@ export function CalendarPage() {
       toast(tr.calendar.moveBlocked.locked)
       return
     }
-    const snappedStart = snapDateToHalfHour(start)
-    const snappedEnd = snapDateToHalfHour(end)
+    const interval = settings?.slotMinutes ?? 30
+    const snappedStart = snapDateToInterval(start, interval)
+    const snappedEnd = snapDateToInterval(end, interval)
     if (
       dateToWallClock(snappedStart) === appointment.row.startsAt &&
       dateToWallClock(snappedEnd) === appointment.row.endsAt
@@ -279,6 +385,22 @@ export function CalendarPage() {
       )
       setMove(null)
       if (scope === 'only') {
+        if (pending.row.seriesId !== null && pending.row.studyGroupId !== null) {
+          toast(tr.calendar.planUpdated)
+          void load()
+          return
+        }
+        setRows((current) =>
+          current === null
+            ? current
+            : replaceMovedRow(
+                current,
+                pending.row.id,
+                pending.day,
+                pending.startTime,
+                pending.durationMin,
+              ),
+        )
         toast(copy.done, {
           label: tr.calendar.move.undo,
           onAction: () =>
@@ -291,12 +413,11 @@ export function CalendarPage() {
         })
       } else {
         toast(`${report.moved} ${copy.doneFollowing}`)
+        void load()
       }
-      void load()
     } catch (err) {
       setMove(null)
       toast((err as AppError).message)
-      void load()
     }
   }
 
@@ -308,6 +429,17 @@ export function CalendarPage() {
   ) => {
     try {
       await rescheduleSession(sessionId, startsAt, durationMin, 'only')
+      setRows((current) =>
+        current === null
+          ? current
+          : replaceMovedRow(
+              current,
+              sessionId,
+              startsAt.slice(0, 10),
+              startsAt.slice(11, 16),
+              durationMin,
+            ),
+      )
       toast(
         kind === 'resize'
           ? tr.calendar.resize.undone
@@ -316,47 +448,164 @@ export function CalendarPage() {
     } catch (err) {
       toast((err as AppError).message)
     }
-    void load()
   }
 
   const onAppointmentUpdating = (event: AppointmentUpdatingEvent) => {
+    const oldAppointment = event.oldData as CalendarAppointment
+    const changed = event.newData as Partial<NativeAppointmentDraft>
+    if (nativeFormTarget.current === oldAppointment.id) {
+      event.cancel = persistNativeAppointment(
+        {
+          id: oldAppointment.id,
+          startDate: oldAppointment.startDate,
+          endDate: oldAppointment.endDate,
+          kind: oldAppointment.row.kind === 'solo' ? 'solo' : 'group',
+          subjectId: oldAppointment.row.subjectId,
+          teacherId: oldAppointment.row.teacherId,
+          studyGroupId: oldAppointment.row.studyGroupId,
+          studentId: oldAppointment.row.studentId,
+          source: oldAppointment,
+          ...changed,
+        },
+        event.component,
+      )
+      return
+    }
     event.cancel = true
-    const oldData = event.oldData as CalendarAppointment
-    const next = { ...oldData, ...(event.newData as Partial<CalendarAppointment>) }
+    const next = {
+      ...oldAppointment,
+      ...(event.newData as Partial<CalendarAppointment>),
+    }
     void beginUpdate({
-      appointment: oldData,
+      appointment: oldAppointment,
       start: next.startDate,
       end: next.endDate,
     })
   }
 
-  const onAppointmentClick = (event: AppointmentClickEvent) => {
-    event.cancel = true
-    setDetail((event.appointmentData as CalendarAppointment).row)
+  const onAppointmentFormOpening = (event: AppointmentFormOpeningEvent) => {
+    if (settings === null || now === null) return
+    const appointment = event.appointmentData as
+      | Partial<CalendarAppointment>
+      | undefined
+    const target = appointment?.row?.id ?? 'new'
+    nativeFormTarget.current = target
+    event.popup.on('hidden', () => {
+      if (nativeFormTarget.current === target) nativeFormTarget.current = null
+    })
+    const closeAndRun = (run: () => void) => {
+      event.popup.hide()
+      run()
+    }
+    configureNativeAppointmentForm(event, catalogs, settings, now, {
+      onAttendance: (row) => closeAndRun(() => setAttendance(row)),
+      onReschedule: (row) =>
+        closeAndRun(() => setAction({ row, kind: 'reschedule' })),
+      onCancel: (row) => closeAndRun(() => setAction({ row, kind: 'cancel' })),
+      onArchive: (row) => closeAndRun(() => setAction({ row, kind: 'remove' })),
+    })
   }
 
-  const cancelDblClick = (event: AppointmentDblClickEvent) => {
-    event.cancel = true
+  const persistNativeAppointment = async (
+    draft: NativeAppointmentDraft,
+    component: AppointmentAddingEvent['component'],
+  ): Promise<boolean> => {
+    const input = nativeDraftToSessionInput(draft)
+    if (input === null) {
+      toast(tr.calendar.nativeForm.invalid)
+      return true
+    }
+    if (closed.has(input.day)) {
+      toast(tr.sessions.form.errors.closedDay)
+      return true
+    }
+    try {
+      const conflicts = await fetchSessionConflicts(
+        `${input.day} ${input.startTime}`,
+        dateToWallClock(draft.endDate),
+        input.id,
+        input.teacherId,
+      )
+      if (conflicts.length > 0) {
+        const accepted = await confirm(
+          tr.sessions.conflict.body,
+          tr.sessions.conflict.title,
+        )
+        if (!accepted) return true
+      }
+      await saveSession(input)
+      component.hideAppointmentPopup(false)
+      toast(
+        input.id !== null
+          ? tr.sessions.form.savedEdit
+          : tr.sessions.form.savedOnce,
+      )
+      void load()
+    } catch (err) {
+      toast((err as AppError).message)
+    }
+    // Kalıcı veri yalnız Tauri komutundan döner; ArrayStore'a geçici kayıt yazılmaz.
+    return true
   }
 
-  const cancelForm = (event: AppointmentFormOpeningEvent) => {
-    event.cancel = true
+  const onAppointmentAdding = (event: AppointmentAddingEvent) => {
+    event.cancel = persistNativeAppointment(
+      event.appointmentData as NativeAppointmentDraft,
+      event.component,
+    )
   }
 
-  const cancelTooltip = (event: AppointmentTooltipShowingEvent) => {
+  const onAppointmentDeleting = (event: AppointmentDeletingEvent) => {
     event.cancel = true
+    const appointment = event.appointmentData as CalendarAppointment
+    setAction({ row: appointment.row, kind: 'remove' })
+  }
+
+  const onAppointmentDblClick = (event: AppointmentDblClickEvent) => {
+    event.cancel = true
+    event.component.showAppointmentPopup(
+      event.appointmentData,
+      false,
+      event.targetedAppointmentData,
+    )
   }
 
   const onCellClick = (event: CellClickEvent) => {
-    event.cancel = true
     const date = event.cellData.startDate as Date
     const day = dateToDay(date)
-    if (view === 'month') {
-      setAnchor(day)
-      setView('day')
+    if (closed.has(day)) {
+      event.cancel = true
+      toast(tr.sessions.form.errors.closedDay)
       return
     }
-    if (!closed.has(day)) openNew(day, dateToTime(snapDateToHalfHour(date)))
+    const pointerEvent = event.event
+    const timestamp = pointerEvent?.timeStamp ?? Date.now()
+    const cellKey = `${dateToWallClock(event.cellData.startDate as Date)}:${
+      event.cellData.groups?.teacherId ?? ''
+    }`
+    const previousClick = lastCellClick.current
+    const isDoubleClick =
+      pointerEvent !== undefined &&
+      'detail' in pointerEvent &&
+      pointerEvent.detail >= 2
+        ? true
+        : previousClick !== null &&
+          previousClick.key === cellKey &&
+          timestamp - previousClick.timestamp >= 0 &&
+          timestamp - previousClick.timestamp <= 700
+    lastCellClick.current = { key: cellKey, timestamp }
+    if (isDoubleClick) {
+      event.cancel = true
+      lastCellClick.current = null
+      event.component.showAppointmentPopup(
+        {
+          startDate: event.cellData.startDate,
+          endDate: event.cellData.endDate,
+          teacherId: event.cellData.groups?.teacherId ?? null,
+        },
+        true,
+      )
+    }
   }
 
   const title =
@@ -368,41 +617,12 @@ export function CalendarPage() {
         title={tr.pages.calendar.title}
         subtitle={title}
         action={
-          <Button variant="primary" onClick={() => openNew()}>
+          <Button variant="primary" onClick={openNativeNew}>
             {tr.calendar.newSession}
           </Button>
         }
       />
       <PageContent fill>
-        <div className={styles.toolbar}>
-          <div className={styles.nav}>
-            <Button size="small" onClick={() => step(-1)} aria-label={tr.calendar.prev}>
-              ‹
-            </Button>
-            <Button
-              size="small"
-              onClick={() => setAnchor(now?.slice(0, 10) ?? null)}
-            >
-              {tr.calendar.today}
-            </Button>
-            <Button size="small" onClick={() => step(1)} aria-label={tr.calendar.next}>
-              ›
-            </Button>
-          </div>
-          <SegmentedControl
-            label={tr.pages.calendar.title}
-            value={view}
-            onChange={setView}
-            options={[
-              { value: 'week', label: tr.calendar.views.week },
-              { value: 'workWeek', label: tr.calendar.views.workWeek },
-              { value: 'day', label: tr.calendar.views.day },
-              { value: 'month', label: tr.calendar.views.month },
-              { value: 'agenda', label: tr.calendar.views.agenda },
-            ]}
-          />
-        </div>
-
         <div className={styles.filters}>
           {subjectRow.length > 0 && (
             <ChipRow>
@@ -443,6 +663,7 @@ export function CalendarPage() {
           !error &&
           now !== null &&
           anchor !== null &&
+          settings !== null &&
           span !== null && (
             <CalendarBody
               view={view}
@@ -455,16 +676,20 @@ export function CalendarPage() {
               closed={closed}
               hasSchedule={hasSchedule}
               span={span}
+              settings={settings}
               onClearFilters={clearFilters}
               onCreate={openNew}
-              onTemplate={() => setTemplateOpen(true)}
-              onAppointmentClick={onAppointmentClick}
               onAppointmentUpdating={onAppointmentUpdating}
-              onAppointmentDblClick={cancelDblClick}
-              onAppointmentFormOpening={cancelForm}
-              onAppointmentTooltipShowing={cancelTooltip}
+              onAppointmentAdding={onAppointmentAdding}
+              onAppointmentDeleting={onAppointmentDeleting}
+              onAppointmentDblClick={onAppointmentDblClick}
+              onAppointmentFormOpening={onAppointmentFormOpening}
               onCellClick={onCellClick}
               onViewDateChange={(date) => setAnchor(dateToDay(date))}
+              onViewChange={setView}
+              onSchedulerReady={(component) => {
+                scheduler.current = component
+              }}
             />
           )}
       </PageContent>
@@ -509,14 +734,6 @@ export function CalendarPage() {
           onSaved={refresh}
         />
       )}
-      {now !== null && (
-        <TemplateModal
-          open={templateOpen}
-          today={now.slice(0, 10)}
-          onClose={() => setTemplateOpen(false)}
-          onApplied={refresh}
-        />
-      )}
       {now !== null && action !== null && (
         <SessionActions
           action={action.kind}
@@ -531,9 +748,12 @@ export function CalendarPage() {
           pending={move}
           onClose={() => {
             setMove(null)
-            void load()
           }}
           onConfirm={(scope) => void applyMove(move, scope)}
+          onEditGroup={(groupId) => {
+            setMove(null)
+            navigate(`/gruplar/${groupId}`)
+          }}
         />
       )}
       <ConfirmDialog
@@ -543,7 +763,6 @@ export function CalendarPage() {
         confirmLabel={tr.calendar.conflictDialog.confirm}
         onCancel={() => {
           setConflict(null)
-          void load()
         }}
         onConfirm={() => {
           if (conflict !== null) prepareMove(conflict)
@@ -564,46 +783,178 @@ interface CalendarBodyProps {
   closed: ReadonlySet<string>
   hasSchedule: boolean
   span: readonly [string, string]
+  settings: CalendarSettings
   onClearFilters: () => void
   onCreate: (day?: string, startTime?: string) => void
-  onTemplate: () => void
-  onAppointmentClick: (event: AppointmentClickEvent) => void
   onAppointmentUpdating: (event: AppointmentUpdatingEvent) => void
+  onAppointmentAdding: (event: AppointmentAddingEvent) => void
+  onAppointmentDeleting: (event: AppointmentDeletingEvent) => void
   onAppointmentDblClick: (event: AppointmentDblClickEvent) => void
   onAppointmentFormOpening: (event: AppointmentFormOpeningEvent) => void
-  onAppointmentTooltipShowing: (event: AppointmentTooltipShowingEvent) => void
   onCellClick: (event: CellClickEvent) => void
   onViewDateChange: (date: Date) => void
+  onViewChange: (view: CalendarView) => void
+  onSchedulerReady: (component: AppointmentAddingEvent['component'] | null) => void
 }
 
-const CalendarBody = memo(CalendarBodyView, sameCalendarBodyProps)
+const CalendarBody = memo(CalendarBodyView)
 
 function CalendarBodyView(props: CalendarBodyProps) {
-  const days = daysBetween(props.span[0], props.span[1])
-  const autoScrollKey = useRef<string | null>(null)
-  const dataSource = useMemo(
-    () => ({
-      store: {
-        type: 'array' as const,
-        key: 'id',
-        data: [...props.appointments],
-      },
-    }),
-    [props.appointments],
+  const currentDate = useMemo(
+    () => wallClockToDate(`${props.anchor} 12:00`),
+    [props.anchor],
   )
-  const onContentReady = (event: ContentReadyEvent) => {
+  const dayHours = useStableDayHours(
+    props.view,
+    props.anchor,
+    props.settings,
+    props.unfiltered,
+  )
+  const autoScrollKey = useRef<string | null>(null)
+  const schedulerFrame = useRef<HTMLDivElement | null>(null)
+  const pendingScrollPosition = useRef<{ top: number; left: number } | null>(null)
+  const store = useRef<ArrayStore<CalendarAppointment, number> | null>(null)
+  const storedAppointments = useRef(props.appointments)
+  if (store.current === null) {
+    store.current = new ArrayStore({
+      key: 'id',
+      data: [...props.appointments],
+    })
+  }
+  useEffect(() => {
+    const previous = new Map(storedAppointments.current.map((item) => [item.id, item]))
+    const next = new Map(props.appointments.map((item) => [item.id, item]))
+    const changes: Array<
+      | { type: 'insert'; data: CalendarAppointment }
+      | { type: 'update'; key: number; data: CalendarAppointment }
+      | { type: 'remove'; key: number }
+    > = []
+    for (const [id, item] of next) {
+      const oldItem = previous.get(id)
+      if (oldItem === undefined) changes.push({ type: 'insert', data: item })
+      else if (!sameAppointment(oldItem, item)) {
+        changes.push({ type: 'update', key: id, data: item })
+      }
+    }
+    for (const id of previous.keys()) {
+      if (!next.has(id)) changes.push({ type: 'remove', key: id })
+    }
+    if (changes.length > 0) {
+      const scrollable = dateTableScrollable(schedulerFrame.current)
+      const scrollPosition =
+        scrollable === undefined || scrollable === null
+          ? null
+          : { top: scrollable.scrollTop, left: scrollable.scrollLeft }
+      if (pendingScrollPosition.current === null) {
+        pendingScrollPosition.current = scrollPosition
+      }
+      store.current?.push(changes)
+      if (schedulerFrame.current !== null && pendingScrollPosition.current !== null) {
+        restoreScrollPosition(schedulerFrame.current, pendingScrollPosition.current)
+      }
+      pendingScrollPosition.current = null
+    }
+    storedAppointments.current = props.appointments
+  }, [props.appointments])
+  const onContentReady = useStableEvent((event: ContentReadyEvent) => {
+    if (
+      pendingScrollPosition.current !== null &&
+      schedulerFrame.current !== null
+    ) {
+      restoreScrollPosition(
+        schedulerFrame.current,
+        pendingScrollPosition.current,
+      )
+      return
+    }
     if (props.view === 'month' || props.view === 'agenda') return
-    const appointmentKey = props.appointments
-      .map((item) => `${item.id}:${item.row.startsAt}:${item.row.endsAt}`)
-      .join('|')
-    const key = `${props.view}:${props.anchor}:${appointmentKey}`
+    const key = `${props.view}:${props.anchor}`
     if (autoScrollKey.current === key) return
     autoScrollKey.current = key
     event.component.scrollTo(
-      scrollTarget(props.now, props.span, props.appointments, props.anchor),
-      { alignInView: 'center' },
-    )
-  }
+      scrollTarget(
+        props.now,
+        props.span,
+        props.appointments,
+        props.anchor,
+        props.settings.dayStart,
+      ),
+        { alignInView: 'center' },
+      )
+  })
+  const onCurrentViewChange = useStableEvent((value: string) => {
+    if (isCalendarView(value)) props.onViewChange(value)
+  })
+  const onCurrentDateChange = useStableEvent((value: Date | number | string) => {
+    if (value instanceof Date) props.onViewDateChange(value)
+  })
+  const onInitialized = useStableEvent(
+    (event: { component?: AppointmentAddingEvent['component'] }) =>
+      props.onSchedulerReady(event.component ?? null),
+  )
+  const onDisposing = useStableEvent(() => props.onSchedulerReady(null))
+  const onAppointmentUpdating = useStableEvent((event: AppointmentUpdatingEvent) => {
+    const scrollable = dateTableScrollable(schedulerFrame.current)
+    pendingScrollPosition.current =
+      scrollable === null
+        ? null
+        : { top: scrollable.scrollTop, left: scrollable.scrollLeft }
+    props.onAppointmentUpdating(event)
+    if (schedulerFrame.current !== null && pendingScrollPosition.current !== null) {
+      restoreScrollPosition(schedulerFrame.current, pendingScrollPosition.current)
+    }
+  })
+  const onAppointmentAdding = useStableEvent(props.onAppointmentAdding)
+  const onAppointmentDeleting = useStableEvent(props.onAppointmentDeleting)
+  const onAppointmentDblClick = useStableEvent(props.onAppointmentDblClick)
+  const onAppointmentFormOpening = useStableEvent(
+    props.onAppointmentFormOpening,
+  )
+  const onCellClick = useStableEvent(props.onCellClick)
+  const appointmentDragging = useMemo(
+    () => ({
+      autoScroll: true,
+      scrollSensitivity: 80,
+      scrollSpeed: 30,
+      onDragStart: (event: {
+        itemData?: unknown
+        cancel?: boolean
+      }) => {
+        const item = event.itemData as CalendarAppointment
+        if (item.locked) event.cancel = true
+      },
+    }),
+    [],
+  )
+  const dateCellRender = useCallback(
+    (data: { date?: Date }) => <DateCell date={data.date as Date} />,
+    [],
+  )
+  const timeCellRender = useCallback(
+    (data: { date?: Date }) => (
+      <span className={styles.timeCell}>{dateToTime(data.date as Date)}</span>
+    ),
+    [],
+  )
+  const dataCellRender = useStableEvent(
+    (data: { startDate?: Date }) => (
+      <span
+        className={styles.dataCell}
+        data-closed={props.closed.has(dateToDay(data.startDate as Date))}
+        aria-label={
+          props.closed.has(dateToDay(data.startDate as Date))
+            ? tr.calendar.empty.dayClosed
+            : undefined
+        }
+      />
+    ),
+  )
+  const resourceCellRender = useCallback(
+    (data: { text?: unknown }) => (
+      <span className={styles.resourceName}>{String(data.text ?? '')}</span>
+    ),
+    [],
+  )
 
   if (!props.hasSchedule && props.unfiltered.length === 0) {
     return (
@@ -615,22 +966,6 @@ function CalendarBodyView(props: CalendarBodyProps) {
             {tr.calendar.newSession}
           </Button>
         }
-        secondaryAction={
-          <Button onClick={props.onTemplate}>{tr.calendar.fromTemplate}</Button>
-        }
-      />
-    )
-  }
-  if (allDaysClosed(days, props.closed)) {
-    return (
-      <EmptyState
-        kind="no-filter-results"
-        title={
-          props.view === 'day'
-            ? tr.calendar.empty.dayClosed
-            : tr.calendar.empty.allClosed
-        }
-        body={tr.calendar.empty.allClosedBody}
       />
     )
   }
@@ -648,42 +983,27 @@ function CalendarBodyView(props: CalendarBodyProps) {
       />
     )
   }
-  if (props.rows.length === 0) {
-    return (
-      <EmptyState
-        kind="no-filter-results"
-        title={
-          props.view === 'day'
-            ? tr.calendar.empty.dayEmpty
-            : tr.calendar.noData
-        }
-        action={
-          props.view === 'day' ? (
-            <Button variant="primary" onClick={() => props.onCreate(props.anchor)}>
-              {tr.calendar.newSession}
-            </Button>
-          ) : undefined
-        }
-      />
-    )
-  }
-
   return (
-    <div className={styles.schedulerFrame} data-testid="devextreme-scheduler">
+    <div
+      ref={schedulerFrame}
+      className={styles.schedulerFrame}
+      data-testid="devextreme-scheduler"
+    >
       <Scheduler
-        dataSource={dataSource}
+        dataSource={store.current}
         textExpr="text"
         startDateExpr="startDate"
         endDateExpr="endDate"
-        currentDate={wallClockToDate(`${props.anchor} 12:00`)}
+        currentDate={currentDate}
         currentView={props.view}
-        onCurrentDateChange={(value) => {
-          if (value instanceof Date) props.onViewDateChange(value)
-        }}
+        onCurrentViewChange={onCurrentViewChange}
+        onInitialized={onInitialized}
+        onDisposing={onDisposing}
+        onCurrentDateChange={onCurrentDateChange}
         firstDayOfWeek={1}
-        cellDuration={30}
-        startDayHour={0}
-        endDayHour={24}
+        cellDuration={props.settings.slotMinutes}
+        startDayHour={dayHours.start}
+        endDayHour={dayHours.end}
         showAllDayPanel={false}
         showCurrentTimeIndicator
         shadeUntilCurrentTime={false}
@@ -691,88 +1011,53 @@ function CalendarBodyView(props: CalendarBodyProps) {
         noDataText={tr.calendar.noData}
         height="100%"
         focusStateEnabled
-        toolbar={{ visible: false }}
-        editing={{
-          allowAdding: false,
-          allowDeleting: false,
-          allowUpdating: true,
-          allowDragging: true,
-          allowResizing: true,
-          allowTimeZoneEditing: false,
-        }}
-        appointmentDragging={{
-          autoScroll: true,
-          scrollSensitivity: 80,
-          scrollSpeed: 30,
-          onDragStart: (event) => {
-            const item = event.itemData as CalendarAppointment
-            if (item.locked) event.cancel = true
-          },
-        }}
+        toolbar={SCHEDULER_TOOLBAR}
+        editing={SCHEDULER_EDITING}
+        appointmentDragging={appointmentDragging}
         appointmentComponent={AppointmentContent}
-        dateCellRender={(data) => <DateCell date={data.date as Date} />}
-        timeCellRender={(data) => (
-          <span className={styles.timeCell}>{dateToTime(data.date as Date)}</span>
-        )}
-        dataCellRender={(data) => (
-          <span
-            className={styles.dataCell}
-            data-closed={props.closed.has(dateToDay(data.startDate as Date))}
-            aria-label={
-              props.closed.has(dateToDay(data.startDate as Date))
-                ? tr.calendar.empty.dayClosed
-                : undefined
-            }
-          />
-        )}
-        resourceCellRender={(data) => (
-          <span className={styles.resourceName}>{String(data.text ?? '')}</span>
-        )}
-        onAppointmentClick={props.onAppointmentClick}
-        onAppointmentDblClick={props.onAppointmentDblClick}
-        onAppointmentFormOpening={props.onAppointmentFormOpening}
-        onAppointmentTooltipShowing={props.onAppointmentTooltipShowing}
-        onAppointmentUpdating={props.onAppointmentUpdating}
-        onCellClick={props.onCellClick}
+        dateCellRender={dateCellRender}
+        timeCellRender={timeCellRender}
+        dataCellRender={dataCellRender}
+        resourceCellRender={resourceCellRender}
+        onAppointmentFormOpening={onAppointmentFormOpening}
+        onAppointmentAdding={onAppointmentAdding}
+        onAppointmentDeleting={onAppointmentDeleting}
+        onAppointmentDblClick={onAppointmentDblClick}
+        onAppointmentUpdating={onAppointmentUpdating}
+        onCellClick={onCellClick}
         onContentReady={onContentReady}
       >
-        <View type="week" name="week" />
-        <View type="workWeek" name="workWeek" />
+        <View
+          type="week"
+          cellDuration={props.settings.slotMinutes}
+          startDayHour={dayHours.start}
+          endDayHour={dayHours.end}
+        />
+        <View
+          type="workWeek"
+          cellDuration={props.settings.slotMinutes}
+          startDayHour={dayHours.start}
+          endDayHour={dayHours.end}
+        />
         <View
           type="day"
-          name="day"
-          groups={props.resources.length > 0 ? ['teacherId'] : []}
+          cellDuration={props.settings.slotMinutes}
+          startDayHour={dayHours.start}
+          endDayHour={dayHours.end}
+          groups={props.resources.length > 0 ? TEACHER_GROUP : NO_GROUPS}
           groupOrientation="horizontal"
         />
-        <View type="month" name="month" />
-        <View type="agenda" name="agenda" agendaDuration={14} />
+        <View type="month" />
+        <View type="agenda" agendaDuration={14} />
         <Resource
           fieldExpr="teacherId"
           valueExpr="id"
           displayExpr="text"
           label={tr.calendar.teachers}
-          dataSource={[...props.resources]}
+          dataSource={props.resources}
         />
       </Scheduler>
     </div>
-  )
-}
-
-function sameCalendarBodyProps(
-  previous: CalendarBodyProps,
-  next: CalendarBodyProps,
-): boolean {
-  return (
-    previous.view === next.view &&
-    previous.anchor === next.anchor &&
-    previous.now === next.now &&
-    previous.rows === next.rows &&
-    previous.unfiltered === next.unfiltered &&
-    previous.appointments === next.appointments &&
-    previous.resources === next.resources &&
-    previous.closed === next.closed &&
-    previous.hasSchedule === next.hasSchedule &&
-    previous.span === next.span
   )
 }
 
@@ -864,12 +1149,6 @@ function rangeTitle(
   return `${formatDate(span[0])} – ${formatDate(span[1])}`
 }
 
-function stepDays(view: CalendarView): number {
-  if (view === 'day') return 1
-  if (view === 'agenda') return 14
-  return 7
-}
-
 function rowDuration(row: DaySessionRow): number {
   return durationMinutes(
     wallClockToDate(row.startsAt),
@@ -897,17 +1176,12 @@ function intersect(
   return next
 }
 
-function daysBetween(from: string, to: string): string[] {
-  const days: string[] = []
-  for (let day = from; day <= to; day = addDays(day, 1)) days.push(day)
-  return days
-}
-
 function scrollTarget(
   now: string,
   span: readonly [string, string],
   appointments: readonly CalendarAppointment[],
   anchor: string,
+  dayStart: string,
 ): Date {
   const today = now.slice(0, 10)
   if (today >= span[0] && today <= span[1]) return wallClockToDate(now)
@@ -918,5 +1192,113 @@ function scrollTarget(
         : earliest,
     null,
   )
-  return first ?? wallClockToDate(`${anchor} 08:00`)
+  return first ?? wallClockToDate(`${anchor} ${dayStart}`)
+}
+
+function isCalendarView(value: string): value is CalendarView {
+  return ['month', 'week', 'workWeek', 'day', 'agenda'].includes(value)
+}
+
+function replaceMovedRow(
+  rows: readonly DaySessionRow[],
+  sessionId: number,
+  day: string,
+  startTime: string,
+  durationMin: number,
+): DaySessionRow[] {
+  const startsAt = `${day} ${startTime}`
+  const start = wallClockToDate(startsAt)
+  const end = new Date(start.getTime() + durationMin * 60_000)
+  return rows.map((row) =>
+    row.id === sessionId
+      ? { ...row, startsAt, endsAt: dateToWallClock(end) }
+      : row,
+  )
+}
+
+function sameAppointment(
+  previous: CalendarAppointment,
+  next: CalendarAppointment,
+): boolean {
+  return (
+    previous.startDate.getTime() === next.startDate.getTime() &&
+    previous.endDate.getTime() === next.endDate.getTime() &&
+    previous.seriesId === next.seriesId &&
+    previous.text === next.text &&
+    previous.subjectId === next.subjectId &&
+    previous.subjectName === next.subjectName &&
+    previous.teacherId === next.teacherId &&
+    previous.teacherName === next.teacherName &&
+    previous.subjectColor === next.subjectColor &&
+    previous.title === next.title &&
+    previous.kind === next.kind &&
+    previous.isMakeup === next.isMakeup &&
+    previous.status === next.status &&
+    previous.attendanceTaken === next.attendanceTaken &&
+    previous.attendanceMissing === next.attendanceMissing &&
+    previous.locked === next.locked &&
+    previous.conflict === next.conflict
+  )
+}
+
+function restoreScrollPosition(
+  frame: HTMLElement,
+  position: { top: number; left: number },
+): void {
+  const restore = () => {
+    const element = dateTableScrollable(frame)
+    if (element === null) return
+    element.scrollTop = position.top
+    element.scrollLeft = position.left
+  }
+  restore()
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(() => {
+      restore()
+      requestAnimationFrame(restore)
+    })
+  }
+}
+
+function dateTableScrollable(frame: HTMLElement | null): HTMLElement | null {
+  return (
+    frame?.querySelector<HTMLElement>(
+      '.dx-scheduler-date-table-scrollable .dx-scrollable-container',
+    ) ?? null
+  )
+}
+
+function useStableDayHours(
+  view: CalendarView,
+  anchor: string,
+  settings: CalendarSettings,
+  rows: readonly DaySessionRow[],
+): { start: number; end: number } {
+  const key = `${view}:${anchor}`
+  const calculated = visibleDayHours(
+    settings,
+    rows.map((row) => ({
+      startDate: wallClockToDate(row.startsAt),
+      endDate: wallClockToDate(row.endsAt),
+    })),
+  )
+  const state = useRef({ key, hours: calculated })
+  if (state.current.key !== key) {
+    state.current = { key, hours: calculated }
+  } else {
+    state.current.hours = {
+      start: Math.min(state.current.hours.start, calculated.start),
+      end: Math.max(state.current.hours.end, calculated.end),
+    }
+  }
+  return state.current.hours
+}
+
+function useStableEvent<T extends (...args: never[]) => unknown>(handler: T): T {
+  const handlerRef = useRef(handler)
+  handlerRef.current = handler
+  return useCallback(
+    ((...args: Parameters<T>) => handlerRef.current(...args)) as T,
+    [],
+  )
 }
