@@ -10,6 +10,8 @@
 
 <p align="center">
   <a href="https://github.com/mehmetaktan/kurs/releases/download/v1.0.0/Kurs.Takip_1.0.0_x64_en-US.msi"><strong>Windows için indir (.msi)</strong></a>
+  ·
+  <a href="https://github.com/mehmetaktan/kurs/releases/download/v1.0.0/Kurs.Takip_1.0.0_universal.dmg"><strong>macOS için indir (.dmg)</strong></a>
 </p>
 
 <p align="center">
@@ -41,14 +43,29 @@ gerektirmez; bilgiler yalnızca kullanılan bilgisayarda saklanır.
 
 ## İndirme ve kurulum
 
+### Windows
+
 En güncel 64-bit Windows kurulum dosyasını
 [doğrudan indirebilir](https://github.com/mehmetaktan/kurs/releases/download/v1.0.0/Kurs.Takip_1.0.0_x64_en-US.msi)
 veya [son sürüm sayfasını](https://github.com/mehmetaktan/kurs/releases/latest) açabilirsiniz.
 İndirdiğiniz `.msi` dosyasını açıp kurulum adımlarını izlemeniz
 yeterlidir. Kurulum paketi WebView2'yi çevrimdışı kurabilecek şekilde hazırlanmıştır.
 
-Adım adım yardım için [kurulum kılavuzunu](https://github.com/mehmetaktan/kurs/blob/main/docs/KURULUM.md)
+Adım adım yardım için [Windows kurulum kılavuzunu](https://github.com/mehmetaktan/kurs/blob/main/docs/KURULUM.md)
 inceleyebilirsiniz.
+
+### macOS
+
+[Universal macOS paketini indirin](https://github.com/mehmetaktan/kurs/releases/download/v1.0.0/Kurs.Takip_1.0.0_universal.dmg),
+DMG dosyasını açın ve Kurs Takip'i Uygulamalar klasörüne sürükleyin. Tek paket hem
+Apple Silicon hem Intel işlemcili Mac'leri destekler.
+
+macOS paketi henüz Apple tarafından imzalanıp noterlenmediği için ilk açılışta
+geliştirici doğrulama uyarısı çıkabilir. Dosyayı yalnızca bu deponun resmi Release
+sayfasından indirdiğinizden eminseniz uygulamayı bir kez açmayı deneyin; ardından
+**Sistem Ayarları → Gizlilik ve Güvenlik → Yine de Aç** yolunu kullanın.
+[Apple'ın güvenlik açıklaması](https://support.apple.com/102445) bu adımı ayrıntılı
+olarak anlatır.
 
 ## Verileriniz sizde kalır
 
@@ -72,7 +89,7 @@ Tüm kalite kontrollerini ve testleri çalıştırmak için:
 npm run check
 ```
 
-Windows kurulum paketi GitHub Actions üzerinde derlenir.
+Windows ve universal macOS kurulum paketleri GitHub Actions üzerinde derlenir.
 
 Kurs sahibi için
 [kurulum kılavuzu](https://github.com/mehmetaktan/kurs/blob/main/docs/KURULUM.md) ve

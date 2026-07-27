@@ -1,4 +1,4 @@
-name: Windows sürümü yayınla
+name: Masaüstü sürümünü yayınla
 
 on:
   push:
@@ -53,7 +53,55 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Kurs Takip v__VERSION__'
-          releaseBody: 'Windows kurulum dosyasını (.msi) aşağıdaki dosyalardan indirebilirsiniz.'
+          releaseBody: 'Windows (.msi) ve universal macOS (.dmg) kurulum dosyalarını aşağıdan indirebilirsiniz.'
           releaseDraft: false
           prerelease: false
           args: '--bundles msi'
+
+  release-macos:
+    name: macOS universal .dmg
+    needs: release
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rust kurulumu
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Rust derleme önbelleği
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: release-macos-universal
+
+      - name: Node kurulumu
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - name: Etiket ve uygulama sürümünü doğrula
+        run: node scripts/verify-version.mjs
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+
+      - name: Tam kalite kapısı
+        run: npm run check
+
+      # Apple imzalama sertifikası ve noterleme bilgileri henüz yok.
+      - name: Universal paketi GitHub Releases'a yükle
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Kurs Takip v__VERSION__'
+          releaseBody: 'Windows (.msi) ve universal macOS (.dmg) kurulum dosyalarını aşağıdan indirebilirsiniz.'
+          releaseDraft: false
+          prerelease: false
+          args: '--bundles dmg --target universal-apple-darwin --no-sign'
