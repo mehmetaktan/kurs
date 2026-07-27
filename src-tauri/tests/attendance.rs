@@ -81,6 +81,124 @@ fn financial_row_counts(conn: &rusqlite::Connection, attendance_id: i64) -> (i64
     .unwrap()
 }
 
+fn assert_session_charge_chain(
+    conn: &rusqlite::Connection,
+    attendance_id: i64,
+    student_id: i64,
+    expected_len: usize,
+    expected_balance: i64,
+) {
+    let rows: Vec<(i64, String, i64, Option<i64>)> = conn
+        .prepare(
+            "WITH RECURSIVE chain(id, kind, amount, reverses_id) AS ( \
+               SELECT id, kind, amount, reverses_id FROM ledger_entry \
+               WHERE attendance_id = ?1 AND kind = 'session_charge' \
+                 AND deleted_at IS NULL \
+               UNION ALL \
+               SELECT entry.id, entry.kind, entry.amount, entry.reverses_id \
+               FROM ledger_entry entry JOIN chain previous \
+                 ON entry.reverses_id = previous.id \
+               WHERE entry.deleted_at IS NULL \
+             ) \
+             SELECT id, kind, amount, reverses_id FROM chain ORDER BY id",
+        )
+        .unwrap()
+        .query_map([attendance_id], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+        })
+        .unwrap()
+        .collect::<rusqlite::Result<_>>()
+        .unwrap();
+
+    assert_eq!(rows.len(), expected_len);
+    assert_eq!(rows[0].1, "session_charge");
+    assert_eq!(rows[0].2, -25_000);
+    assert_eq!(rows[0].3, None);
+    for pair in rows.windows(2) {
+        let previous = &pair[0];
+        let current = &pair[1];
+        assert_eq!(current.1, "reversal");
+        assert_eq!(current.2, -previous.2);
+        assert_eq!(current.3, Some(previous.0));
+    }
+
+    let head_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM ledger_entry \
+             WHERE attendance_id = ?1 AND kind = 'session_charge' \
+               AND reverses_id IS NULL AND deleted_at IS NULL",
+            [attendance_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        head_count, 1,
+        "düzeltme ikinci session_charge başlığı açmamalı"
+    );
+
+    let (view_balance, effective_sum): (i64, i64) = conn
+        .query_row(
+            "SELECT b.balance_kurus, \
+                    COALESCE((SELECT SUM(e.amount) FROM v_ledger_effective e \
+                              WHERE e.student_id = b.student_id), 0) \
+             FROM v_student_balance b WHERE b.student_id = ?1",
+            [student_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(balance(conn, student_id), expected_balance);
+    assert_eq!(view_balance, expected_balance);
+    assert_eq!(effective_sum, expected_balance);
+    common::assert_ledger_invariant(conn);
+}
+
+fn assert_package_usage_chain(
+    conn: &rusqlite::Connection,
+    attendance_id: i64,
+    package_id: i64,
+    expected_len: usize,
+    expected_remaining: i64,
+) {
+    let rows: Vec<(i64, i64, i64, Option<i64>)> = conn
+        .prepare(
+            "SELECT id, package_id, delta, reverses_id FROM package_usage \
+             WHERE attendance_id = ?1 AND deleted_at IS NULL ORDER BY id",
+        )
+        .unwrap()
+        .query_map([attendance_id], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+        })
+        .unwrap()
+        .collect::<rusqlite::Result<_>>()
+        .unwrap();
+
+    assert_eq!(rows.len(), expected_len);
+    assert_eq!(rows[0], (rows[0].0, package_id, -1, None));
+    for pair in rows.windows(2) {
+        let previous = &pair[0];
+        let current = &pair[1];
+        assert_eq!(current.1, package_id);
+        assert_eq!(current.2, -previous.2);
+        assert_eq!(current.3, Some(previous.0));
+    }
+
+    let (lesson_count, usage_sum, remaining): (i64, i64, i64) = conn
+        .query_row(
+            "SELECT p.lesson_count, \
+                    COALESCE((SELECT SUM(u.delta) FROM package_usage u \
+                              WHERE u.package_id = p.id AND u.deleted_at IS NULL), 0), \
+                    r.remaining \
+             FROM package p JOIN v_package_remaining r ON r.package_id = p.id \
+             WHERE p.id = ?1",
+            [package_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .unwrap();
+    assert_eq!(remaining, lesson_count + usage_sum);
+    assert_eq!(remaining, expected_remaining);
+    assert_eq!(common::remaining(conn, package_id), expected_remaining);
+}
+
 fn save_one(
     conn: &rusqlite::Connection,
     session_id: i64,
@@ -535,7 +653,7 @@ fn mazeret_ayarlari_iki_degerde_de_para_ve_hak_yonunu_belirler() {
 }
 
 #[test]
-fn duzeltme_zinciri_siniflandirmayi_korur_ve_ayni_hedefte_yeni_halka_yazmaz() {
+fn save_attendance_dort_halkali_duzeltmede_iki_finans_degismezini_korur() {
     let conn = common::conn();
     let subject_id = common::subject(&conn, "Geometri");
     let group_id = common::group(&conn, "Geometri Grubu", subject_id);
@@ -554,6 +672,7 @@ fn duzeltme_zinciri_siniflandirmayi_korur_ve_ayni_hedefte_yeni_halka_yazmaz() {
     }
     let original_package = common::package(&conn, packaged);
     let session_id = common::group_session(&conn, group_id, subject_id, "2026-03-20");
+    let mut planned_makeup_id = None;
 
     for (step, status, marked_at, expected_rows, expected_remaining, expected_balance) in [
         (1, "present", "2026-03-31 18:01", 1, 7, -25_000),
@@ -566,22 +685,19 @@ fn duzeltme_zinciri_siniflandirmayi_korur_ve_ayni_hedefte_yeni_halka_yazmaz() {
             // sınıfına taşıyamaz; tersin tersi yine deftere yazılır.
             common::package(&conn, charged);
         }
-        repo::attendance::save_attendance(
-            &conn,
-            &SaveAttendanceInput {
-                session_id,
-                marked_at: marked_at.into(),
-                marks: [packaged, charged]
-                    .into_iter()
-                    .map(|student_id| AttendanceMarkInput {
-                        student_id,
-                        status: status.into(),
-                        note: None,
-                    })
-                    .collect(),
-            },
-        )
-        .unwrap();
+        let input = SaveAttendanceInput {
+            session_id,
+            marked_at: marked_at.into(),
+            marks: [packaged, charged]
+                .into_iter()
+                .map(|student_id| AttendanceMarkInput {
+                    student_id,
+                    status: status.into(),
+                    note: None,
+                })
+                .collect(),
+        };
+        repo::attendance::save_attendance(&conn, &input).unwrap();
 
         let package_attendance = attendance_id(&conn, session_id, packaged);
         let charged_attendance = attendance_id(&conn, session_id, charged);
@@ -593,11 +709,111 @@ fn duzeltme_zinciri_siniflandirmayi_korur_ve_ayni_hedefte_yeni_halka_yazmaz() {
             financial_row_counts(&conn, charged_attendance),
             (0, expected_rows)
         );
-        assert_eq!(
-            common::remaining(&conn, original_package),
-            expected_remaining
+        assert_package_usage_chain(
+            &conn,
+            package_attendance,
+            original_package,
+            expected_rows as usize,
+            expected_remaining,
         );
-        assert_eq!(balance(&conn, charged), expected_balance);
+        assert_session_charge_chain(
+            &conn,
+            charged_attendance,
+            charged,
+            expected_rows as usize,
+            expected_balance,
+        );
+
+        // `attendance_detail`, Tauri komutunun ekrana döndürdüğü aynı kalıcı
+        // projeksiyondur. Her kayıttan sonra bir sonraki yönü gerçek zincir ucundan okur.
+        let detail = repo::attendance::attendance_detail(&conn, session_id, common::TODAY).unwrap();
+        let package_row = detail
+            .rows
+            .iter()
+            .find(|row| row.student_id == packaged)
+            .unwrap();
+        let charged_row = detail
+            .rows
+            .iter()
+            .find(|row| row.student_id == charged)
+            .unwrap();
+        assert_eq!(package_row.status, status);
+        assert_eq!(charged_row.status, status);
+        let currently_consumed = step % 2 == 1;
+        assert_eq!(
+            package_row.effects.present.lesson_credits,
+            if currently_consumed { 0 } else { 1 }
+        );
+        assert_eq!(
+            package_row.effects.excused.lesson_credits,
+            if currently_consumed { -1 } else { 0 }
+        );
+        assert_eq!(
+            charged_row.effects.present.debt_kurus,
+            if currently_consumed { 0 } else { 25_000 }
+        );
+        assert_eq!(
+            charged_row.effects.excused.debt_kurus,
+            if currently_consumed { -25_000 } else { 0 }
+        );
+
+        // Çift tık/ağ tekrarı aynı hedefi yeniden gönderse de yön fonksiyonları
+        // mevcut ucu görür; ne ikinci başlık ne de yeni reversal oluşur.
+        repo::attendance::save_attendance(&conn, &input).unwrap();
+        assert_package_usage_chain(
+            &conn,
+            package_attendance,
+            original_package,
+            expected_rows as usize,
+            expected_remaining,
+        );
+        assert_session_charge_chain(
+            &conn,
+            charged_attendance,
+            charged,
+            expected_rows as usize,
+            expected_balance,
+        );
+
+        let debts = repo::attendance::makeup_debt_rows(&conn).unwrap();
+        if currently_consumed {
+            assert!(debts.is_empty());
+        } else {
+            assert_eq!(debts.len(), 2);
+            assert!(debts.iter().all(|row| row.pending_count == 1));
+        }
+
+        if step == 2 {
+            let report = repo::schedule::save_makeup_session(
+                &conn,
+                &MakeupSessionInput {
+                    attendance_id: package_attendance,
+                    teacher_id: Some(1),
+                    day: "2026-04-10".into(),
+                    start_time: "16:00".into(),
+                    duration_min: 60,
+                },
+            )
+            .unwrap();
+            planned_makeup_id = report.session_id;
+            assert_eq!(report.created, 1);
+            assert_eq!(
+                repo::attendance::pending_makeup_count(&conn, packaged).unwrap(),
+                1,
+                "planlı telafi kaynak yoklamayı ikinci kez saymamalı"
+            );
+        }
+
+        if step >= 2 {
+            let detail =
+                repo::attendance::attendance_detail(&conn, session_id, common::TODAY).unwrap();
+            let package_row = detail
+                .rows
+                .iter()
+                .find(|row| row.student_id == packaged)
+                .unwrap();
+            assert_eq!(package_row.makeup_session_id, planned_makeup_id);
+        }
     }
 
     let later_package: i64 = conn
@@ -609,31 +825,24 @@ fn duzeltme_zinciri_siniflandirmayi_korur_ve_ayni_hedefte_yeni_halka_yazmaz() {
         .unwrap();
     assert_eq!(common::remaining(&conn, later_package), 8);
 
-    // Son hedef tekrar kaydedilirse iki zincir de aynı uçta kalır.
-    repo::attendance::save_attendance(
-        &conn,
-        &SaveAttendanceInput {
-            session_id,
-            marked_at: "2026-04-04 18:05".into(),
-            marks: [packaged, charged]
-                .into_iter()
-                .map(|student_id| AttendanceMarkInput {
-                    student_id,
-                    status: "excused".into(),
-                    note: None,
-                })
-                .collect(),
-        },
-    )
-    .unwrap();
+    let package_attendance = attendance_id(&conn, session_id, packaged);
+    let charged_attendance = attendance_id(&conn, session_id, charged);
+    assert_package_usage_chain(&conn, package_attendance, original_package, 4, 8);
+    assert_session_charge_chain(&conn, charged_attendance, charged, 4, 0);
     assert_eq!(
-        financial_row_counts(&conn, attendance_id(&conn, session_id, packaged)),
-        (4, 0)
+        repo::attendance::pending_makeup_count(&conn, packaged).unwrap(),
+        1,
+        "kaynak tekrar mazeretli olduğunda mevcut plan tek telafi borcu olarak kalmalı"
     );
-    assert_eq!(
-        financial_row_counts(&conn, attendance_id(&conn, session_id, charged)),
-        (0, 4)
-    );
+    let linked_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM session \
+             WHERE makeup_for_attendance_id = ?1 AND deleted_at IS NULL",
+            [package_attendance],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(linked_count, 1);
     let statement = repo::finance::statement_rows(
         &conn,
         &repo::finance::StatementQuery {
@@ -657,7 +866,6 @@ fn duzeltme_zinciri_siniflandirmayi_korur_ve_ayni_hedefte_yeni_halka_yazmaz() {
             .collect::<Vec<_>>(),
         [-25_000, 0, -25_000, 0]
     );
-    common::assert_ledger_invariant(&conn);
 }
 
 #[test]
