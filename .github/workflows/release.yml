@@ -1,0 +1,59 @@
+name: Windows sürümü yayınla
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Windows .msi
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rust kurulumu
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust derleme önbelleği
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: release-windows
+
+      - name: Node kurulumu
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - name: Etiket ve uygulama sürümünü doğrula
+        run: node scripts/verify-version.mjs
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+
+      - name: Tam kalite kapısı
+        run: npm run check
+
+      # S10: Kod imzalama sertifikası alınmayacak; bu iş imzalama sırrı kullanmaz.
+      - name: Kurulum paketini GitHub Releases'a yükle
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Kurs Takip v__VERSION__'
+          releaseBody: 'Windows kurulum dosyasını (.msi) aşağıdaki dosyalardan indirebilirsiniz.'
+          releaseDraft: false
+          prerelease: false
+          args: '--bundles msi'

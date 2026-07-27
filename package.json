@@ -1,7 +1,7 @@
 {
   "name": "kurs-takip",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "tauri dev",
@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "fmt": "cargo fmt --manifest-path src-tauri/Cargo.toml",
     "fmt:check": "cargo fmt --manifest-path src-tauri/Cargo.toml -- --check",
-    "check": "npm run typecheck && npm run lint && npm run fmt:check && npm run test && npm run verify:bundle",
+    "check": "npm run verify:version && npm run typecheck && npm run lint && npm run fmt:check && npm run test && npm run verify:bundle",
+    "verify:version": "node scripts/verify-version.mjs",
     "verify:bundle": "vite build && node scripts/verify-bundle.mjs",
     "seed": "cargo run --manifest-path src-tauri/Cargo.toml --features seed --bin seed --",
     "web:dev": "vite",

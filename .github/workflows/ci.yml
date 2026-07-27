@@ -38,7 +38,7 @@ jobs:
         os: [windows-latest, macos-latest]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # .gitattributes *.sql text eol=lf diyor. Bu adım kuralın gerçekten
       # uygulandığını doğrular: CRLF'e dönmüş bir migration dosyası farklı
@@ -85,7 +85,7 @@ jobs:
       # ağacını yeniden hesaplayıp reddediyor (`npm ci` EUSAGE, picomatch çakışması).
       # `rust-toolchain.toml` ile aynı disiplin: yerel ve CI aynı dosyayı okur.
       - name: Node kurulumu
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -143,7 +143,7 @@ jobs:
               src-tauri/target/release/bundle/dmg/*.dmg
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Rust kurulumu
         uses: dtolnay/rust-toolchain@stable
@@ -161,7 +161,7 @@ jobs:
       # ağacını yeniden hesaplayıp reddediyor (`npm ci` EUSAGE, picomatch çakışması).
       # `rust-toolchain.toml` ile aynı disiplin: yerel ve CI aynı dosyayı okur.
       - name: Node kurulumu
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
           cache: npm

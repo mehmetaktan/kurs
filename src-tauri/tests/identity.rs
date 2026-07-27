@@ -62,17 +62,31 @@ fn app_identifier_urun_kimligidir() {
     );
 }
 
-/// Sürüm numarasının tek kaynağı olmalı: `Cargo.toml` ↔ `tauri.conf.json`.
-/// (`package.json` ayağını `src/config/brand.test.ts` sınıyor.)
+/// Sürüm numarasının tek kaynağı `package.json`: Tauri onu dosya yolu üzerinden okur,
+/// Cargo'daki zorunlu crate sürümü de aynı değerde kalır.
 ///
 /// Elle yazılan sürüm kayar ve kimse fark etmez — Faz 3 sonunda kenar çubuğu
 /// `'Sürüm 1.0'` diyordu, gerçek sürüm `0.1.0`'dı.
 #[test]
 fn surum_numarasi_cargo_ile_tauri_conf_arasinda_ayni() {
     let conf = tauri_conf();
+    let package_path: PathBuf = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("src-tauri kök altında olmalı")
+        .join("package.json");
+    let package: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(&package_path)
+            .unwrap_or_else(|err| panic!("{} okunamadı: {err}", package_path.display())),
+    )
+    .expect("package.json geçerli JSON olmalı");
     assert_eq!(
         conf["version"].as_str(),
+        Some("../package.json"),
+        "Tauri sürümü doğrudan package.json dosyasından okunmalı"
+    );
+    assert_eq!(
+        package["version"].as_str(),
         Some(env!("CARGO_PKG_VERSION")),
-        "tauri.conf.json > version ile Cargo.toml > version ayrıştı"
+        "package.json > version ile Cargo.toml > version ayrıştı"
     );
 }

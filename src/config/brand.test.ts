@@ -48,8 +48,8 @@ describe('sürüm numarası tek kaynaktan gelir', () => {
     expect(APP_VERSION).toBe(pkg.version)
   })
 
-  it('package.json ile tauri.conf.json aynı sürümü söyler', () => {
-    expect(tauriConf.version).toBe(pkg.version)
+  it('tauri.conf.json sürümü doğrudan package.json yolundan okur', () => {
+    expect(tauriConf.version).toBe('../package.json')
   })
 
   /** Sürüm numarası metinlerin arasında elle yazılmaz — kayar ve kimse fark etmez. */

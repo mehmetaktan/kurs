@@ -37,8 +37,8 @@ export const institution: Institution = {
  *
  * `vite.config.ts` derleme anında `__APP_VERSION__` sabitini basıyor. Elle yazılan sürüm
  * numarası kayar ve kimse fark etmez: Faz 3 sonunda `tr.app.version` `'Sürüm 1.0'`
- * diyordu, gerçek sürüm `0.1.0`'dı. `package.json` ↔ `tauri.conf.json` ↔ `Cargo.toml`
- * üçlüsünün eşitliğini `src/config/brand.test.ts` ve `src-tauri/tests/identity.rs`
- * koruyor.
+ * diyordu, gerçek paket sürümü farklıydı. Tauri de `package.json` yolunu doğrudan okur;
+ * zorunlu Cargo crate kopyasının eşitliğini `npm run verify:version` ve identity testi
+ * korur.
  */
 export const APP_VERSION: string = __APP_VERSION__
