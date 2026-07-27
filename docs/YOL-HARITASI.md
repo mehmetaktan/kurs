@@ -9,25 +9,14 @@ açılmıyor (ADR-033).
 
 ---
 
-## Kalan plan — iki faz
+## Kalan plan — tek teslim kapısı
 
-| Sıra | Faz | Komut | Ne çıkar |
+| Sıra | İş | Kaynak | Ne çıkar |
 |---|---|---|---|
-| **1** | **Yoklama & Telafi** — yoklama girişi, devamsızlık, telafi dersi, **paket tüketiminin bağlanması** · **Codex'te** (ADR-042) | `/faz-06` | Ders sonrası rutini kapanır. İlk madde `DENETIM-PARA > P1` (ADR-044) |
-| **2** | **Teslim** — özet ekranı (kırpılmış Faz 9), yedekleme, hata dayanıklılığı, kurulum, kılavuz, **tek `.msi` ve elle Windows testi** | `/faz-10` | Kurs sahibinin kullandığı hâl |
+| **1** | **Gerçek Windows teslim testi** — WebView2'siz Windows 10/11, tek `.msi`, elle | `docs/WINDOWS-TESLIM-KONTROLU.md` | Yeşil kanıt sonrası v1 teslim edilir |
 
-**Para fazı bitti (2026-07-27)** ve plandaki **tek zorunlu denetim yapıldı** —
-`docs/DENETIM-PARA.md`. Üç bulgudan ikisi Faz 6'ya, biri ürün sahibinin cevabına bağlandı.
-
-### Neden Faz 6 yine Codex'te
-
-Devir denendi ve tuttu (ADR-042): dış ajan sınırlara uydu, sekiz bölümlü commit geldi,
-denetimde tek gerçek hata çıktı ve o da devirden değil, **altındaki eski bir varsayımdan**
-doğdu. Aynı kalıp Faz 6'da sürüyor; prompt `docs/CODEX-DEVIR.md`'de.
-
-**Denetim** planda tekti ve para fazından sonra yapıldı. Faz 6 ve Faz 10 kendi
-kapanışlarındaki kontrol listesiyle yeter (ADR-033) — devredilen iş yine de diff'ten
-okunur.
+**Faz 6 ile Faz 10'un kod ve belge işleri bitti (2026-07-27).** Son kapı gerçek hedef
+bilgisayardaki Windows testidir; çalıştırılmadan teslim edilmiş sayılmaz.
 
 ---
 
@@ -46,8 +35,10 @@ okunur.
 | Para §0 | Öğretmenler, işletme ayarları, çakışma uyarısı, aranabilir seçim (`/faz-07`) | ADR-041; `DENETIM-FAZ1 > C5` kapandı |
 | Para §4 | `package_usage` ters kayıt zinciri + tüketim fonksiyonu (`/faz-07`) | `003_*.sql`; ADR-036'nın kanıt şartı yeşil; ADR-040 |
 | **Para §1–§10** | Tarife, paket/taksit, defter, tahsilat, borçlu, ekstre, makbuz PDF (`/faz-07`, **Codex**) | ADR-043, ADR-044; **denetlendi** — `docs/DENETIM-PARA.md` |
+| **Faz 6** | Yoklama, telafi, öğrenci ders geçmişi ve devamsızlık raporu (`/faz-06`, **Codex**) | Paket/defter etkileri testli; Takvim dondurması korundu |
+| **Faz 10 kodu** | Özetler, raporlar, yedekleme/geri yükleme, hata dayanıklılığı, yardım, v1 yayın hattı ve kılavuzlar (`/faz-10`, **Codex**) | Windows elle testi ayrı teslim kapısında bekliyor |
 
-588 test (345 TypeScript + 243 Rust), `npm run check` yeşil, Windows `.msi` CI'da üretiliyor.
+697 test (404 TypeScript + 293 Rust) + 1 doc-test, `npm run check` yeşil.
 
 Ayrıntı git geçmişinde (`git log --oneline`) ve ADR'lerde; `docs/DURUM.md` yalnızca
 **son durumu** tutar, oturum arşivi değildir.
@@ -59,7 +50,7 @@ Ayrıntı git geçmişinde (`git log --oneline`) ve ADR'lerde; `docs/DURUM.md` y
 ```
 … 4 ──> 5A ──> 5B ──> 5C (donduruldu)
          │
-         └──> 7+8 (para) ✅ ──> 6 (yoklama) ──> 10 (teslim)
+         └──> 7+8 (para) ✅ ──> 6 (yoklama) ✅ ──> 10 (kod) ✅ ──> Windows teslim testi
 ```
 
 - **Para fazı 5A'ya bağlı**, 5B/5C'ye değil: seansları motor üretiyor, takvim değil.
@@ -74,8 +65,8 @@ Ayrıntı git geçmişinde (`git log --oneline`) ve ADR'lerde; `docs/DURUM.md` y
 |---|---|
 | Faz 5A sonu ✅ | **CI ilk kez tümüyle yeşil** (2026-07-26). Şemanın Windows'ta kurulduğu kanıtlı — testler gerçek migration'ları uyguluyor |
 | **Para fazı sonu ✅** | **Para mantığının testleri yeşil** (2026-07-27). Buradan sonra şema değişikliği pahalı. Plandaki tek zorunlu denetim burada yapıldı |
-| Faz 10 · teslim kapısı | **Projenin tek elle Windows testi.** Ara `.msi` denemeleri kaldırıldı; tek paket orada üretilir ve orada kurulur |
-| Faz 10 sonu | Kurulum dosyası + kullanım kılavuzu + otomatik yedekleme |
+| Faz 10 kodu ✅ | Kurulum/yayın hattı + kullanım kılavuzu + otomatik yedekleme hazır |
+| Faz 10 · teslim kapısı | **Projenin tek elle Windows testi.** Tek paket üretilir, gerçek hedefte kurulur; henüz bekliyor |
 
 ---
 
