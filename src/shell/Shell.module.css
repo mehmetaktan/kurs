@@ -100,6 +100,35 @@
   outline: none;
 }
 
+.screenHelp {
+  flex-shrink: 0;
+  padding: var(--space-2) var(--space-7);
+  font-size: var(--font-size-meta);
+  line-height: var(--line-height-prose);
+  color: var(--color-text-tertiary);
+  background: var(--color-surface-bar);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.screenHelp strong {
+  color: var(--color-text-secondary);
+}
+
+.onboardingCourse {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--color-surface-bar);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-8);
+}
+
+.onboardingCourse span {
+  font-size: var(--font-size-meta);
+  color: var(--color-text-muted);
+}
+
 .pageHeader {
   display: flex;
   flex-shrink: 0;

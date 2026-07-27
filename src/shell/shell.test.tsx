@@ -1,6 +1,6 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AppShell } from './AppShell'
+import { AppShell, screenHelpText } from './AppShell'
 import { SidebarNav } from './SidebarNav'
 import { isNavActive, NAV_ITEMS } from './routes'
 
@@ -9,13 +9,24 @@ import { isNavActive, NAV_ITEMS } from './routes'
  * jsdom'da Tauri IPC'si yok — taklit olmadan her test konsola hata basardı ve rozetin
  * iki dalını (sayı var / yok) ayrı ayrı sınamak mümkün olmazdı.
  */
-const fetchStudentDebts = vi.hoisted(() => vi.fn())
+const api = vi.hoisted(() => ({
+  fetchStudentDebts: vi.fn(),
+  fetchAppStatus: vi.fn(),
+  fetchSubjects: vi.fn(),
+  saveSubject: vi.fn(),
+}))
 
-vi.mock('../lib/api', () => ({ fetchStudentDebts }))
+vi.mock('../lib/api', () => api)
 
 beforeEach(() => {
-  fetchStudentDebts.mockReset()
-  fetchStudentDebts.mockResolvedValue([])
+  Object.values(api).forEach((fn) => fn.mockReset())
+  api.fetchStudentDebts.mockResolvedValue([])
+  api.fetchAppStatus.mockResolvedValue({
+    institutionName: 'Aydın Özel Ders',
+    studentCount: 1,
+  })
+  api.fetchSubjects.mockResolvedValue([])
+  api.saveSubject.mockResolvedValue(1)
   window.location.hash = ''
 })
 
@@ -126,7 +137,7 @@ describe('AppShell', () => {
   })
 
   it('borçlu sayısı okunamazsa kabuk çalışmaya devam eder', async () => {
-    fetchStudentDebts.mockRejectedValue({ code: 'unknown', message: 'olmadı' })
+    api.fetchStudentDebts.mockRejectedValue({ code: 'unknown', message: 'olmadı' })
 
     render(
       <AppShell currentPath="/odemeler">
@@ -141,7 +152,7 @@ describe('AppShell', () => {
   })
 
   it('borçlu sayısı gelince rozet çıkar', async () => {
-    fetchStudentDebts.mockResolvedValue([
+    api.fetchStudentDebts.mockResolvedValue([
       { studentId: 1, debtKurus: 120000, oldestDueOn: '2026-07-01' },
       { studentId: 2, debtKurus: 80000, oldestDueOn: '2026-07-10' },
     ])
@@ -155,6 +166,39 @@ describe('AppShell', () => {
 
     expect(screen.getByRole('link', { name: /Ödemeler/ }).textContent).toContain('2')
   })
+
+  it('boş veritabanında kurs, branş ve öğrenci adımlarını sırayla açar', async () => {
+    api.fetchAppStatus.mockResolvedValue({
+      institutionName: 'Aydın Özel Ders',
+      studentCount: 0,
+    })
+
+    render(
+      <AppShell currentPath="/">
+        <p>içerik</p>
+      </AppShell>,
+    )
+
+    expect(await screen.findByText('Kurs Takip’e hoş geldiniz')).toBeTruthy()
+    expect(screen.getByText('Aydın Özel Ders')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Kurs adı doğru, devam et' }))
+
+    fireEvent.change(screen.getByLabelText('Branş adı'), { target: { value: 'Matematik' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Branşı kaydet ve devam et' }))
+    await waitFor(() =>
+      expect(api.saveSubject).toHaveBeenCalledWith({
+        id: null,
+        name: 'Matematik',
+        color: '#5F8F6B',
+        defaultMin: null,
+        sortOrder: 0,
+      }),
+    )
+
+    expect(await screen.findByText('İlk öğrenciyi ekleyin')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Yeni öğrenci formunu aç' }))
+    expect(window.location.hash).toBe('#/ogrenciler?yeni=1')
+  })
 })
 
 describe('NAV_ITEMS', () => {
@@ -162,5 +206,12 @@ describe('NAV_ITEMS', () => {
     const withBadge = NAV_ITEMS.filter((item) => item.badge !== undefined)
     expect(withBadge).toHaveLength(1)
     expect(withBadge[0]?.path).toBe('/odemeler')
+  })
+
+  it('yedi ana ekranın her biri kısa yardım metni taşır', () => {
+    const helps = NAV_ITEMS.map((item) => screenHelpText(item.path))
+    expect(helps).toHaveLength(7)
+    expect(new Set(helps).size).toBe(7)
+    helps.forEach((help) => expect(help.length).toBeGreaterThan(20))
   })
 })

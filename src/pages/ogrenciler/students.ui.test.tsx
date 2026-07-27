@@ -10,7 +10,10 @@ const api = vi.hoisted(() => ({
   restoreStudent: vi.fn(),
 }))
 vi.mock('../../lib/api', async (original) => ({ ...(await original()), ...api }))
-vi.mock('./StudentForm', () => ({ StudentForm: () => null }))
+vi.mock('./StudentForm', () => ({
+  StudentForm: ({ open }: { open: boolean }) =>
+    open ? <div data-testid="student-form-open" /> : null,
+}))
 vi.mock('../odemeler/PaymentModal', () => ({
   PaymentModal: ({ open, initialStudentId }: { open: boolean; initialStudentId: number | null }) =>
     open ? <div data-testid="student-payment">{initialStudentId}</div> : null,
@@ -32,6 +35,7 @@ beforeEach(() => {
   api.fetchStudyGroups.mockResolvedValue([])
   api.fetchSubjects.mockResolvedValue([])
   api.restoreStudent.mockResolvedValue(true)
+  window.location.hash = ''
 })
 
 const draw = () => render(<ToastProvider><StudentsPage /></ToastProvider>)
@@ -48,5 +52,12 @@ describe('öğrenci listesinin para eylemi', () => {
     draw()
     fireEvent.click(await screen.findByRole('button', { name: /Arşivlenmiş/ }))
     expect(await screen.findByRole('button', { name: 'Geri al' })).toBeTruthy()
+  })
+
+  it('karşılama bağlantısı yeni öğrenci formunu doğrudan açar', async () => {
+    window.location.hash = '#/ogrenciler?yeni=1'
+    draw()
+
+    expect(await screen.findByTestId('student-form-open')).toBeTruthy()
   })
 })

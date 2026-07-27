@@ -12,7 +12,7 @@ import {
 } from '../../lib/api'
 import { formatDate, formatLira, formatPhone } from '../../lib/format'
 import { paginate } from '../../lib/paginate'
-import { navigate } from '../../lib/router'
+import { navigate, replace, useRoute } from '../../lib/router'
 import { sortTrBy } from '../../lib/sortTr'
 import { PageContent } from '../../shell/AppShell'
 import { PageHeader, StatusBar } from '../../shell/PageHeader'
@@ -57,6 +57,7 @@ const SEARCH_DEBOUNCE_MS = 150
  * sayfalamak da yanlış sayfa üretir, o yüzden ikisi aynı yerde).
  */
 export function StudentsPage() {
+  const route = useRoute()
   const [rows, setRows] = useState<StudentRow[] | null>(null)
   const [error, setError] = useState<AppError | null>(null)
   const [subjects, setSubjects] = useState<Subject[]>([])
@@ -76,6 +77,13 @@ export function StudentsPage() {
 
   const searchRef = useRef<HTMLInputElement>(null)
   const toast = useToast()
+
+  useEffect(() => {
+    if (new URLSearchParams(route.query).get('yeni') !== '1') return
+    setEditing(null)
+    setFormOpen(true)
+    replace('/ogrenciler')
+  }, [route.query])
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), SEARCH_DEBOUNCE_MS)

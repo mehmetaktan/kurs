@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { tr } from '../i18n/tr'
 import { fetchStudentDebts } from '../lib/api'
 import { GlobalSearch } from './GlobalSearch'
+import { Onboarding } from './Onboarding'
 import { SidebarNav } from './SidebarNav'
 import styles from './Shell.module.css'
 
@@ -72,10 +73,31 @@ export function AppShell({ currentPath, children }: AppShellProps) {
 
       <main className={styles.main} id="icerik" ref={mainRef} tabIndex={-1}>
         {children}
+        <ScreenHelp currentPath={currentPath} />
       </main>
 
       <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
+      <Onboarding currentPath={currentPath} />
     </div>
+  )
+}
+
+export function screenHelpText(path: string): string {
+  if (path === '/') return tr.help.screens.today
+  if (path.startsWith('/takvim')) return tr.help.screens.calendar
+  if (path.startsWith('/ogrenciler')) return tr.help.screens.students
+  if (path.startsWith('/gruplar')) return tr.help.screens.groups
+  if (path.startsWith('/odemeler')) return tr.help.screens.payments
+  if (path.startsWith('/tanimlar')) return tr.help.screens.definitions
+  if (path.startsWith('/raporlar')) return tr.help.screens.reports
+  return tr.help.screens.fallback
+}
+
+function ScreenHelp({ currentPath }: { currentPath: string }) {
+  return (
+    <aside className={styles.screenHelp} aria-label={tr.help.label}>
+      <strong>{tr.help.prefix}</strong> {screenHelpText(currentPath)}
+    </aside>
   )
 }
 

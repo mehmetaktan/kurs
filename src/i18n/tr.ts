@@ -119,6 +119,46 @@ export const tr = {
     },
   },
 
+  help: {
+    label: 'Ekran yardımı',
+    prefix: 'Bu ekran:',
+    screens: {
+      today: 'Günün derslerini, bekleyen işleri ve önemli özetleri bir arada gösterir.',
+      calendar: 'Ders programını gün ve hafta içinde görmenizi ve düzenlemenizi sağlar.',
+      students: 'Öğrenci, veli, bakiye ve ders hakkı kayıtlarını yönetir.',
+      groups: 'Grup üyelerini, kapasiteyi ve haftalık ders düzenini yönetir.',
+      payments: 'Borçları izler, tahsilat alır ve öğrenci cari ekstresini açar.',
+      definitions: 'Branş, tarife, öğretmen, tatil, çalışma düzeni ve yedeklemeyi ayarlar.',
+      reports: 'Tahsilat, işlenen ders, devam ve devamsızlık sonuçlarını karşılaştırır.',
+      fallback: 'Seçtiğiniz bölümdeki kayıtları görüntüler ve yönetir.',
+    },
+  },
+
+  onboarding: {
+    later: 'Şimdilik kapat',
+    course: {
+      title: 'Kurs Takip’e hoş geldiniz',
+      description:
+        'Program bu kurs için hazırlanmıştır. Önce kurs adını kontrol edin, sonra ilk branş ve öğrenci kaydını birlikte oluşturalım.',
+      institution: 'Kurs adı',
+      continue: 'Kurs adı doğru, devam et',
+    },
+    subject: {
+      title: 'İlk branşı ekleyin',
+      description:
+        'Öğrencileri ve dersleri bağlamak için önce bir branş gerekir. Ders süresi ve rengi daha sonra Tanımlar ekranından değiştirilebilir.',
+      label: 'Branş adı',
+      placeholder: 'Örnek: Matematik',
+      save: 'Branşı kaydet ve devam et',
+    },
+    student: {
+      title: 'İlk öğrenciyi ekleyin',
+      description:
+        'Branş hazır. Şimdi öğrenci ve veli bilgilerini kaydedin; ders ve ödeme işlemlerine bundan sonra başlayabilirsiniz.',
+      open: 'Yeni öğrenci formunu aç',
+    },
+  },
+
   // Faz 4 — Öğrenci ve veli modülü (EKRANLAR.md §3, §4, E1, E2).
   students: {
     searchPlaceholder: 'Öğrenci adı, veli adı veya telefon ara',
