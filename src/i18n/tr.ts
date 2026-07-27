@@ -52,6 +52,9 @@ export const tr = {
     openClock: 'Saat listesini aç',
     archive: 'Arşivle',
     saving: 'Kaydediliyor…',
+    copyDetails: 'Ayrıntıları kopyala',
+    detailsCopied: 'Ayrıntılar kopyalandı',
+    detailsCopyFailed: 'Ayrıntılar kopyalanamadı',
   },
 
   states: {

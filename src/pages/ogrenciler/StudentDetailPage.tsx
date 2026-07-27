@@ -118,7 +118,7 @@ export function StudentDetailPage({ studentId }: { studentId: number }) {
     return (
       <PageContent>
         <BackRow />
-        <ErrorState message={error.message} onRetry={() => void load()} />
+        <ErrorState message={error.message} details={error.details} onRetry={() => void load()} />
       </PageContent>
     )
   }
@@ -146,7 +146,14 @@ export function StudentDetailPage({ studentId }: { studentId: number }) {
         <BackRow />
 
         {/* Yükleme sonrası çıkan hata satırı: veri ekranda kalır, hata üstte durur. */}
-        {error && <ErrorState inline message={error.message} onRetry={() => void load()} />}
+        {error && (
+          <ErrorState
+            inline
+            message={error.message}
+            details={error.details}
+            onRetry={() => void load()}
+          />
+        )}
 
         <div className={styles.identity}>
           <Avatar name={student.fullName} size={52} />

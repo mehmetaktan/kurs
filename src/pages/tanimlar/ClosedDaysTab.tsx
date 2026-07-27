@@ -235,7 +235,9 @@ export function ClosedDaysTab() {
         </div>
 
         {days === null && !error && <LoadingState />}
-        {error && <ErrorState message={error.message} onRetry={() => void load()} />}
+        {error && (
+          <ErrorState message={error.message} details={error.details} onRetry={() => void load()} />
+        )}
 
         {fieldError && (
           <p className={styles.formError} role="alert">

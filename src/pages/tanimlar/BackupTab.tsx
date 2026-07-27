@@ -176,7 +176,7 @@ export function BackupTab() {
 
   if (status === null && !error) return <LoadingState />
   if (status === null && error) {
-    return <ErrorState message={error.message} onRetry={() => void load()} />
+    return <ErrorState message={error.message} details={error.details} onRetry={() => void load()} />
   }
   if (status === null) return null
 
@@ -200,7 +200,7 @@ export function BackupTab() {
 
       {error && (
         <div className={styles.backupError}>
-          <ErrorState inline message={error.message} />
+          <ErrorState inline message={error.message} details={error.details} />
         </div>
       )}
 

@@ -199,7 +199,13 @@ export function StudentForm({ open, studentId, onClose, onSaved }: StudentFormPr
         }
       >
         {loading && <LoadingState />}
-        {loadError && <ErrorState message={loadError.message} onRetry={() => void load()} />}
+        {loadError && (
+          <ErrorState
+            message={loadError.message}
+            details={loadError.details}
+            onRetry={() => void load()}
+          />
+        )}
 
         {!loading && !loadError && (
           <>

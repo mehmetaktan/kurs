@@ -68,7 +68,9 @@ export function GeneralTab() {
   }
 
   if (values === null && !error) return <LoadingState />
-  if (error) return <ErrorState message={error.message} onRetry={() => void load()} />
+  if (error) {
+    return <ErrorState message={error.message} details={error.details} onRetry={() => void load()} />
+  }
   if (values === null) return null
 
   const t = tr.definitions.general

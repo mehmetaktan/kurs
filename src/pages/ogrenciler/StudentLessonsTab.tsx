@@ -77,7 +77,7 @@ export function StudentLessonsTab({ studentId }: { studentId: number }) {
   }, [load])
 
   if (error) {
-    return <ErrorState message={error.message} onRetry={() => void load()} />
+    return <ErrorState message={error.message} details={error.details} onRetry={() => void load()} />
   }
   if (!overview) {
     return <LoadingState />

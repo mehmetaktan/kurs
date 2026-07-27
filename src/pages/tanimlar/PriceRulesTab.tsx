@@ -201,7 +201,9 @@ export function PriceRulesTab() {
       </div>
 
       {rules === null && !error && <LoadingState />}
-      {error && <ErrorState message={error.message} onRetry={() => void load()} />}
+      {error && (
+        <ErrorState message={error.message} details={error.details} onRetry={() => void load()} />
+      )}
       {rules && (
         <Table
           columns={columns}

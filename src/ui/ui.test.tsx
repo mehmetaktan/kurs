@@ -7,6 +7,7 @@ import { DatePicker, TimePicker } from './Picker'
 import { Drawer } from './Drawer'
 import { Modal } from './Modal'
 import { StatCard, Tabs } from './Display'
+import { ErrorState } from './States'
 import { Table } from './Table'
 import { TOAST_MS, ToastProvider, useToast } from './Toast'
 import type { Column } from './Table'
@@ -48,6 +49,25 @@ describe('Button', () => {
     )
     fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }))
     expect(onClick).not.toHaveBeenCalled()
+  })
+})
+
+describe('ErrorState', () => {
+  it('beklenmeyen hata ayrıntısını göstermeden panoya kopyalar', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    })
+
+    render(<ErrorState message="Türkçe kullanıcı mesajı" details="sqlite: teknik ayrıntı" />)
+
+    expect(screen.queryByText('sqlite: teknik ayrıntı')).toBeNull()
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Ayrıntıları kopyala' }))
+    })
+    expect(writeText).toHaveBeenCalledWith('sqlite: teknik ayrıntı')
+    expect(screen.getByRole('button', { name: 'Ayrıntılar kopyalandı' })).toBeTruthy()
   })
 })
 

@@ -311,6 +311,7 @@ export function ReportsPage() {
           {overviewError && (
             <ErrorState
               message={overviewError.message}
+              details={overviewError.details}
               onRetry={() => today && void loadOverview(`${today} 00:00`)}
             />
           )}
@@ -488,6 +489,7 @@ export function ReportsPage() {
           {error && (
             <ErrorState
               message={error.message}
+              details={error.details}
               onRetry={() => void (initialized ? load() : initialize())}
             />
           )}

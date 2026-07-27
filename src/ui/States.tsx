@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { tr } from '../i18n/tr'
 import { Button } from './Button'
 import { marks } from './marks'
@@ -70,6 +70,8 @@ export interface ErrorStateProps {
   onRetry?: () => void
   title?: string
   inline?: boolean
+  /** Beklenmeyen hatanın teknik ayrıntısı; ekrana basılmaz, yalnız panoya kopyalanır. */
+  details?: string
 }
 
 export function ErrorState({
@@ -77,16 +79,42 @@ export function ErrorState({
   onRetry,
   title = tr.states.errorTitle,
   inline = false,
+  details,
 }: ErrorStateProps) {
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
+
+  const copyDetails = async () => {
+    if (!details) return
+    try {
+      await navigator.clipboard.writeText(details)
+      setCopyState('copied')
+    } catch {
+      setCopyState('failed')
+    }
+  }
+
+  const detailAction = details ? (
+    <Button size="small" onClick={() => void copyDetails()}>
+      {copyState === 'copied'
+        ? tr.actions.detailsCopied
+        : copyState === 'failed'
+          ? tr.actions.detailsCopyFailed
+          : tr.actions.copyDetails}
+    </Button>
+  ) : null
+
   if (inline) {
     return (
       <div className={[styles.stateInline, styles.stateInlineError].join(' ')} role="alert">
         {message}
-        {onRetry && (
+        {(onRetry ?? detailAction) && (
           <div className={styles.stateActions}>
-            <Button size="small" onClick={onRetry}>
-              {tr.actions.retry}
-            </Button>
+            {onRetry && (
+              <Button size="small" onClick={onRetry}>
+                {tr.actions.retry}
+              </Button>
+            )}
+            {detailAction}
           </div>
         )}
       </div>
@@ -100,11 +128,14 @@ export function ErrorState({
       </span>
       <div className={styles.stateTitle}>{title}</div>
       <p className={styles.stateBody}>{message}</p>
-      {onRetry && (
+      {(onRetry ?? detailAction) && (
         <div className={styles.stateActions}>
-          <Button variant="primary" onClick={onRetry}>
-            {tr.actions.retry}
-          </Button>
+          {onRetry && (
+            <Button variant="primary" onClick={onRetry}>
+              {tr.actions.retry}
+            </Button>
+          )}
+          {detailAction}
         </div>
       )}
     </div>

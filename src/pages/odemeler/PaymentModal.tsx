@@ -179,7 +179,7 @@ export function PaymentModal({ open, initialStudentId = null, onClose, onSaved }
           <div className={styles.paymentSuccess}>
             <strong>{tr.payments.modal.savedTitle}</strong>
             <p>{tr.payments.modal.savedBody}</p>
-            {error && <ErrorState inline message={error.message} />}
+            {error && <ErrorState inline message={error.message} details={error.details} />}
             <div className={styles.modalActions}>
               <Button onClick={onClose}>{tr.payments.modal.close}</Button>
               <Button variant="primary" disabled={openingReceipt} onClick={() => void openReceipt()}>
@@ -189,7 +189,7 @@ export function PaymentModal({ open, initialStudentId = null, onClose, onSaved }
           </div>
         ) : (
         <div className={styles.paymentForm}>
-          {error && <ErrorState inline message={error.message} />}
+          {error && <ErrorState inline message={error.message} details={error.details} />}
           <SearchSelect
             label={tr.payments.modal.student}
             placeholder={tr.payments.modal.studentPlaceholder}

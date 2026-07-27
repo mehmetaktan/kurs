@@ -155,7 +155,7 @@ export function PackageSaleModal({
   return (
     <Modal open={open} title={tr.students.packages.title} onClose={onClose} dismissLabel={false}>
       {rules === null && !error && <LoadingState inline />}
-      {error && <ErrorState inline message={error.message} />}
+      {error && <ErrorState inline message={error.message} details={error.details} />}
       {rules && draft && (
         <div className={styles.packageForm}>
           <div className={styles.packageCounters}>

@@ -8,12 +8,15 @@
 //!
 //! Mesaj metinleri PRD §8 tablosuyla birebir.
 
+use rusqlite::ffi::ErrorCode;
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct AppError {
     pub code: String,
     pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub details: Option<String>,
 }
 
 pub type AppResult<T> = Result<T, AppError>;
@@ -23,18 +26,22 @@ impl AppError {
         Self {
             code: code.into(),
             message: message.into(),
+            details: None,
         }
     }
 
     /// Sebebi bilinmeyen / beklenmeyen hata. Ham metin yalnızca log'a gider.
     pub fn internal(code: impl Into<String>, detail: impl std::fmt::Display) -> Self {
         let code = code.into();
-        eprintln!("[kurs] iç hata ({code}): {detail}");
-        Self::new(
+        let details = format!("{code}: {detail}");
+        eprintln!("[kurs] iç hata ({details})");
+        let mut error = Self::new(
             code,
             "Beklenmeyen bir sorun oluştu. Programı kapatıp yeniden açın; \
              sorun sürerse en son yedeği geri yükleyin.",
-        )
+        );
+        error.details = Some(details);
+        error
     }
 }
 
@@ -198,17 +205,45 @@ impl From<rusqlite::Error> for AppError {
                 "Girilen bilgi kurallara uymuyor. Alanları kontrol edip tekrar deneyin.",
             );
         }
-        if text.contains("database is locked") || text.contains("SQLITE_BUSY") {
-            return AppError::new(
-                "db_locked",
-                "Kayıt şu anda tamamlanamadı. Birkaç saniye sonra tekrar deneyin.",
-            );
-        }
         if matches!(err, rusqlite::Error::QueryReturnedNoRows) {
             return AppError::new(
                 "not_found",
                 "Kayıt bulunamadı. Silinmiş ya da arşivlenmiş olabilir; listeyi yenileyin.",
             );
+        }
+
+        match err.sqlite_error_code() {
+            Some(ErrorCode::DatabaseBusy | ErrorCode::DatabaseLocked) => {
+                return AppError::new(
+                    "db_locked",
+                    "Program başka bir pencerede açık olabilir. Diğer pencereyi kapatıp tekrar deneyin.",
+                );
+            }
+            Some(ErrorCode::DatabaseCorrupt | ErrorCode::NotADatabase) => {
+                return AppError::new(
+                    "db_corrupt",
+                    "Veritabanı açılamadı. Son yedekten geri yüklemek ister misiniz?",
+                );
+            }
+            Some(ErrorCode::DiskFull) => {
+                return AppError::new(
+                    "disk_full",
+                    "Diskte boş alan kalmadı. Gereksiz dosyaları silip tekrar deneyin.",
+                );
+            }
+            Some(ErrorCode::ReadOnly | ErrorCode::PermissionDenied) => {
+                return AppError::new(
+                    "write_denied",
+                    "Dosyaya yazılamadı. Klasör iznini kontrol edip tekrar deneyin.",
+                );
+            }
+            Some(ErrorCode::CannotOpen) => {
+                return AppError::new(
+                    "db_open",
+                    "Veritabanı dosyası açılamadı. Klasörün erişilebilir olduğunu kontrol edip programı yeniden açın.",
+                );
+            }
+            _ => {}
         }
 
         AppError::internal("sqlite", err)
@@ -217,12 +252,141 @@ impl From<rusqlite::Error> for AppError {
 
 impl From<std::io::Error> for AppError {
     fn from(err: std::io::Error) -> Self {
-        AppError::internal("io", err)
+        match err.kind() {
+            std::io::ErrorKind::PermissionDenied => AppError::new(
+                "write_denied",
+                "Dosyaya yazılamadı. Klasör iznini kontrol edip tekrar deneyin.",
+            ),
+            std::io::ErrorKind::StorageFull => AppError::new(
+                "disk_full",
+                "Diskte boş alan kalmadı. Gereksiz dosyaları silip tekrar deneyin.",
+            ),
+            _ => AppError::internal("io", err),
+        }
     }
 }
 
 impl From<tauri::Error> for AppError {
     fn from(err: tauri::Error) -> Self {
         AppError::internal("tauri", err)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use super::*;
+    use rusqlite::{Connection, OpenFlags};
+
+    struct TestDirectory(std::path::PathBuf);
+
+    impl TestDirectory {
+        fn new(label: &str) -> Self {
+            let unique = format!(
+                "kurs-error-{label}-{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .expect("sistem saati")
+                    .as_nanos()
+            );
+            let path = std::env::temp_dir().join(unique);
+            std::fs::create_dir_all(&path).expect("test klasörü");
+            Self(path)
+        }
+    }
+
+    impl Drop for TestDirectory {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn gercek_sqlite_kilidi_eylem_oneren_mesaja_donusur() {
+        let dir = TestDirectory::new("locked");
+        let path = dir.0.join("locked.db");
+        let first = Connection::open(&path).unwrap();
+        first
+            .execute_batch("CREATE TABLE item (id INTEGER); BEGIN EXCLUSIVE;")
+            .unwrap();
+        let second = Connection::open(&path).unwrap();
+        second.busy_timeout(Duration::ZERO).unwrap();
+
+        let error = second
+            .execute("INSERT INTO item VALUES (1)", [])
+            .unwrap_err();
+        let mapped = AppError::from(error);
+
+        assert_eq!(mapped.code, "db_locked");
+        assert_eq!(
+            mapped.message,
+            "Program başka bir pencerede açık olabilir. Diğer pencereyi kapatıp tekrar deneyin."
+        );
+    }
+
+    #[test]
+    fn gercek_bozuk_dosya_yedekten_geri_yuklemeyi_onerir() {
+        let dir = TestDirectory::new("corrupt");
+        let path = dir.0.join("corrupt.db");
+        std::fs::write(&path, b"bu bir sqlite veritabani degil").unwrap();
+        let conn = Connection::open(&path).unwrap();
+
+        let error = conn
+            .query_row("PRAGMA schema_version", [], |_| Ok(()))
+            .unwrap_err();
+        let mapped = AppError::from(error);
+
+        assert_eq!(mapped.code, "db_corrupt");
+        assert_eq!(
+            mapped.message,
+            "Veritabanı açılamadı. Son yedekten geri yüklemek ister misiniz?"
+        );
+    }
+
+    #[test]
+    fn gercek_salt_okunur_baglanti_yazma_izni_mesajina_donusur() {
+        let dir = TestDirectory::new("readonly");
+        let path = dir.0.join("readonly.db");
+        Connection::open(&path)
+            .unwrap()
+            .execute("CREATE TABLE item (id INTEGER)", [])
+            .unwrap();
+        let conn = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+
+        let error = conn.execute("INSERT INTO item VALUES (1)", []).unwrap_err();
+        let mapped = AppError::from(error);
+
+        assert_eq!(mapped.code, "write_denied");
+    }
+
+    #[test]
+    fn gercek_sqlite_siniri_disk_dolu_mesajina_donusur() {
+        let dir = TestDirectory::new("full");
+        let path = dir.0.join("full.db");
+        let conn = Connection::open(&path).unwrap();
+        conn.execute_batch(
+            "PRAGMA page_size = 512;
+             PRAGMA max_page_count = 3;
+             CREATE TABLE item (payload BLOB);",
+        )
+        .unwrap();
+
+        let payload = vec![0_u8; 8_192];
+        let error = conn
+            .execute("INSERT INTO item VALUES (?1)", [&payload])
+            .unwrap_err();
+        let mapped = AppError::from(error);
+
+        assert_eq!(mapped.code, "disk_full");
+    }
+
+    #[test]
+    fn beklenmeyen_hata_ayrintiyi_mesajdan_ayri_tasir() {
+        let error = AppError::internal("ornek", "ham teknik ayrıntı");
+
+        assert!(!error.message.contains("ham teknik"));
+        assert_eq!(error.details.as_deref(), Some("ornek: ham teknik ayrıntı"));
     }
 }

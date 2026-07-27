@@ -113,6 +113,27 @@ fn yazilamayan_yedek_turkce_eylemle_hata_verir_ve_basarisizligi_loglar() {
 }
 
 #[test]
+fn silinmis_yedek_klasoru_yeniden_olusturulur() {
+    let root = TestDirectory::new("backup-deleted-directory");
+    let db_path = root.path().join("canli").join("kurs.db");
+    let backup_dir = root
+        .path()
+        .join("Belgeler")
+        .join("Kurs Takip")
+        .join("Yedekler");
+    let live = db::open(&db_path).unwrap();
+    db::migrate::run(&live).unwrap();
+    common::student(&live, "Ayşe Işık");
+    std::fs::create_dir_all(&backup_dir).unwrap();
+    std::fs::remove_dir_all(&backup_dir).unwrap();
+
+    let backup = backup::run_manual(&db_path, &backup_dir, "2026-07-27 09:15").unwrap();
+
+    assert!(backup.is_file());
+    assert!(backup.starts_with(&backup_dir));
+}
+
+#[test]
 fn geri_yukleme_eski_wal_verisini_temizler_ve_once_canliyi_vacuum_ile_yedekler() {
     let root = TestDirectory::new("restore");
     let db_path = root.path().join("canli").join("kurs.db");

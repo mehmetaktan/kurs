@@ -11,6 +11,8 @@ import { tr } from '../i18n/tr'
 export interface AppError {
   code: string
   message: string
+  /** Yalnız panoya kopyalanır; kullanıcı arayüzünde ham olarak çizilmez. */
+  details?: string
 }
 
 function isAppError(value: unknown): value is AppError {
@@ -32,7 +34,11 @@ export async function call<T>(command: string, args?: Record<string, unknown>): 
   } catch (raw) {
     if (isAppError(raw)) throw raw
     console.error('[kurs] beklenmeyen hata biçimi:', raw)
-    throw { code: 'unknown', message: tr.errors.unknown } satisfies AppError
+    throw {
+      code: 'unknown',
+      message: tr.errors.unknown,
+      details: String(raw),
+    } satisfies AppError
   }
 }
 

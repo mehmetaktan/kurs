@@ -235,7 +235,13 @@ export function TodayPage() {
             />
 
             {rows === null && !error && <LoadingState />}
-            {error && <ErrorState message={error.message} onRetry={() => void load()} />}
+            {error && (
+              <ErrorState
+                message={error.message}
+                details={error.details}
+                onRetry={() => void load()}
+              />
+            )}
 
             {rows !== null && !error && rows.length === 0 && (
               <TodayEmptyState
@@ -443,9 +449,13 @@ function TodaySummary({
           }
         />
       </div>
-      {error && <ErrorState inline message={error.message} />}
-      {makeupError && <ErrorState inline message={makeupError.message} />}
-      {packageError && <ErrorState inline message={packageError.message} />}
+      {error && <ErrorState inline message={error.message} details={error.details} />}
+      {makeupError && (
+        <ErrorState inline message={makeupError.message} details={makeupError.details} />
+      )}
+      {packageError && (
+        <ErrorState inline message={packageError.message} details={packageError.details} />
+      )}
     </section>
   )
 }
@@ -490,7 +500,7 @@ function MakeupDebtSection({
         meta={rows === null ? null : `${total} ${tr.makeup.list.countSuffix}`}
       />
       {rows === null && !error && <LoadingState inline />}
-      {error && <ErrorState inline message={error.message} />}
+      {error && <ErrorState inline message={error.message} details={error.details} />}
       {rows !== null && !error && rows.length === 0 && (
         <p className={styles.sideBody}>{tr.makeup.list.empty}</p>
       )}
@@ -524,7 +534,7 @@ function PackageSection({
         meta={rows === null ? null : `${rows.length} ${tr.today.packages.countSuffix}`}
       />
       {rows === null && !error && <LoadingState inline />}
-      {error && <ErrorState inline message={error.message} />}
+      {error && <ErrorState inline message={error.message} details={error.details} />}
       {rows !== null && !error && rows.length === 0 && (
         <p className={styles.sideBody}>{tr.today.packages.empty}</p>
       )}
@@ -711,7 +721,7 @@ function DebtorSection({ rows, error }: { rows: DebtorRow[] | null; error: AppEr
         meta={rows === null ? null : `${rows.length} ${tr.today.debtors.countSuffix}${tr.units.separator}${formatLira(total)}`}
       />
       {rows === null && !error && <LoadingState inline />}
-      {error && <ErrorState inline message={error.message} />}
+      {error && <ErrorState inline message={error.message} details={error.details} />}
       {rows !== null && !error && rows.length === 0 && <p className={styles.sideBody}>{tr.today.debtors.empty}</p>}
       {rows !== null && !error && rows.length > 0 && (
         <div className={styles.debtorList}>
@@ -755,7 +765,7 @@ function BackupSection({
         }
       />
       {status === null && !error && <LoadingState inline />}
-      {error && <ErrorState inline message={error.message} />}
+      {error && <ErrorState inline message={error.message} details={error.details} />}
       {status !== null && !error && (
         <>
           <p className={delayed ? styles.backupDelayed : styles.sideBody}>

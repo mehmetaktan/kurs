@@ -132,7 +132,9 @@ export function PaymentsPage() {
           />
         </div>
         {rows === null && !error && <LoadingState />}
-        {error && <ErrorState message={error.message} onRetry={() => void load()} />}
+        {error && (
+          <ErrorState message={error.message} details={error.details} onRetry={() => void load()} />
+        )}
         {rows !== null && !error && <Table label={tr.payments.table.label} columns={columns} rows={paged.rows} rowKey={(row) => row.studentId} stickyHeader emptyState={empty} />}
         {rows !== null && !error && sorted.length > 0 && (
           <>

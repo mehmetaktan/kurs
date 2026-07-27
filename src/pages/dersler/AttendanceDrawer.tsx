@@ -221,7 +221,11 @@ export function AttendanceDrawer({ row, now, onClose, onSaved }: Props) {
     >
       {detail === null && error === null && <LoadingState />}
       {error !== null && detail === null && (
-        <ErrorState message={error.message} onRetry={() => row !== null && void load(row)} />
+        <ErrorState
+          message={error.message}
+          details={error.details}
+          onRetry={() => row !== null && void load(row)}
+        />
       )}
       {detail !== null && (
         <div className={styles.content}>

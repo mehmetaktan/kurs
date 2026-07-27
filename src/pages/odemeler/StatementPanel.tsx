@@ -90,7 +90,9 @@ export function StatementPanel({ studentId }: { studentId: number }) {
         </div>
       </div>
       {rows === null && !error && <LoadingState />}
-      {error && <ErrorState message={error.message} onRetry={() => void load()} />}
+      {error && (
+        <ErrorState message={error.message} details={error.details} onRetry={() => void load()} />
+      )}
       {rows !== null && !error && <Table label={tr.payments.statement.tableLabel} columns={columns} rows={paged.rows} rowKey={(row) => row.entryId} emptyState={<EmptyState kind="no-filter-results" title={tr.payments.statement.empty} body={tr.payments.statement.emptyBody} />} />}
       {rows !== null && !error && <Pagination page={paged.page} pageCount={paged.pageCount} onChange={setPage} />}
       <PaymentModal open={paymentOpen} initialStudentId={studentId} onClose={() => setPaymentOpen(false)} onSaved={() => void load()} />
