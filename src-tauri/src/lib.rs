@@ -215,6 +215,8 @@ pub fn run() {
             // Faz 6 §1–§2 — yoklama paneli ve atomik finans/hak kaydetme yolu
             commands::attendance_detail,
             commands::save_attendance,
+            commands::save_makeup_session,
+            commands::makeup_debts,
             commands::has_schedule,
             commands::is_closed_day,
             commands::save_session,

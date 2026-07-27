@@ -349,6 +349,8 @@ pub struct StudentDetail {
     pub has_ledger: bool,
     /// Sıradaki planlı dersin başlangıcı (`'YYYY-MM-DD HH:MM'`). Yoksa `None`.
     pub next_session_at: Option<String>,
+    /// Tamamlanmış canlı bir telafi seansıyla henüz kapanmamış mazeretli yoklama sayısı.
+    pub pending_makeup_count: i64,
 }
 
 pub fn student_detail(
@@ -387,6 +389,7 @@ pub fn student_detail(
         guardians: guardian_links(conn, student_id)?,
         notes: repo::people::notes_of(conn, student_id)?,
         next_session_at: next_session_at(conn, student_id, &today)?,
+        pending_makeup_count: crate::repo::attendance::pending_makeup_count(conn, student_id)?,
         has_ledger: crate::repo::views::has_ledger_entries(conn, student_id)?,
         days_overdue,
         row,

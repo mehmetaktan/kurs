@@ -16,7 +16,9 @@ use crate::model::{
     ClosedDay, Guardian, InstallmentOpen, PriceRule, Setting, Student, StudentBalance, StudentDebt,
     StudyGroup, Subject, Teacher,
 };
-use crate::repo::attendance::{AttendanceDetail, SaveAttendanceInput, SaveAttendanceReport};
+use crate::repo::attendance::{
+    AttendanceDetail, MakeupDebtRow, SaveAttendanceInput, SaveAttendanceReport,
+};
 use crate::repo::finance::{
     PackageCloseMode, PackageCloseReport, PackageOverview, PackageSaleInput,
     PaymentAllocationInput, PaymentInput, PaymentReport, PriceRuleInput,
@@ -25,8 +27,8 @@ use crate::repo::people::TeacherInput;
 use crate::repo::roster::{StudentDetail, StudentInput, StudentQuery, StudentRow};
 use crate::repo::schedule::{
     ApplyTemplateReport, Capacity, ClosedDayInput, Conflict, DaySessionRow, DeleteReport,
-    GroupDetail, GroupInput, GroupQuery, GroupRow, RescheduleReport, RescheduleScope,
-    SaveSessionReport, SessionInput, SessionScope, SubjectInput, TemplatePreview,
+    GroupDetail, GroupInput, GroupQuery, GroupRow, MakeupSessionInput, RescheduleReport,
+    RescheduleScope, SaveSessionReport, SessionInput, SessionScope, SubjectInput, TemplatePreview,
 };
 use crate::{db, repo, AppState};
 
@@ -693,6 +695,19 @@ pub fn save_attendance(
     input: SaveAttendanceInput,
 ) -> AppResult<SaveAttendanceReport> {
     state.with_conn(|conn| repo::attendance::save_attendance(conn, &input))
+}
+
+#[tauri::command]
+pub fn save_makeup_session(
+    state: State<'_, AppState>,
+    input: MakeupSessionInput,
+) -> AppResult<SaveSessionReport> {
+    state.with_conn(|conn| repo::schedule::save_makeup_session(conn, &input))
+}
+
+#[tauri::command]
+pub fn makeup_debts(state: State<'_, AppState>) -> AppResult<Vec<MakeupDebtRow>> {
+    state.with_conn(repo::attendance::makeup_debt_rows)
 }
 
 /// Haftalık program tanımlı mı — Bugün ekranının iki boş durumunu ayırır (R1.7).

@@ -3,6 +3,7 @@ mod common;
 use kurs_takip_lib::model::{Enrollment, Package, Session};
 use kurs_takip_lib::repo;
 use kurs_takip_lib::repo::attendance::{AttendanceMarkInput, SaveAttendanceInput};
+use kurs_takip_lib::repo::schedule::MakeupSessionInput;
 
 fn solo_session(conn: &rusqlite::Connection, student_id: i64, subject_id: i64, day: &str) -> i64 {
     solo_session_with(conn, student_id, subject_id, day, Some(30_000), false)
@@ -751,6 +752,196 @@ fn telafi_seansi_geldi_olsa_da_borc_ve_hak_etkisini_atlar() {
             .unwrap();
         assert_eq!(state, ("done".into(), Some("2026-03-31 18:05".into())));
     }
+}
+
+#[test]
+fn telafi_kisayolu_backendde_yalnizca_excused_durumunu_kabul_eder() {
+    for status in ["present", "unexcused", "cancelled"] {
+        let conn = common::conn();
+        let subject_id = common::subject(&conn, "Telafi Uygunluk");
+        let student_id = common::student(&conn, "Uygunluk Öğrencisi");
+        let session_id = solo_session(&conn, student_id, subject_id, "2026-03-20");
+        save_one(&conn, session_id, student_id, status, "2026-03-31 18:05");
+        let source_attendance = attendance_id(&conn, session_id, student_id);
+
+        let err = repo::schedule::save_makeup_session(
+            &conn,
+            &MakeupSessionInput {
+                attendance_id: source_attendance,
+                teacher_id: Some(1),
+                day: "2026-04-01".into(),
+                start_time: "16:00".into(),
+                duration_min: 60,
+            },
+        )
+        .unwrap_err();
+
+        assert_eq!(err.code, "makeup.status", "{status} telafi doğurmamalı");
+        let linked: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM session WHERE makeup_for_attendance_id = ?1",
+                [source_attendance],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(linked, 0);
+    }
+}
+
+#[test]
+fn telafi_baglantisi_idempotenttir_borc_cift_sayilmaz_ve_islenince_ikinci_etki_yazmaz() {
+    let conn = common::conn();
+    let subject_id = common::subject(&conn, "Telafi Zinciri");
+    let student_id = common::student(&conn, "Telafi Bekleyen");
+    let package_id = common::package(&conn, student_id);
+    let original_session = solo_session(&conn, student_id, subject_id, "2026-03-20");
+    save_one(
+        &conn,
+        original_session,
+        student_id,
+        "excused",
+        "2026-03-31 18:05",
+    );
+    let source_attendance = attendance_id(&conn, original_session, student_id);
+
+    let input = MakeupSessionInput {
+        attendance_id: source_attendance,
+        teacher_id: Some(1),
+        day: "2026-04-01".into(),
+        start_time: "16:00".into(),
+        duration_min: 60,
+    };
+    let first = repo::schedule::save_makeup_session(&conn, &input).unwrap();
+    let second = repo::schedule::save_makeup_session(&conn, &input).unwrap();
+    let makeup_session = first.session_id.unwrap();
+
+    assert_eq!(first.created, 1);
+    assert_eq!(second.created, 0);
+    assert_eq!(second.session_id, Some(makeup_session));
+    let linked: (i64, i64, i64, i64) = conn
+        .query_row(
+            "SELECT COUNT(*), MIN(is_makeup), MIN(makeup_for_attendance_id), MIN(student_id) \
+             FROM session WHERE makeup_for_attendance_id = ?1 AND deleted_at IS NULL",
+            [source_attendance],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        )
+        .unwrap();
+    assert_eq!(linked, (1, 1, source_attendance, student_id));
+
+    // Planlanmış telafi henüz borcu kapatmaz ve kaynak yoklama satırı bir kez sayılır.
+    let debts = repo::attendance::makeup_debt_rows(&conn).unwrap();
+    assert_eq!(debts.len(), 1);
+    assert_eq!(debts[0].student_id, student_id);
+    assert_eq!(debts[0].pending_count, 1);
+    assert_eq!(
+        repo::attendance::pending_makeup_count(&conn, student_id).unwrap(),
+        1
+    );
+    assert_eq!(
+        repo::roster::student_detail(&conn, student_id, Some(common::TODAY.into()))
+            .unwrap()
+            .pending_makeup_count,
+        1
+    );
+
+    // İptal edilmiş telafi borcu kapatmaz ve yeni planlamayı engellemez.
+    repo::schedule::cancel_session(&conn, makeup_session, Some("Saat uyuşmadı")).unwrap();
+    assert_eq!(
+        repo::attendance::pending_makeup_count(&conn, student_id).unwrap(),
+        1
+    );
+    let source_detail =
+        repo::attendance::attendance_detail(&conn, original_session, common::TODAY).unwrap();
+    assert_eq!(source_detail.rows[0].makeup_session_id, None);
+
+    let replacement = repo::schedule::save_makeup_session(
+        &conn,
+        &MakeupSessionInput {
+            day: "2026-04-02".into(),
+            ..input.clone()
+        },
+    )
+    .unwrap();
+    let replacement_session = replacement.session_id.unwrap();
+    assert_eq!(replacement.created, 1);
+    assert_ne!(replacement_session, makeup_session);
+    let linked_counts: (i64, i64) = conn
+        .query_row(
+            "SELECT COUNT(*), SUM(status <> 'cancelled') FROM session \
+             WHERE makeup_for_attendance_id = ?1 AND deleted_at IS NULL",
+            [source_attendance],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(linked_counts, (2, 1));
+    assert_eq!(
+        repo::attendance::pending_makeup_count(&conn, student_id).unwrap(),
+        1
+    );
+
+    save_one(
+        &conn,
+        replacement_session,
+        student_id,
+        "present",
+        "2026-04-02 17:05",
+    );
+    let makeup_attendance = attendance_id(&conn, replacement_session, student_id);
+
+    // §2'nin gerçek save_attendance yolundan işlendi; telafi ikinci hak/borç üretmez.
+    assert_eq!(financial_row_counts(&conn, source_attendance), (0, 0));
+    assert_eq!(financial_row_counts(&conn, makeup_attendance), (0, 0));
+    assert_eq!(common::remaining(&conn, package_id), 8);
+    assert_eq!(balance(&conn, student_id), 0);
+    assert!(repo::attendance::makeup_debt_rows(&conn)
+        .unwrap()
+        .is_empty());
+    assert_eq!(
+        repo::attendance::pending_makeup_count(&conn, student_id).unwrap(),
+        0
+    );
+    assert_eq!(
+        repo::roster::student_detail(&conn, student_id, Some(common::TODAY.into()))
+            .unwrap()
+            .pending_makeup_count,
+        0
+    );
+    common::assert_ledger_invariant(&conn);
+}
+
+#[test]
+fn bekleyen_telafi_listesi_kisiyi_tek_satirda_dogru_sayar() {
+    let conn = common::conn();
+    let subject_id = common::subject(&conn, "Telafi Sayacı");
+    let first = common::student(&conn, "İki Telafi");
+    let second = common::student(&conn, "Bir Telafi");
+
+    for (student_id, days) in [
+        (first, vec!["2026-03-18", "2026-03-20"]),
+        (second, vec!["2026-03-19"]),
+    ] {
+        for day in days {
+            let session_id = solo_session(&conn, student_id, subject_id, day);
+            save_one(&conn, session_id, student_id, "excused", "2026-03-31 18:05");
+        }
+    }
+
+    let rows = repo::attendance::makeup_debt_rows(&conn).unwrap();
+    assert_eq!(rows.len(), 2);
+    assert_eq!(
+        rows.iter()
+            .find(|row| row.student_id == first)
+            .unwrap()
+            .pending_count,
+        2
+    );
+    assert_eq!(
+        rows.iter()
+            .find(|row| row.student_id == second)
+            .unwrap()
+            .pending_count,
+        1
+    );
 }
 
 #[test]

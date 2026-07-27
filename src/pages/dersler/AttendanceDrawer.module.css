@@ -44,6 +44,18 @@
   font-weight: var(--font-weight-semibold);
 }
 
+.makeupPlanned {
+  font-size: var(--font-size-meta);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-success);
+}
+
+.makeupHint {
+  font-size: var(--font-size-meta);
+  line-height: var(--line-height-prose);
+  color: var(--color-warn-text);
+}
+
 .statusControl > div {
   display: flex;
   width: 100%;

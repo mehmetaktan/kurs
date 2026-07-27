@@ -7,6 +7,7 @@ import { AttendanceDrawer } from './AttendanceDrawer'
 const api = vi.hoisted(() => ({
   fetchAttendanceDetail: vi.fn(),
   saveAttendance: vi.fn(),
+  saveMakeupSession: vi.fn(),
 }))
 vi.mock('../../lib/api', async (original) => ({ ...(await original()), ...api }))
 
@@ -112,6 +113,7 @@ const draw = (onSaved = vi.fn(), onClose = vi.fn()) =>
 beforeEach(() => {
   api.fetchAttendanceDetail.mockReset().mockResolvedValue(DETAIL)
   api.saveAttendance.mockReset().mockResolvedValue({ saved: 2 })
+  api.saveMakeupSession.mockReset().mockResolvedValue({ sessionId: 90, seriesId: null, created: 1 })
 })
 
 describe('Yoklama paneli', () => {
@@ -200,6 +202,88 @@ describe('Yoklama paneli', () => {
     expect(
       screen.getByText('1 ders hakkı düşecek, 250,00 ₺ borç yazılacak.'),
     ).toBeTruthy()
+  })
+
+  it('telafi kısayolunu yalnızca kaydedilmiş exact excused satırında gösterir', async () => {
+    api.fetchAttendanceDetail.mockResolvedValue({
+      ...DETAIL,
+      rows: [
+        { ...DETAIL.rows[0]!, attendanceId: 31, status: 'excused' },
+        { ...DETAIL.rows[1]!, attendanceId: 32, status: 'unexcused' },
+      ],
+    })
+    draw()
+
+    const excused = (await screen.findByText('Zeynep Kaya')).closest('section') as HTMLElement
+    const unexcused = screen.getByText('Ali Çelik').closest('section') as HTMLElement
+    expect(within(excused).getByRole('button', { name: 'Telafi planla' })).toBeTruthy()
+    expect(within(unexcused).queryByRole('button', { name: 'Telafi planla' })).toBeNull()
+  })
+
+  it('aktif bağlı telafide kısayolu gizler; iptal edilen bağlantının null projeksiyonunda yeniden gösterir', async () => {
+    api.fetchAttendanceDetail.mockResolvedValue({
+      ...DETAIL,
+      rows: [
+        {
+          ...DETAIL.rows[0]!,
+          attendanceId: 31,
+          status: 'excused',
+          makeupSessionId: 77,
+        },
+      ],
+    })
+    const first = draw()
+    expect(await screen.findByText('Telafi planlandı')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Telafi planla' })).toBeNull()
+    first.unmount()
+
+    api.fetchAttendanceDetail.mockResolvedValue({
+      ...DETAIL,
+      rows: [
+        {
+          ...DETAIL.rows[0]!,
+          attendanceId: 31,
+          status: 'excused',
+          // Backend iptal edilmiş bağlı seansı aktif projeksiyona katmaz.
+          makeupSessionId: null,
+        },
+      ],
+    })
+    draw()
+    expect(await screen.findByRole('button', { name: 'Telafi planla' })).toBeTruthy()
+  })
+
+  it('başka satırdaki kirli durum/not telafi akışını kilitler ve taslağı korur', async () => {
+    api.fetchAttendanceDetail.mockResolvedValue({
+      ...DETAIL,
+      rows: [
+        { ...DETAIL.rows[0]!, attendanceId: 31, status: 'excused' },
+        { ...DETAIL.rows[1]!, attendanceId: 32, status: 'unexcused' },
+      ],
+    })
+    draw()
+    const target = (await screen.findByText('Zeynep Kaya')).closest('section') as HTMLElement
+    const other = screen.getByText('Ali Çelik').closest('section') as HTMLElement
+    fireEvent.click(within(other).getByRole('button', { name: 'Geldi' }))
+    fireEvent.change(within(other).getByLabelText('Kısa not'), {
+      target: { value: 'Korunacak kirli not' },
+    })
+
+    const shortcut = within(target).getByRole('button', { name: 'Telafi planla' }) as HTMLButtonElement
+    expect(shortcut.disabled).toBe(true)
+    expect(
+      within(target).getByText('Önce yoklama değişikliklerini kaydedin, sonra telafiyi planlayın.'),
+    ).toBeTruthy()
+    // Savunmacı handler: disabled özelliği sentetik olarak kaldırılsa da kirli taslak açılmaz.
+    shortcut.disabled = false
+    fireEvent.click(shortcut)
+
+    expect(screen.queryByRole('dialog', { name: 'Telafi dersi planla' })).toBeNull()
+    expect(api.saveMakeupSession).not.toHaveBeenCalled()
+    expect((within(other).getByLabelText('Kısa not') as HTMLTextAreaElement).value).toBe(
+      'Korunacak kirli not',
+    )
+    expect(within(other).getByRole('button', { name: 'Geldi', pressed: true })).toBeTruthy()
   })
 
   it('öğrenci notunu ve dört durumdan seçileni tek save_attendance yoluna gönderir', async () => {

@@ -393,6 +393,8 @@ export interface StudentDetail {
   hasLedger: boolean
   /** `'YYYY-MM-DD HH:MM'` ya da `null`. */
   nextSessionAt: string | null
+  /** Tamamlanmış telafiyle henüz kapanmamış mazeretli yoklama sayısı. */
+  pendingMakeupCount: number
 }
 
 export function fetchStudentDetail(studentId: number): Promise<StudentDetail> {
@@ -893,6 +895,7 @@ export interface AttendancePolicy {
 
 export interface AttendanceStudentRow {
   attendanceId: number | null
+  makeupSessionId?: number | null
   studentId: number
   fullName: string
   status: AttendanceStatus
@@ -917,7 +920,9 @@ export interface AttendanceStatusEffects {
 export interface AttendanceDetail {
   sessionId: number
   title: string
+  subjectId?: number
   subjectName: string
+  teacherId?: number | null
   startsAt: string
   endsAt: string
   kind: string
@@ -952,6 +957,28 @@ export function fetchAttendanceDetail(
 /** Yoklama, seans durumu ve para/ders hakkı etkileri Rust'ta tek transaction'dır. */
 export function saveAttendance(input: SaveAttendanceInput): Promise<SaveAttendanceReport> {
   return call<SaveAttendanceReport>('save_attendance', { input })
+}
+
+export interface MakeupSessionInput {
+  attendanceId: number
+  teacherId: number | null
+  day: string
+  startTime: string
+  durationMin: number
+}
+
+export function saveMakeupSession(input: MakeupSessionInput): Promise<SaveSessionReport> {
+  return call<SaveSessionReport>('save_makeup_session', { input })
+}
+
+export interface MakeupDebtRow {
+  studentId: number
+  fullName: string
+  pendingCount: number
+}
+
+export function fetchMakeupDebts(): Promise<MakeupDebtRow[]> {
+  return call<MakeupDebtRow[]>('makeup_debts')
 }
 
 /**

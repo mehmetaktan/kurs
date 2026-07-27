@@ -19,7 +19,7 @@
 use std::collections::{HashMap, HashSet};
 
 use chrono::{Datelike, Days, NaiveDate, NaiveDateTime, NaiveTime};
-use rusqlite::{params, Connection, Row};
+use rusqlite::{params, Connection, OptionalExtension, Row};
 use serde::{Deserialize, Serialize};
 
 use crate::clock;
@@ -905,6 +905,24 @@ pub struct SessionInput {
     pub repeat: SessionRepeat,
 }
 
+/// Mazeretli bir yoklamadan açılan tek seferlik telafi dersi.
+///
+/// Öğrenci ve branş arayüzden alınmaz: ikisi de kaynak yoklamadan çözülür. Böylece
+/// çağıran başka bir öğrenciyi kaynak yoklamaya bağlayamaz ve normal `SessionInput`
+/// yazma motorunun ikinci bir kopyası oluşmaz.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MakeupSessionInput {
+    pub attendance_id: i64,
+    #[serde(default)]
+    pub teacher_id: Option<i64>,
+    /// `'YYYY-MM-DD'`
+    pub day: String,
+    /// `'HH:MM'`
+    pub start_time: String,
+    pub duration_min: i64,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SaveSessionReport {
@@ -956,7 +974,7 @@ pub fn save_session(
             })
         }
         (None, SessionRepeat::Once) => {
-            let id = insert_single_session(conn, input, &starts_at, &ends_at)?;
+            let id = insert_single_session(conn, input, &starts_at, &ends_at, None)?;
             Ok(SaveSessionReport {
                 session_id: Some(id),
                 series_id: None,
@@ -989,6 +1007,102 @@ pub fn save_session(
                 created: report.created,
             })
         }
+    })
+}
+
+/// Mazeretli yoklamaya bağlı telafiyi normal tek-seferlik seans yazma yolundan açar.
+///
+/// Uygunluğun son sözü buradadır: arayüz düğmeyi gizlese bile yalnızca **canlı ve
+/// `excused`** yoklama telafi doğurabilir. Aynı yoklamaya bağlı canlı ve iptal edilmemiş
+/// bir telafi varsa mevcut seans döner; çift tık ikinci satır yazmaz. İptal edilen telafi
+/// borcu kapatmadığı için yeniden planlamayı da engellemez.
+pub fn save_makeup_session(
+    conn: &Connection,
+    input: &MakeupSessionInput,
+) -> AppResult<SaveSessionReport> {
+    repo::in_transaction(conn, |conn| {
+        let source: Option<(i64, i64, String)> = conn
+            .query_row(
+                "SELECT a.student_id, s.subject_id, a.status \
+                 FROM attendance a \
+                 JOIN session s ON s.id = a.session_id AND s.deleted_at IS NULL \
+                 JOIN student st ON st.id = a.student_id AND st.deleted_at IS NULL \
+                 WHERE a.id = ?1 AND a.deleted_at IS NULL",
+                [input.attendance_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .optional()?;
+        let Some((student_id, subject_id, status)) = source else {
+            return Err(AppError::new(
+                "makeup.attendance",
+                "Telafi hakkı bulunamadı. Yoklama panelini yenileyip yeniden deneyin.",
+            ));
+        };
+        if status != "excused" {
+            return Err(AppError::new(
+                "makeup.status",
+                "Telafi yalnızca Mazeretli yoklama için planlanabilir. Yoklama durumunu kontrol edin.",
+            ));
+        }
+
+        let existing: Option<i64> = conn
+            .query_row(
+                "SELECT id FROM session \
+                 WHERE makeup_for_attendance_id = ?1 AND is_makeup = 1 \
+                   AND deleted_at IS NULL AND status <> 'cancelled' \
+                 ORDER BY id LIMIT 1",
+                [input.attendance_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        if let Some(session_id) = existing {
+            return Ok(SaveSessionReport {
+                session_id: Some(session_id),
+                series_id: None,
+                created: 0,
+            });
+        }
+
+        let day = parse_date(input.day.trim())?;
+        if input.duration_min <= 0 {
+            return Err(AppError::new(
+                "session.durationMin",
+                "Ders süresi sıfırdan büyük olmalı.",
+            ));
+        }
+        if is_closed_day(conn, day)? {
+            return Err(AppError::new(
+                "session.day",
+                "Bu gün tatil olarak işaretli, o güne ders eklenemez. \
+                 Başka bir gün seçin ya da Tanımlar → Tatil günleri'nden tatili kaldırın.",
+            ));
+        }
+        let (starts_at, ends_at) = slot_bounds(day, input.start_time.trim(), input.duration_min)?;
+
+        let session = SessionInput {
+            id: None,
+            subject_id,
+            teacher_id: input.teacher_id,
+            study_group_id: None,
+            student_id: Some(student_id),
+            day: input.day.trim().to_string(),
+            start_time: input.start_time.trim().to_string(),
+            duration_min: input.duration_min,
+            repeat: SessionRepeat::Once,
+        };
+        validate_session(&session)?;
+        let session_id = insert_single_session(
+            conn,
+            &session,
+            &starts_at,
+            &ends_at,
+            Some(input.attendance_id),
+        )?;
+        Ok(SaveSessionReport {
+            session_id: Some(session_id),
+            series_id: None,
+            created: 1,
+        })
     })
 }
 
@@ -1028,6 +1142,7 @@ fn insert_single_session(
     input: &SessionInput,
     starts_at: &str,
     ends_at: &str,
+    makeup_for_attendance_id: Option<i64>,
 ) -> AppResult<i64> {
     // Birebirde ücret snapshot'ı kayıttan kopyalanır (ADR-006); grupta `NULL` kalır —
     // `insert_from_series` ile aynı gerekçe, sıfır yazmak "bedava" demek olurdu (§5).
@@ -1050,8 +1165,8 @@ fn insert_single_session(
             session_date: None, // GENERATED
             kind: None,         // GENERATED
             status: "planned".into(),
-            is_makeup: false,
-            makeup_for_attendance_id: None,
+            is_makeup: makeup_for_attendance_id.is_some(),
+            makeup_for_attendance_id,
             unit_price,
             attendance_taken_at: None,
             cancel_reason: None,

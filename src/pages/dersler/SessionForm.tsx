@@ -8,6 +8,7 @@ import {
   fetchStudentList,
   fetchSubjects,
   fetchTeachers,
+  saveMakeupSession,
   saveSession,
   type AppError,
   type Conflict,
@@ -51,6 +52,8 @@ interface Props {
   today: string
   /** Dolu = düzenleme. Satır çağırandan gelir; ikinci bir komut açmaya gerek yok. */
   session?: DaySessionRow | null
+  /** Yoklamadan açılan telafide hedef ve branş kilitlidir; yalnızca zaman/öğretmen seçilir. */
+  makeup?: MakeupSource | null
   /**
    * Yeni ders için ön dolgu — takvimde **boş bir slota tıklandığında** o slotun günü ve
    * saati (`EKRANLAR §142`). Düzenlemede yok sayılır: orada değerler dersin kendisinden
@@ -60,6 +63,15 @@ interface Props {
   initialTime?: string
   onClose: () => void
   onSaved: () => void
+}
+
+export interface MakeupSource {
+  attendanceId: number
+  studentId: number
+  studentName: string
+  subjectId: number
+  subjectName: string
+  teacherId: number | null
 }
 
 /**
@@ -81,6 +93,7 @@ export function SessionForm({
   open,
   today,
   session,
+  makeup,
   initialDay,
   initialTime,
   onClose,
@@ -114,10 +127,12 @@ export function SessionForm({
     setConflicts(null)
     setDurationTouched(editing)
     try {
+      // Telafide öğrenci, grup ve branş kaynak yoklamadan kilitlidir. Bu uzun listeleri
+      // boşuna okumamak kısayolun açılışını hızlandırır; yalnız öğretmen seçimi kalır.
       const [nextSubjects, nextGroups, nextStudents, nextTeachers] = await Promise.all([
-        fetchSubjects(),
-        fetchGroupList(),
-        fetchStudentList(),
+        makeup ? Promise.resolve<Subject[]>([]) : fetchSubjects(),
+        makeup ? Promise.resolve<GroupRow[]>([]) : fetchGroupList(),
+        makeup ? Promise.resolve<StudentRow[]>([]) : fetchStudentList(),
         fetchTeachers(),
       ])
       setSubjects(nextSubjects)
@@ -129,7 +144,7 @@ export function SessionForm({
       // tek adayı seçen satır, ikinci öğretmen eklenince bütün dersleri sessizce
       // birincisine yazardı ve K-1 uyarısı yanlış öğretmene bakardı.
       setTeachers(nextTeachers)
-      setTeacherId(session?.teacherId ?? null)
+      setTeacherId(session?.teacherId ?? makeup?.teacherId ?? null)
 
       if (session) {
         setDraft({
@@ -141,6 +156,14 @@ export function SessionForm({
           day: session.startsAt.slice(0, 10),
           startTime: session.startsAt.slice(11, 16),
           durationMin: String(minutesBetween(session.startsAt, session.endsAt)),
+          repeat: 'once',
+        })
+      } else if (makeup) {
+        setDraft({
+          ...emptySessionDraft(initialDay ?? today),
+          kind: 'solo',
+          subjectId: String(makeup.subjectId),
+          studentId: String(makeup.studentId),
           repeat: 'once',
         })
       } else {
@@ -156,7 +179,7 @@ export function SessionForm({
     } finally {
       setLoading(false)
     }
-  }, [editing, session, today, initialDay, initialTime])
+  }, [editing, makeup, session, today, initialDay, initialTime])
 
   useEffect(() => {
     if (open) void load()
@@ -254,11 +277,28 @@ export function SessionForm({
     setSaving(true)
     setError(null)
     try {
-      const report = await saveSession(toSessionInput(draft, teacherId))
-      toast(savedMessage(report.created, draft.repeat, editing))
+      const report = makeup
+        ? await saveMakeupSession({
+            attendanceId: makeup.attendanceId,
+            teacherId,
+            day: draft.day ?? '',
+            startTime: draft.startTime ?? '',
+            durationMin: Number(draft.durationMin),
+          })
+        : await saveSession(toSessionInput(draft, teacherId))
+      toast(
+        makeup
+          ? report.created === 0
+            ? tr.makeup.alreadyPlanned
+            : tr.makeup.saved
+          : savedMessage(report.created, draft.repeat, editing),
+      )
       onSaved()
     } catch (err) {
       const appError = err as AppError
+      // "Yine de ekle" sonrasındaki hata çakışma özetinin arkasında kalmasın.
+      // Normal forma dönünce alan hatası ilgili girdide, genel hata üstte görünür.
+      setConflicts(null)
       if (isFieldError(appError.code)) {
         setErrors({ [appError.code]: appError.message })
       } else {
@@ -267,7 +307,7 @@ export function SessionForm({
     } finally {
       setSaving(false)
     }
-  }, [draft, editing, onSaved, teacherId, toast])
+  }, [draft, editing, makeup, onSaved, teacherId, toast])
 
   const submit = async () => {
     const found = validateSession(draft)
@@ -335,12 +375,12 @@ export function SessionForm({
   return (
     <Modal
       open
-      title={editing ? tr.sessions.form.editTitle : tr.sessions.form.newTitle}
+      title={makeup ? tr.makeup.form.title : editing ? tr.sessions.form.editTitle : tr.sessions.form.newTitle}
       onClose={onClose}
       actions={
         <Button
           variant="primary"
-          disabled={saving || loading || closedDay || subjects.length === 0}
+          disabled={saving || loading || closedDay || (!makeup && subjects.length === 0)}
           onClick={() => void submit()}
         >
           {tr.actions.save}
@@ -356,7 +396,7 @@ export function SessionForm({
               {error.message}
             </p>
           )}
-          {subjects.length === 0 && (
+          {!makeup && subjects.length === 0 && (
             <p className={styles.formError} role="alert">
               {tr.sessions.form.errors.noSubjects}
             </p>
@@ -364,7 +404,12 @@ export function SessionForm({
 
           {/* Düzenlemede tür kilitli: dersin hedefi devredilemez (yoklaması ve borcu
               başkasına geçerdi). Doğrusu iptal edip yenisini açmak. */}
-          {editing ? (
+          {makeup ? (
+            <p className={styles.hint}>
+              {tr.makeup.form.source}{tr.units.separator}{makeup.studentName}
+              {tr.units.separator}{makeup.subjectName}
+            </p>
+          ) : editing ? (
             <p className={styles.hint}>{tr.sessions.form.kindLocked}</p>
           ) : (
             <SegmentedControl<SessionKind>
@@ -380,7 +425,7 @@ export function SessionForm({
 
           {/* K1 — öğrenci ve grup listeleri UZUN olabilir; burada aranabilir seçim
               kullanılıyor. Branş ve öğretmen kısa listeler, onlar `Select` kalıyor. */}
-          {!editing && (
+          {!editing && !makeup && (
             <SearchSelect
               label={draft.kind === 'group' ? tr.sessions.form.group : tr.sessions.form.student}
               placeholder={
@@ -401,17 +446,19 @@ export function SessionForm({
             />
           )}
 
-          <Select
-            label={tr.sessions.form.subject}
-            placeholder={tr.sessions.form.subjectPlaceholder}
-            error={errors['session.subjectId']}
-            value={draft.subjectId}
-            options={subjectOptions}
-            onChange={(event) => {
-              patch({ subjectId: event.target.value })
-              setDurationTouched(false)
-            }}
-          />
+          {!makeup && (
+            <Select
+              label={tr.sessions.form.subject}
+              placeholder={tr.sessions.form.subjectPlaceholder}
+              error={errors['session.subjectId']}
+              value={draft.subjectId}
+              options={subjectOptions}
+              onChange={(event) => {
+                patch({ subjectId: event.target.value })
+                setDurationTouched(false)
+              }}
+            />
+          )}
 
           {/* ADR-037 — öğretmen artık gerçek bir alan. K-1 çakışma uyarısı buna
               bakıyor: boş bırakılan ders hiçbir uyarı üretmez. */}
@@ -457,7 +504,7 @@ export function SessionForm({
 
           {isPast && <p className={styles.warn}>{tr.sessions.form.pastWarning}</p>}
 
-          {!editing && (
+          {!editing && !makeup && (
             <SegmentedControl
               label={tr.sessions.form.repeat}
               value={draft.repeat}
@@ -468,7 +515,7 @@ export function SessionForm({
               onChange={(repeat) => patch({ repeat })}
             />
           )}
-          {!editing && draft.repeat === 'weekly' && (
+          {!editing && !makeup && draft.repeat === 'weekly' && (
             <p className={styles.hint}>{tr.sessions.form.repeatWeeklyHint}</p>
           )}
         </div>

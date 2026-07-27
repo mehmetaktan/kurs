@@ -977,6 +977,26 @@ export const tr = {
     saved: 'Yoklama kaydedildi.',
   },
 
+  // Faz 6 §3 — mazeretli yoklamanın telafi planı ve kursun açık telafi borcu.
+  makeup: {
+    plan: 'Telafi planla',
+    planned: 'Telafi planlandı',
+    saveAttendanceFirst: 'Önce yoklama değişikliklerini kaydedin, sonra telafiyi planlayın.',
+    saved: 'Telafi dersi programa eklendi.',
+    alreadyPlanned: 'Bu yoklama için telafi zaten planlanmış.',
+    pendingBadge: 'bekleyen telafi',
+    form: {
+      title: 'Telafi dersi planla',
+      source: 'Telafi hakkı',
+    },
+    list: {
+      heading: 'Bekleyen telafiler',
+      countSuffix: 'telafi',
+      rowSuffix: 'bekliyor',
+      empty: 'Bekleyen telafi yok.',
+    },
+  },
+
   // Faz 5B — ders ekle/düzenle (E3), seans işlemleri ve şablondan oluştur (E6).
   sessions: {
     form: {

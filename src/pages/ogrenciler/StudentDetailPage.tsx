@@ -153,6 +153,11 @@ export function StudentDetailPage({ studentId }: { studentId: number }) {
             <div className={styles.identityName}>
               {student.fullName}
               {row.archived && <Badge tone="neutral">{tr.students.detail.archivedBadge}</Badge>}
+              {detail.pendingMakeupCount > 0 && (
+                <Badge tone="warn">
+                  {detail.pendingMakeupCount} {tr.makeup.pendingBadge}
+                </Badge>
+              )}
             </div>
             <div className={styles.identityMeta}>
               <StatusDot

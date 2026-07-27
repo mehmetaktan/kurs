@@ -7,6 +7,7 @@ const api = vi.hoisted(() => ({
   fetchDaySessions: vi.fn(),
   fetchHasSchedule: vi.fn(),
   fetchDebtorRows: vi.fn(),
+  fetchMakeupDebts: vi.fn(),
   fetchAttendanceDetail: vi.fn(),
   saveAttendance: vi.fn(),
 }))
@@ -23,6 +24,9 @@ beforeEach(() => {
   api.fetchDebtorRows.mockResolvedValue([
     { studentId: 4, fullName: 'İpek Şahin', guardianPhone: null, archived: false, debtKurus: 120_000, advanceKurus: 0, oldestDueOn: '2026-07-14', daysOverdue: 12 },
     { studentId: 5, fullName: 'Arşiv Borçlu', guardianPhone: null, archived: true, debtKurus: 80_000, advanceKurus: 0, oldestDueOn: '2026-07-10', daysOverdue: 16 },
+  ])
+  api.fetchMakeupDebts.mockResolvedValue([
+    { studentId: 8, fullName: 'Zeynep Kaya', pendingCount: 2 },
   ])
   api.fetchAttendanceDetail.mockResolvedValue({
     sessionId: 12,
@@ -46,6 +50,14 @@ describe('Bugün borç özeti', () => {
     expect(screen.getByText(/1 öğrenci/)).toBeTruthy()
     expect(screen.queryByText('Arşiv Borçlu')).toBeNull()
     expect(api.fetchDebtorRows).toHaveBeenCalledWith({ search: null, filter: 'all', today: '2026-07-26' })
+  })
+
+  it('bekleyen telafi borcunu öğrenci başına sayısıyla gösterir', async () => {
+    render(<TodayPage />)
+
+    expect(await screen.findByText('Zeynep Kaya')).toBeTruthy()
+    expect(screen.getByText('2 bekliyor')).toBeTruthy()
+    expect(screen.getByText('2 telafi')).toBeTruthy()
   })
 })
 

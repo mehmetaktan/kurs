@@ -5,9 +5,11 @@ import {
   fetchDebtorRows,
   fetchHasSchedule,
   fetchLocalNow,
+  fetchMakeupDebts,
   type AppError,
   type DaySessionRow,
   type DebtorRow,
+  type MakeupDebtRow,
 } from '../../lib/api'
 import { formatDateWithWeekday, formatLira, formatTime } from '../../lib/format'
 import { PageContent } from '../../shell/AppShell'
@@ -28,6 +30,7 @@ import { SessionActions, type SessionAction } from '../dersler/SessionActions'
 import { SessionForm } from '../dersler/SessionForm'
 import { TemplateModal } from '../dersler/TemplateModal'
 import { subjectColorOf } from '../tanimlar/palette'
+import { sortTrBy } from '../../lib/sortTr'
 import { isPendingAttendance, pendingAttendanceCount, splitByNow } from './today'
 import styles from './Today.module.css'
 import { sortDebtors, visibleReceivableKurus } from '../odemeler/debtors'
@@ -48,6 +51,8 @@ export function TodayPage() {
   const [error, setError] = useState<AppError | null>(null)
   const [debtors, setDebtors] = useState<DebtorRow[] | null>(null)
   const [debtError, setDebtError] = useState<AppError | null>(null)
+  const [makeupDebts, setMakeupDebts] = useState<MakeupDebtRow[] | null>(null)
+  const [makeupError, setMakeupError] = useState<AppError | null>(null)
 
   const [formOpen, setFormOpen] = useState(false)
   const [templateOpen, setTemplateOpen] = useState(false)
@@ -58,7 +63,9 @@ export function TodayPage() {
   const load = useCallback(async () => {
     setError(null)
     setDebtError(null)
+    setMakeupError(null)
     setDebtors(null)
+    setMakeupDebts(null)
     try {
       const stamp = await fetchLocalNow()
       setNow(stamp)
@@ -73,6 +80,12 @@ export function TodayPage() {
         setDebtors(sortDebtors(debtRows.filter((row) => !row.archived), 'debt_desc'))
       } catch (err) {
         setDebtError(err as AppError)
+      }
+      try {
+        const makeupRows = await fetchMakeupDebts()
+        setMakeupDebts(sortTrBy(makeupRows, (row) => row.fullName))
+      } catch (err) {
+        setMakeupError(err as AppError)
       }
     } catch (err) {
       setError(err as AppError)
@@ -198,9 +211,10 @@ export function TodayPage() {
             )}
           </section>
 
-          {/* Üç yan bölüm tasarımda kalır; borç listesi artık defterden okunur. */}
+          {/* Tasarımın yan bölümleri korunur; açık telafi borcu da günlük iş akışına eklenir. */}
           <aside className={styles.side}>
             <DebtorSection rows={debtors} error={debtError} />
+            <MakeupDebtSection rows={makeupDebts} error={makeupError} />
             <SideSection title={tr.today.packages.heading} body={tr.today.packages.soon} />
             <SideSection title={tr.today.backup.heading} body={tr.today.backup.soon} />
           </aside>
@@ -244,10 +258,45 @@ export function TodayPage() {
           row={attendanceRow}
           now={now}
           onClose={() => setAttendanceRow(null)}
-          onSaved={refresh}
+          onSaved={() => void load()}
         />
       )}
     </>
+  )
+}
+
+function MakeupDebtSection({
+  rows,
+  error,
+}: {
+  rows: MakeupDebtRow[] | null
+  error: AppError | null
+}) {
+  const total = rows?.reduce((sum, row) => sum + row.pendingCount, 0) ?? 0
+  return (
+    <Card className={styles.sideCard}>
+      <SectionHeader
+        title={tr.makeup.list.heading}
+        meta={rows === null ? null : `${total} ${tr.makeup.list.countSuffix}`}
+      />
+      {rows === null && !error && <LoadingState inline />}
+      {error && <ErrorState inline message={error.message} />}
+      {rows !== null && !error && rows.length === 0 && (
+        <p className={styles.sideBody}>{tr.makeup.list.empty}</p>
+      )}
+      {rows !== null && !error && rows.length > 0 && (
+        <div className={styles.makeupList}>
+          {rows.map((row) => (
+            <div className={styles.makeupRow} key={row.studentId}>
+              <span>{row.fullName}</span>
+              <strong>
+                {row.pendingCount} {tr.makeup.list.rowSuffix}
+              </strong>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
   )
 }
 

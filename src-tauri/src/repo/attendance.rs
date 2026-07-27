@@ -27,6 +27,8 @@ pub struct AttendancePolicy {
 #[serde(rename_all = "camelCase")]
 pub struct AttendanceStudentRow {
     pub attendance_id: Option<i64>,
+    /// Bu yoklamaya bağlı canlı, iptal edilmemiş telafi. Doluysa ikinci kısayol çıkmaz.
+    pub makeup_session_id: Option<i64>,
     pub student_id: i64,
     pub full_name: String,
     /// `pending` yalnızca kayıt yokken/henüz işaretlenmemişken gelir; ekranda düğmesi yoktur.
@@ -59,7 +61,9 @@ pub struct AttendanceStatusEffects {
 pub struct AttendanceDetail {
     pub session_id: i64,
     pub title: String,
+    pub subject_id: i64,
     pub subject_name: String,
+    pub teacher_id: Option<i64>,
     pub starts_at: String,
     pub ends_at: String,
     pub kind: String,
@@ -97,7 +101,9 @@ struct SessionContext {
     student_id: Option<i64>,
     session_day: String,
     title: String,
+    subject_id: i64,
     subject_name: String,
+    teacher_id: Option<i64>,
     starts_at: String,
     ends_at: String,
     kind: String,
@@ -108,6 +114,7 @@ struct SessionContext {
 #[derive(Debug)]
 struct ParticipantRow {
     attendance_id: Option<i64>,
+    makeup_session_id: Option<i64>,
     student_id: i64,
     full_name: String,
     status: String,
@@ -137,6 +144,7 @@ pub fn attendance_detail(
         )?;
         rows.push(AttendanceStudentRow {
             attendance_id: participant.attendance_id,
+            makeup_session_id: participant.makeup_session_id,
             student_id: participant.student_id,
             full_name: participant.full_name,
             status: participant.status,
@@ -148,7 +156,9 @@ pub fn attendance_detail(
     Ok(AttendanceDetail {
         session_id: session.id,
         title: session.title,
+        subject_id: session.subject_id,
         subject_name: session.subject_name,
+        teacher_id: session.teacher_id,
         starts_at: session.starts_at,
         ends_at: session.ends_at,
         kind: session.kind,
@@ -308,8 +318,8 @@ fn apply_financial_direction(
 fn session_context(conn: &Connection, session_id: i64) -> AppResult<SessionContext> {
     conn.query_row(
         "SELECT se.id, se.study_group_id, se.student_id, se.session_date, \
-                COALESCE(g.name, st.full_name), sub.name, se.starts_at, se.ends_at, se.kind, \
-                se.status, se.is_makeup \
+                COALESCE(g.name, st.full_name), se.subject_id, sub.name, se.teacher_id, \
+                se.starts_at, se.ends_at, se.kind, se.status, se.is_makeup \
          FROM session se \
          JOIN subject sub ON sub.id = se.subject_id \
          LEFT JOIN study_group g ON g.id = se.study_group_id \
@@ -323,12 +333,14 @@ fn session_context(conn: &Connection, session_id: i64) -> AppResult<SessionConte
                 student_id: row.get(2)?,
                 session_day: row.get(3)?,
                 title: row.get(4)?,
-                subject_name: row.get(5)?,
-                starts_at: row.get(6)?,
-                ends_at: row.get(7)?,
-                kind: row.get(8)?,
-                status: row.get(9)?,
-                is_makeup: row.get(10)?,
+                subject_id: row.get(5)?,
+                subject_name: row.get(6)?,
+                teacher_id: row.get(7)?,
+                starts_at: row.get(8)?,
+                ends_at: row.get(9)?,
+                kind: row.get(10)?,
+                status: row.get(11)?,
+                is_makeup: row.get(12)?,
             })
         },
     )
@@ -345,7 +357,11 @@ fn participant_rows(conn: &Connection, session: &SessionContext) -> AppResult<Ve
     let mut out = Vec::new();
     if let Some(group_id) = session.group_id {
         let mut stmt = conn.prepare(
-            "SELECT st.id, st.full_name, a.id, COALESCE(a.status, 'pending'), a.note \
+            "SELECT st.id, st.full_name, a.id, COALESCE(a.status, 'pending'), a.note, \
+                    ( SELECT m.id FROM session m \
+                      WHERE m.makeup_for_attendance_id = a.id AND m.is_makeup = 1 \
+                        AND m.deleted_at IS NULL AND m.status <> 'cancelled' \
+                      ORDER BY m.id LIMIT 1 ) \
              FROM enrollment e \
              JOIN student st ON st.id = e.student_id AND st.deleted_at IS NULL \
              LEFT JOIN attendance a ON a.session_id = ?1 AND a.student_id = st.id \
@@ -363,7 +379,11 @@ fn participant_rows(conn: &Connection, session: &SessionContext) -> AppResult<Ve
     } else if let Some(student_id) = session.student_id {
         let row = conn
             .query_row(
-                "SELECT st.id, st.full_name, a.id, COALESCE(a.status, 'pending'), a.note \
+                "SELECT st.id, st.full_name, a.id, COALESCE(a.status, 'pending'), a.note, \
+                        ( SELECT m.id FROM session m \
+                          WHERE m.makeup_for_attendance_id = a.id AND m.is_makeup = 1 \
+                            AND m.deleted_at IS NULL AND m.status <> 'cancelled' \
+                          ORDER BY m.id LIMIT 1 ) \
                  FROM student st \
                  LEFT JOIN attendance a ON a.session_id = ?1 AND a.student_id = st.id \
                                           AND a.deleted_at IS NULL \
@@ -386,7 +406,58 @@ fn participant_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Participant
         attendance_id: row.get(2)?,
         status: row.get(3)?,
         note: row.get(4)?,
+        makeup_session_id: row.get(5)?,
     })
+}
+
+/// Kursun henüz tamamlamadığı telafi borcu, öğrenci başına tek satır.
+///
+/// Kaynak **yoklama** sayılır; bağlı seanslarla JOIN yapılmaz. Bu yüzden bozuk/eski bir
+/// veritabanında aynı yoklamaya birden fazla telafi bağlanmış olsa bile borç çift
+/// sayılmaz. Planlı ya da iptal telafi borcu kapatmaz; mevcut şemada çözümün açık kanıtı
+/// canlı ve `done` durumundaki bağlı telafi seansıdır.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct MakeupDebtRow {
+    pub student_id: i64,
+    pub full_name: String,
+    pub pending_count: i64,
+}
+
+pub fn makeup_debt_rows(conn: &Connection) -> AppResult<Vec<MakeupDebtRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT st.id, st.full_name, COUNT(a.id) \
+         FROM attendance a \
+         JOIN student st ON st.id = a.student_id AND st.deleted_at IS NULL \
+         JOIN session source ON source.id = a.session_id AND source.deleted_at IS NULL \
+         WHERE a.deleted_at IS NULL AND a.status = 'excused' \
+           AND NOT EXISTS ( \
+             SELECT 1 FROM session makeup \
+             WHERE makeup.makeup_for_attendance_id = a.id \
+               AND makeup.is_makeup = 1 AND makeup.deleted_at IS NULL \
+               AND makeup.status = 'done' \
+           ) \
+         GROUP BY st.id, st.full_name",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok(MakeupDebtRow {
+            student_id: row.get(0)?,
+            full_name: row.get(1)?,
+            pending_count: row.get(2)?,
+        })
+    })?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row?);
+    }
+    Ok(out)
+}
+
+pub fn pending_makeup_count(conn: &Connection, student_id: i64) -> AppResult<i64> {
+    Ok(makeup_debt_rows(conn)?
+        .into_iter()
+        .find(|row| row.student_id == student_id)
+        .map_or(0, |row| row.pending_count))
 }
 
 fn eligible_student_ids(conn: &Connection, session: &SessionContext) -> AppResult<HashSet<i64>> {

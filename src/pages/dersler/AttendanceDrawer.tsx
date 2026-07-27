@@ -28,6 +28,7 @@ import {
   attendanceEffectText,
   type AttendanceDraft,
 } from './attendance'
+import { SessionForm, type MakeupSource } from './SessionForm'
 import styles from './AttendanceDrawer.module.css'
 
 const STATUS_OPTIONS = [
@@ -52,6 +53,7 @@ export function AttendanceDrawer({ row, now, onClose, onSaved }: Props) {
   const [error, setError] = useState<AppError | null>(null)
   const [busy, setBusy] = useState(false)
   const [confirmDiscard, setConfirmDiscard] = useState(false)
+  const [makeup, setMakeup] = useState<MakeupSource | null>(null)
   const requestRef = useRef(0)
   const toast = useToast()
 
@@ -62,6 +64,7 @@ export function AttendanceDrawer({ row, now, onClose, onSaved }: Props) {
     setInitialDrafts({})
     setError(null)
     setConfirmDiscard(false)
+    setMakeup(null)
     try {
       const next = await fetchAttendanceDetail(session.id, now.slice(0, 10))
       if (request !== requestRef.current) return
@@ -124,6 +127,29 @@ export function AttendanceDrawer({ row, now, onClose, onSaved }: Props) {
     }))
   }
 
+  const openMakeup = (item: AttendanceDetail['rows'][number]) => {
+    // Disabled düğmeye sentetik olay gönderilse bile kirli taslak telafi modalıyla
+    // örtülmez. Önce yoklama kaydedilir; telafi kaynağının DB'deki durumu kesinleşir.
+    if (
+      busy ||
+      dirty ||
+      row === null ||
+      item.status !== 'excused' ||
+      item.attendanceId === null ||
+      item.makeupSessionId != null
+    ) {
+      return
+    }
+    setMakeup({
+      attendanceId: item.attendanceId,
+      studentId: item.studentId,
+      studentName: item.fullName,
+      subjectId: row.subjectId,
+      subjectName: row.subjectName,
+      teacherId: row.teacherId,
+    })
+  }
+
   const markAllPresent = () => {
     if (detail === null || busy) return
     setDrafts((current) =>
@@ -155,6 +181,7 @@ export function AttendanceDrawer({ row, now, onClose, onSaved }: Props) {
       })
       setInitialDrafts(drafts)
       toast(tr.attendance.saved)
+      if (row !== null) await load(row)
       onSaved()
     } catch (err) {
       setError(err as AppError)
@@ -247,6 +274,26 @@ export function AttendanceDrawer({ row, now, onClose, onSaved }: Props) {
                           updateDraft(item.studentId, { note: event.target.value })
                         }
                       />
+                      {item.status === 'excused' && item.attendanceId !== null && (
+                        item.makeupSessionId == null ? (
+                          <>
+                            <Button
+                              size="small"
+                              disabled={busy || dirty}
+                              onClick={() => openMakeup(item)}
+                            >
+                              {tr.makeup.plan}
+                            </Button>
+                            {dirty && (
+                              <span className={styles.makeupHint}>
+                                {tr.makeup.saveAttendanceFirst}
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <span className={styles.makeupPlanned}>{tr.makeup.planned}</span>
+                        )
+                      )}
                     </section>
                   )
                 })}
@@ -270,6 +317,17 @@ export function AttendanceDrawer({ row, now, onClose, onSaved }: Props) {
           onClose()
         }}
         onCancel={() => setConfirmDiscard(false)}
+      />
+      <SessionForm
+        open={makeup !== null}
+        today={now.slice(0, 10)}
+        makeup={makeup}
+        onClose={() => setMakeup(null)}
+        onSaved={() => {
+          setMakeup(null)
+          if (!dirty && row !== null) void load(row)
+          onSaved()
+        }}
       />
     </>
   )

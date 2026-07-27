@@ -22,6 +22,7 @@ const api = vi.hoisted(() => ({
   fetchIsClosedDay: vi.fn(),
   fetchSessionConflicts: vi.fn(),
   saveSession: vi.fn(),
+  saveMakeupSession: vi.fn(),
   cancelSession: vi.fn(),
   deleteSessions: vi.fn(),
   rescheduleSession: vi.fn(),
@@ -68,6 +69,7 @@ beforeEach(() => {
   api.fetchIsClosedDay.mockResolvedValue(false)
   api.fetchSessionConflicts.mockResolvedValue([])
   api.saveSession.mockResolvedValue({ sessionId: 1, seriesId: null, created: 1 })
+  api.saveMakeupSession.mockResolvedValue({ sessionId: 2, seriesId: null, created: 1 })
   api.deleteSessions.mockResolvedValue({ removed: 0, cancelled: 1, seriesClosed: false })
 })
 
@@ -131,6 +133,29 @@ describe('SessionForm — çakışma uyarısı', () => {
     await waitFor(() => expect(api.saveSession).toHaveBeenCalledTimes(1))
   })
 
+  it('"Yine de ekle" kaydı hata verirse çakışma modalını kapatıp eylem öneren hatayı gösterir', async () => {
+    api.fetchSessionConflicts.mockResolvedValue([
+      {
+        sessionId: 42,
+        startsAt: '2026-07-27 16:00',
+        endsAt: '2026-07-27 17:00',
+        label: 'Fizik · Mehmet Aslan',
+      },
+    ])
+    api.saveSession.mockRejectedValue({
+      code: 'session_save_failed',
+      message: 'Ders kaydedilemedi. Saati kontrol edip yeniden deneyin.',
+    })
+
+    await fillAndSave()
+    fireEvent.click(await screen.findByRole('button', { name: /Yine de ekle/ }))
+
+    expect(
+      await screen.findByText('Ders kaydedilemedi. Saati kontrol edip yeniden deneyin.'),
+    ).toBeTruthy()
+    expect(screen.queryByText('Bu saatte başka bir ders var')).toBeNull()
+  })
+
   it('çakışma yoksa uyarı hiç çıkmaz', async () => {
     await fillAndSave()
 
@@ -176,6 +201,50 @@ describe('SessionForm — çakışma uyarısı', () => {
       null,
       null,
     )
+  })
+})
+
+describe('SessionForm — telafi kısayolu', () => {
+  it('öğrenci ve branşı kilitler, dar telafi girdisini ayrı komuta gönderir', async () => {
+    const onSaved = vi.fn()
+    render(
+      <SessionForm
+        open
+        today={TODAY}
+        makeup={{
+          attendanceId: 44,
+          studentId: 9,
+          studentName: 'Zeynep Kaya',
+          subjectId: 1,
+          subjectName: 'Matematik',
+          teacherId: 1,
+        }}
+        onClose={() => {}}
+        onSaved={onSaved}
+      />,
+    )
+
+    expect(await screen.findByText(/Zeynep Kaya.*Matematik/)).toBeTruthy()
+    expect(screen.queryByLabelText('Öğrenci')).toBeNull()
+    expect(screen.queryByLabelText('Branş')).toBeNull()
+    const time = screen.getByLabelText('Saat')
+    fireEvent.change(time, { target: { value: '16:00' } })
+    fireEvent.blur(time)
+    await waitFor(() =>
+      expect((screen.getByLabelText(/Süre/) as HTMLInputElement).value).toBe('60'),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }))
+
+    await waitFor(() => expect(api.saveMakeupSession).toHaveBeenCalledTimes(1))
+    expect(api.saveMakeupSession).toHaveBeenCalledWith({
+      attendanceId: 44,
+      teacherId: 1,
+      day: TODAY,
+      startTime: '16:00',
+      durationMin: 60,
+    })
+    expect(api.saveSession).not.toHaveBeenCalled()
+    expect(onSaved).toHaveBeenCalledTimes(1)
   })
 })
 
