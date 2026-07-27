@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="610" viewBox="0 0 1000 610">
+  <rect width="1000" height="610" fill="#f3f4f6"/>
+  <rect x="145" y="55" width="710" height="500" rx="8" fill="#ffffff" stroke="#c7cbd1" stroke-width="2"/>
+  <rect x="145" y="55" width="710" height="54" rx="8" fill="#1666b1"/>
+  <rect x="145" y="101" width="710" height="8" fill="#1666b1"/>
+  <text x="180" y="91" font-family="Segoe UI, Arial, sans-serif" font-size="24" fill="#ffffff">Windows bilgisayarınızı korudu</text>
+  <text x="190" y="165" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="600" fill="#1f2937">Microsoft Defender SmartScreen</text>
+  <text x="190" y="200" font-family="Segoe UI, Arial, sans-serif" font-size="18" fill="#374151">Tanınmayan bir uygulamanın başlatılmasını engelledi.</text>
+  <text x="190" y="232" font-family="Segoe UI, Arial, sans-serif" font-size="18" fill="#374151">Bu uygulamayı çalıştırmak bilgisayarınızı riske atabilir.</text>
+  <text x="190" y="286" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="600" fill="#1f2937">Uygulama:</text>
+  <text x="310" y="286" font-family="Segoe UI, Arial, sans-serif" font-size="17" fill="#374151">Kurs Takip kurulum dosyası</text>
+  <text x="190" y="322" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="600" fill="#1f2937">Yayımcı:</text>
+  <text x="310" y="322" font-family="Segoe UI, Arial, sans-serif" font-size="17" fill="#374151">Bilinmeyen yayımcı</text>
+  <rect x="190" y="370" width="220" height="54" rx="4" fill="#1666b1"/>
+  <text x="300" y="404" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="600" fill="#ffffff">Yine de çalıştır</text>
+  <rect x="430" y="370" width="170" height="54" rx="4" fill="#e5e7eb" stroke="#c7cbd1"/>
+  <text x="515" y="404" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="18" fill="#1f2937">Çalıştırma</text>
+  <path d="M170 470 L245 415" stroke="#b42318" stroke-width="4" fill="none"/>
+  <polygon points="245,415 231,417 239,430" fill="#b42318"/>
+  <text x="170" y="500" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="600" fill="#b42318">“Ek bilgi” seçildikten sonra bu düğme görünür.</text>
+  <text x="500" y="590" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="16" fill="#6b7280">ÖRNEK GÖRÜNÜM — Yazılar ve düğmeler Windows sürümüne göre değişebilir.</text>
+</svg>
