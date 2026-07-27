@@ -101,3 +101,23 @@ pub fn last_successful_backup(conn: &Connection) -> AppResult<Option<BackupLog>>
         None => Ok(None),
     }
 }
+
+pub fn has_successful_backup_on(conn: &Connection, day: &str) -> AppResult<bool> {
+    Ok(conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM backup_log \
+         WHERE ok = 1 AND is_auto = 1 AND deleted_at IS NULL \
+           AND substr(taken_at, 1, 10) = ?1)",
+        [day],
+        |row| row.get(0),
+    )?)
+}
+
+/// Saklama politikası dosyayı kaldırdığında geçmiş satır hard-delete edilmez.
+pub fn mark_backup_pruned(conn: &Connection, file_path: &str, now: &str) -> AppResult<()> {
+    conn.execute(
+        "UPDATE backup_log SET deleted_at = ?2, updated_at = ?2 \
+         WHERE file_path = ?1 AND deleted_at IS NULL",
+        params![file_path, now],
+    )?;
+    Ok(())
+}

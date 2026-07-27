@@ -5,6 +5,7 @@
 //!
 //! Frontend SQL yazmaz. Para mantığı Rust'ta, saf ve test edilebilir fonksiyonlarda.
 
+pub mod backup;
 pub mod brand;
 pub mod clock;
 pub mod commands;
@@ -34,13 +35,14 @@ use crate::error::{AppError, AppResult};
 /// ham çökme yerine Türkçe bir mesaj görür (CLAUDE.md > Arayüz).
 pub struct AppState {
     pub db_path: PathBuf,
+    pub backup_dir: AppResult<PathBuf>,
     pub applied_migrations: Vec<i64>,
     db: Mutex<AppResult<Connection>>,
 }
 
 impl AppState {
     /// Veritabanını açar ve bekleyen migration'ları uygular.
-    pub fn open(db_path: PathBuf) -> Self {
+    pub fn open(db_path: PathBuf, backup_dir: AppResult<PathBuf>) -> Self {
         let mut applied_migrations = Vec::new();
 
         let db = match db::open(&db_path) {
@@ -64,6 +66,7 @@ impl AppState {
 
         Self {
             db_path,
+            backup_dir,
             applied_migrations,
             db: Mutex::new(db),
         }
@@ -73,9 +76,15 @@ impl AppState {
     pub fn failed(err: AppError) -> Self {
         Self {
             db_path: PathBuf::new(),
+            backup_dir: Err(err.clone()),
             applied_migrations: Vec::new(),
             db: Mutex::new(Err(err)),
         }
+    }
+
+    fn automatic_backup_request(&self) -> Option<(PathBuf, AppResult<PathBuf>)> {
+        let ready = self.db.lock().ok()?.is_ok();
+        ready.then(|| (self.db_path.clone(), self.backup_dir.clone()))
     }
 
     /// Bağlantıyı ödünç verir. Açılış başarısızsa saklanan hatayı döndürür.
@@ -139,11 +148,35 @@ pub fn run() {
         .setup(|app| {
             // Yol string birleştirmeyle kurulmaz → Tauri path API (CLAUDE.md > Windows).
             // Veritabanı app_data_dir altında (%APPDATA%), proje klasöründe değil (ADR-008).
+            let backup_dir = app
+                .path()
+                .document_dir()
+                .map(|dir| backup::default_backup_dir(&dir))
+                .map_err(|err| {
+                    eprintln!("[kurs] Belgeler klasörü bulunamadı: {err}");
+                    AppError::new(
+                        "backup_documents_dir",
+                        "Belgeler klasörü bulunamadı. Klasör izinlerini kontrol edip programı yeniden açın.",
+                    )
+                });
             let state = match app.path().app_data_dir() {
-                Ok(dir) => AppState::open(db::db_file_in(&dir)),
+                Ok(dir) => AppState::open(db::db_file_in(&dir), backup_dir),
                 Err(err) => AppState::failed(AppError::internal("app_data_dir", err)),
             };
+            let backup_request = state.automatic_backup_request();
             app.manage(state);
+            if let Some((db_path, backup_dir)) = backup_request {
+                std::thread::spawn(move || {
+                    let now = clock::now_local();
+                    let result = match backup_dir {
+                        Ok(directory) => backup::run_automatic(&db_path, &directory, &now).map(|_| ()),
+                        Err(error) => backup::record_directory_failure(&db_path, &now, &error),
+                    };
+                    if let Err(error) = result {
+                        eprintln!("[kurs] otomatik yedekleme tamamlanamadı: {error}");
+                    }
+                });
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
