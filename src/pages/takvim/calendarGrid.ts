@@ -243,7 +243,7 @@ export function scrollTopForNow(
 
 // ─── Tarih gezinmesi ──────────────────────────────────────────────────────────
 //
-// `toISOString()` HİÇBİR yerde kullanılmıyor: UTC'ye çevirir ve İstanbul (+03:00) gibi
+// UTC serileştirmesi HİÇBİR yerde kullanılmıyor: İstanbul (+03:00) gibi
 // dilimlerde tarihi bir gün geriye kaydırır. `lib/format`'ın `isoToDate`/`dateToIso`
 // çifti `Date.UTC` üzerinden çalışıyor ve bu tuzağı kapatıyor.
 

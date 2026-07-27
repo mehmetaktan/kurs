@@ -543,3 +543,183 @@
   color: var(--color-text-secondary);
   text-wrap: pretty;
 }
+
+/* DevExtreme kaynak CSS'i değiştirilmez. Bu sınırlı katman yalnızca Scheduler'ı
+   uygulamanın token, sistem fontu ve 700px pencere düzenine bağlar. */
+.schedulerFrame {
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-12);
+  background: var(--color-surface-card);
+}
+
+.schedulerFrame :global(.dx-widget),
+.schedulerFrame :global(.dx-scheduler) {
+  font-family: var(--font-family);
+  color: var(--color-text-primary);
+}
+
+.schedulerFrame :global(.dx-scheduler-work-space) {
+  min-height: 0;
+}
+
+.schedulerFrame :global(.dx-scheduler-date-table-cell),
+.schedulerFrame :global(.dx-scheduler-time-panel-cell) {
+  background: var(--color-surface-card);
+}
+
+.schedulerFrame :global(.dx-scheduler-appointment) {
+  border-radius: var(--radius-7);
+  box-shadow: var(--shadow-drag);
+  background: var(--color-surface-card);
+  color: var(--color-text-primary);
+}
+
+.filters {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.appointment {
+  --subject-color: var(--color-warn-accent);
+  display: flex;
+  position: relative;
+  height: 100%;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+  overflow: hidden;
+  padding: 4px 6px 4px 10px;
+  border-left: 4px solid var(--subject-color);
+  background: var(--color-surface-card);
+  color: var(--color-text-primary);
+  line-height: 1.15;
+}
+
+.appointment[data-kind='group'] {
+  background: var(--color-surface-block);
+}
+
+.appointment[data-makeup='true'] {
+  border-top: 1px dashed var(--subject-color);
+  border-right: 1px dashed var(--subject-color);
+  border-bottom: 1px dashed var(--subject-color);
+}
+
+.appointment[data-cancelled='true'] {
+  opacity: 0.52;
+  text-decoration: line-through;
+}
+
+.appointment[data-past='true']:not([data-attendance-missing='true']) {
+  opacity: 0.62;
+}
+
+.appointment[data-attendance-missing='true'] {
+  background: var(--color-warn-bg);
+  color: var(--color-warn-text);
+}
+
+.appointment[data-conflict='true'] {
+  outline: 2px solid var(--color-conflict);
+  outline-offset: -2px;
+}
+
+.appointmentTime,
+.appointmentMeta,
+.appointmentTags {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-micro);
+}
+
+.appointmentTime {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-bold);
+}
+
+.appointmentMeta {
+  color: var(--color-text-quaternary);
+}
+
+.appointmentTags {
+  font-weight: var(--font-weight-semibold);
+}
+
+.dateCell,
+.timeCell,
+.resourceName {
+  font-family: var(--font-family);
+  font-size: var(--font-size-caption);
+}
+
+.timeCell {
+  font-variant-numeric: tabular-nums;
+}
+
+.resourceName {
+  overflow-wrap: anywhere;
+  font-weight: var(--font-weight-bold);
+}
+
+.dataCell {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.dataCell[data-closed='true'] {
+  background:
+    repeating-linear-gradient(
+      -45deg,
+      transparent,
+      transparent 6px,
+      rgb(216 211 202 / 55%) 6px,
+      rgb(216 211 202 / 55%) 8px
+    );
+}
+
+.detailPanel {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.detailSubject,
+.detailTitle,
+.detailMeta {
+  margin: 0;
+}
+
+.detailSubject {
+  font-size: var(--font-size-title-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.detailTitle {
+  margin-top: var(--space-1);
+  font-weight: var(--font-weight-semibold);
+}
+
+.detailMeta {
+  margin-top: var(--space-1);
+  color: var(--color-text-tertiary);
+}
+
+.detailBadges,
+.detailActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+@media (max-height: 760px) {
+  .schedulerFrame {
+    min-height: 460px;
+  }
+}

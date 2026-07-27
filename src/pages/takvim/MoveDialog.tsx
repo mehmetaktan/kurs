@@ -11,6 +11,8 @@ export interface PendingMove {
   day: string
   /** `'HH:MM'` */
   startTime: string
+  /** Taşıma veya yeniden boyutlandırma sonrasındaki süre. */
+  durationMin: number
 }
 
 /**

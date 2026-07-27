@@ -1417,12 +1417,22 @@ export const tr = {
   // Takvim ekranı (EKRANLAR §2). Gün/ay ADLARI burada değil, `dates` altında: biri
   // ekranın metni, öteki uygulamanın her yerinde kullanılan sözlük.
   calendar: {
-    views: { month: 'Ay', week: 'Hafta', day: 'Gün' },
+    views: {
+      month: 'Ay',
+      week: 'Hafta',
+      workWeek: 'Çalışma haftası',
+      day: 'Gün',
+      agenda: 'Ajanda',
+    },
     today: 'Bugün',
     prev: 'Önceki',
     next: 'Sonraki',
     newSession: '＋ Ders ekle',
     fromTemplate: 'Şablondan oluştur',
+    clearAllFilters: 'Tüm filtreleri temizle',
+    subjects: 'Branşlar',
+    teachers: 'Öğretmenler',
+    noData: 'Bu aralıkta ders yok.',
     closed: 'Tatil',
     now: 'şimdi',
     // Blok içindeki ikinci satır: grupta "4/6", birebirde tek kelime.
@@ -1430,6 +1440,29 @@ export const tr = {
     makeup: 'Telafi',
     cancelled: 'İptal',
     attendanceMissing: 'Yoklama',
+    locked: 'Kilitli',
+    conflict: 'Öğretmen çakışması',
+    group: 'Grup',
+    details: {
+      title: 'Ders ayrıntısı',
+      edit: 'Düzenle',
+      attendanceTake: 'Yoklama al',
+      attendanceView: 'Yoklamayı görüntüle',
+      reschedule: 'Ertele',
+      cancel: 'İptal et',
+      archive: 'Arşivle',
+      close: 'Kapat',
+    },
+    conflictDialog: {
+      title: 'Öğretmen çakışması var',
+      body: 'Aynı öğretmenin bu saatte başka dersi var. Ders yine de bu saate taşınsın mı?',
+      confirm: 'Yine de taşı',
+    },
+    moveBlocked: {
+      closed: 'Bu gün kapalı. Açık bir gün seçip yeniden deneyin.',
+      locked: 'Yoklaması alınmış ders taşınamaz veya süresi değiştirilemez.',
+      failed: 'Ders taşınamadı. Takvimi yenileyip yeniden deneyin.',
+    },
     // Ay ızgarasının hücre altyazısı: "3 ders".
     lessonCount: 'ders',
     more: 'daha',
