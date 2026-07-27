@@ -679,7 +679,6 @@ export const tr = {
         unexcusedConsumes: 'Mazeretsiz devamsızlıkta ders hakkı düşsün',
         packageExpiryDays: 'Paket geçerlilik süresi (gün)',
         receiptPrefix: 'Makbuz numarası öneki',
-        backupWarnDays: 'Yedekleme uyarısı eşiği (gün)',
       },
       hints: {
         hours: 'Takvimin dikey aralığı bu iki saat arasıdır.',
@@ -690,7 +689,6 @@ export const tr = {
         unexcusedConsumes: 'Açıkken mazeretsiz devamsızlık gelmiş ders sayılır.',
         packageExpiryDays: 'Boş bırakılırsa paketler süresizdir.',
         receiptPrefix: 'Makbuz numarasının başına eklenir, örnek: 2026-14.',
-        backupWarnDays: 'Bu kadar gün yedek alınmazsa Bugün ekranı uyarır.',
       },
       density: {
         comfortable: 'Rahat',

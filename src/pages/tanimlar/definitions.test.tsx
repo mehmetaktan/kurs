@@ -45,7 +45,6 @@ const SETTINGS = [
   { key: 'absence_unexcused_consumes_lesson', value: '1' },
   { key: 'package_expiry_days', value: '' },
   { key: 'receipt_prefix', value: '2026-' },
-  { key: 'backup_warn_days', value: '3' },
 ]
 
 beforeEach(() => {
@@ -177,12 +176,13 @@ describe('Tanımlar → Genel', () => {
     await waitFor(() => expect(api.updateSetting).toHaveBeenCalledWith('package_expiry_days', ''))
   })
 
-  it("programın kendi satırları ekranda YOK (ADR-024 kurum adı, makbuz sayacı, yedek zamanı)", async () => {
+  it("programın kendi ve yedekleme satırları ekranda YOK (ADR-024 ve faz-10 §3)", async () => {
     api.fetchSettings.mockResolvedValue([
       ...SETTINGS,
       { key: 'institution_name', value: 'Aydın Özel Ders' },
       { key: 'receipt_next_no', value: '14' },
       { key: 'last_backup_at', value: '2026-07-25 08:14' },
+      { key: 'backup_warn_days', value: '3' },
     ])
     drawGeneral()
     await screen.findByText('İşletme ayarları')
@@ -190,5 +190,6 @@ describe('Tanımlar → Genel', () => {
     expect(screen.queryByDisplayValue('Aydın Özel Ders')).toBeNull()
     expect(screen.queryByDisplayValue('14')).toBeNull()
     expect(screen.queryByDisplayValue('2026-07-25 08:14')).toBeNull()
+    expect(screen.queryByLabelText('Kaç gün sonra uyarı verilsin')).toBeNull()
   })
 })

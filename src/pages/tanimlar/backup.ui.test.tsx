@@ -95,4 +95,15 @@ describe('Tanımlar → Yedekleme', () => {
       ),
     )
   })
+
+  it('yedek uyarısı eşiğini yalnızca bu sekmeden kaydeder', async () => {
+    draw()
+    await screen.findByText(STATUS.directory)
+
+    const field = screen.getByLabelText('Kaç gün sonra uyarı verilsin')
+    fireEvent.change(field, { target: { value: '7' } })
+    fireEvent.blur(field)
+
+    await waitFor(() => expect(api.updateSetting).toHaveBeenCalledWith('backup_warn_days', '7'))
+  })
 })
