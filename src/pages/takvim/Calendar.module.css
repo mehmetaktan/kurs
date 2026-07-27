@@ -577,6 +577,20 @@
   color: var(--color-text-primary);
 }
 
+/* Varsayılan 3px tutamak gerçek fare kullanımında kolayca taşıma jestine dönüşüyor. */
+.schedulerFrame :global(.dx-resizable-handle-bottom),
+.schedulerFrame :global(.dx-resizable-handle-top) {
+  height: 10px;
+}
+
+.schedulerFrame :global(.dx-resizable-handle-bottom) {
+  bottom: -4px;
+}
+
+.schedulerFrame :global(.dx-resizable-handle-top) {
+  top: -4px;
+}
+
 .filters {
   display: flex;
   min-width: 0;

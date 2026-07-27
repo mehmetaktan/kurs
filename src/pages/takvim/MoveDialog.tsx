@@ -13,6 +13,7 @@ export interface PendingMove {
   startTime: string
   /** Taşıma veya yeniden boyutlandırma sonrasındaki süre. */
   durationMin: number
+  kind: 'move' | 'resize'
 }
 
 /**
@@ -38,28 +39,38 @@ export function MoveDialog({
   onClose: () => void
   onConfirm: (scope: RescheduleScope) => void
 }) {
+  const resizing = pending.kind === 'resize'
+  const copy = resizing ? tr.calendar.resize : tr.calendar.move
   return (
-    <Modal open title={tr.calendar.move.title} onClose={onClose}>
+    <Modal open title={copy.title} onClose={onClose}>
       <div className={styles.moveBody}>
         {/* Nereye taşındığı YAZIYLA da söyleniyor: sürüklenen bloğun bıraktığı yer
             ekranda görünüyor ama onay bir cümleye dayanmalı. */}
-        <p className={styles.moveLead}>
-          <strong>{sessionLabel(pending.row)}</strong> {tr.calendar.move.lead}{' '}
-          <strong>
-            {formatDateWithWeekday(pending.day)} {formatTime(pending.startTime)}
-          </strong>{' '}
-          {tr.calendar.move.leadSuffix}
-        </p>
+        {resizing ? (
+          <p className={styles.moveLead}>
+            <strong>{sessionLabel(pending.row)}</strong> {copy.lead}{' '}
+            <strong>{pending.durationMin} {tr.units.minute}</strong>{' '}
+            {copy.leadSuffix}
+          </p>
+        ) : (
+          <p className={styles.moveLead}>
+            <strong>{sessionLabel(pending.row)}</strong> {copy.lead}{' '}
+            <strong>
+              {formatDateWithWeekday(pending.day)} {formatTime(pending.startTime)}
+            </strong>{' '}
+            {copy.leadSuffix}
+          </p>
+        )}
 
         <ModalOption
-          title={tr.calendar.move.only}
-          hint={tr.calendar.move.onlyHint}
+          title={copy.only}
+          hint={copy.onlyHint}
           tone="primary"
           onClick={() => onConfirm('only')}
         />
         <ModalOption
-          title={tr.calendar.move.following}
-          hint={tr.calendar.move.followingHint}
+          title={copy.following}
+          hint={copy.followingHint}
           onClick={() => onConfirm('following')}
         />
       </div>

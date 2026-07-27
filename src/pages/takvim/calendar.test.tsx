@@ -175,6 +175,21 @@ describe('DevExtreme Scheduler yüzeyi', () => {
     expect(screen.queryByText(/Today|Week|Month|Agenda/)).toBeNull()
   })
 
+  it('ilk açılışta görünümü şimdiye kaydırır ve yeniden çizimde sıçramaz', async () => {
+    draw()
+    await screen.findByTestId('scheduler-mock')
+    const handler = schedulerProps().onContentReady as (event: {
+      component: { scrollTo: ReturnType<typeof vi.fn> }
+    }) => void
+    const scrollTo = vi.fn()
+    handler({ component: { scrollTo } })
+    handler({ component: { scrollTo } })
+    expect(scrollTo).toHaveBeenCalledTimes(1)
+    expect(scrollTo).toHaveBeenCalledWith(wallClockToDate(NOW), {
+      alignInView: 'center',
+    })
+  })
+
   it('branş ve öğretmen filtrelerini birlikte uygular ve birlikte temizler', async () => {
     api.fetchRangeSessions.mockResolvedValue([
       row({ id: 1, startsAt: '2026-07-22 16:00' }),
@@ -234,6 +249,28 @@ describe('DevExtreme Scheduler yüzeyi', () => {
     expect(
       screen.getByRole('button', { name: /Bu ve sonraki dersler/ }),
     ).toBeTruthy()
+  })
+
+  it('yeniden boyutlandırmayı taşıma olarak adlandırmaz', async () => {
+    api.fetchRangeSessions.mockResolvedValue([
+      row({ id: 1, startsAt: '2026-07-22 16:00', seriesId: 8 }),
+    ])
+    draw()
+    await screen.findByTestId('scheduler-mock')
+    await updateAppointment('2026-07-22 16:00', '2026-07-22 17:30')
+    expect(await screen.findByText('Ders süresini değiştir')).toBeTruthy()
+    expect(screen.getByText(/90 dakika/)).toBeTruthy()
+  })
+
+  it('üst kenardan yeniden boyutlandırmayı da süre değişikliği sayar', async () => {
+    api.fetchRangeSessions.mockResolvedValue([
+      row({ id: 1, startsAt: '2026-07-22 16:00', seriesId: 8 }),
+    ])
+    draw()
+    await screen.findByTestId('scheduler-mock')
+    await updateAppointment('2026-07-22 15:30', '2026-07-22 17:00')
+    expect(await screen.findByText('Ders süresini değiştir')).toBeTruthy()
+    expect(screen.getByText(/90 dakika/)).toBeTruthy()
   })
 
   it('tek ders taşımasını yazar ve geri aldırır', async () => {

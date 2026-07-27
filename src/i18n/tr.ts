@@ -1412,6 +1412,7 @@ export const tr = {
     // ekran çökmesin, kullanıcı boş hücreyi görsün.
     emptyValue: '—',
     separator: ' · ',
+    minute: 'dakika',
   },
 
   // Takvim ekranı (EKRANLAR §2). Gün/ay ADLARI burada değil, `dates` altında: biri
@@ -1509,6 +1510,19 @@ export const tr = {
       doneFollowing: 'ders yeni gün ve saate taşındı.',
       undo: 'Geri al',
       undone: 'Taşıma geri alındı.',
+    },
+    resize: {
+      title: 'Ders süresini değiştir',
+      lead: 'dersinin süresi',
+      leadSuffix: 'olacak.',
+      only: 'Sadece bu ders',
+      onlyHint: 'Yalnızca bu dersin süresi değişir; haftalık program aynı kalır.',
+      following: 'Bu ve sonraki dersler',
+      followingHint:
+        'Haftalık programda bu tarihten itibaren ders süresi değişir. Geçmiş dersler aynı kalır.',
+      done: 'Ders süresi değiştirildi.',
+      doneFollowing: 'dersin süresi değiştirildi.',
+      undone: 'Süre değişikliği geri alındı.',
     },
   },
 

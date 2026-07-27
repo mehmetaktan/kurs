@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Scheduler, { Resource, View } from 'devextreme-react/scheduler'
 import { loadMessages, locale } from 'devextreme/localization'
 import trMessages from 'devextreme/localization/messages/tr.json'
@@ -9,6 +9,7 @@ import type {
   AppointmentTooltipShowingEvent,
   AppointmentUpdatingEvent,
   CellClickEvent,
+  ContentReadyEvent,
 } from 'devextreme/ui/scheduler'
 import 'devextreme/dist/css/dx.light.css'
 import { tr } from '../../i18n/tr'
@@ -102,6 +103,7 @@ export function CalendarPage() {
   const [move, setMove] = useState<PendingMove | null>(null)
   const [conflict, setConflict] = useState<PendingUpdate | null>(null)
   const gate = useRef(new RequestGate())
+  const loadedSpan = useRef<string | null>(null)
   const toast = useToast()
 
   useEffect(() => {
@@ -128,7 +130,8 @@ export function CalendarPage() {
   const load = useCallback(async () => {
     if (span === null) return
     const request = gate.current.next()
-    setRows(null)
+    const spanKey = span.join(':')
+    if (loadedSpan.current !== spanKey) setRows(null)
     setError(null)
     try {
       const [visible, closedDays, schedule] = await Promise.all([
@@ -137,6 +140,7 @@ export function CalendarPage() {
         fetchHasSchedule(),
       ])
       if (!gate.current.isCurrent(request)) return
+      loadedSpan.current = spanKey
       setRows(visible)
       setClosed(new Set(closedDays))
       setHasSchedule(schedule)
@@ -252,6 +256,10 @@ export function CalendarPage() {
       day: dateToDay(pending.start),
       startTime: dateToTime(pending.start),
       durationMin,
+      kind:
+        durationMin !== rowDuration(pending.appointment.row)
+          ? 'resize'
+          : 'move',
     }
     setConflict(null)
     if (pending.appointment.seriesId === null) void applyMove(next, 'only')
@@ -261,6 +269,8 @@ export function CalendarPage() {
   const applyMove = async (pending: PendingMove, scope: 'only' | 'following') => {
     const oldDuration = rowDuration(pending.row)
     try {
+      const copy =
+        pending.kind === 'resize' ? tr.calendar.resize : tr.calendar.move
       const report = await rescheduleSession(
         pending.row.id,
         `${pending.day} ${pending.startTime}`,
@@ -269,13 +279,18 @@ export function CalendarPage() {
       )
       setMove(null)
       if (scope === 'only') {
-        toast(tr.calendar.move.done, {
+        toast(copy.done, {
           label: tr.calendar.move.undo,
           onAction: () =>
-            void undoMove(pending.row.id, pending.row.startsAt, oldDuration),
+            void undoMove(
+              pending.row.id,
+              pending.row.startsAt,
+              oldDuration,
+              pending.kind,
+            ),
         })
       } else {
-        toast(`${report.moved} ${tr.calendar.move.doneFollowing}`)
+        toast(`${report.moved} ${copy.doneFollowing}`)
       }
       void load()
     } catch (err) {
@@ -285,10 +300,19 @@ export function CalendarPage() {
     }
   }
 
-  const undoMove = async (sessionId: number, startsAt: string, durationMin: number) => {
+  const undoMove = async (
+    sessionId: number,
+    startsAt: string,
+    durationMin: number,
+    kind: PendingMove['kind'],
+  ) => {
     try {
       await rescheduleSession(sessionId, startsAt, durationMin, 'only')
-      toast(tr.calendar.move.undone)
+      toast(
+        kind === 'resize'
+          ? tr.calendar.resize.undone
+          : tr.calendar.move.undone,
+      )
     } catch (err) {
       toast((err as AppError).message)
     }
@@ -552,8 +576,35 @@ interface CalendarBodyProps {
   onViewDateChange: (date: Date) => void
 }
 
-function CalendarBody(props: CalendarBodyProps) {
+const CalendarBody = memo(CalendarBodyView, sameCalendarBodyProps)
+
+function CalendarBodyView(props: CalendarBodyProps) {
   const days = daysBetween(props.span[0], props.span[1])
+  const autoScrollKey = useRef<string | null>(null)
+  const dataSource = useMemo(
+    () => ({
+      store: {
+        type: 'array' as const,
+        key: 'id',
+        data: [...props.appointments],
+      },
+    }),
+    [props.appointments],
+  )
+  const onContentReady = (event: ContentReadyEvent) => {
+    if (props.view === 'month' || props.view === 'agenda') return
+    const appointmentKey = props.appointments
+      .map((item) => `${item.id}:${item.row.startsAt}:${item.row.endsAt}`)
+      .join('|')
+    const key = `${props.view}:${props.anchor}:${appointmentKey}`
+    if (autoScrollKey.current === key) return
+    autoScrollKey.current = key
+    event.component.scrollTo(
+      scrollTarget(props.now, props.span, props.appointments, props.anchor),
+      { alignInView: 'center' },
+    )
+  }
+
   if (!props.hasSchedule && props.unfiltered.length === 0) {
     return (
       <EmptyState
@@ -620,13 +671,7 @@ function CalendarBody(props: CalendarBodyProps) {
   return (
     <div className={styles.schedulerFrame} data-testid="devextreme-scheduler">
       <Scheduler
-        dataSource={{
-          store: {
-            type: 'array',
-            key: 'id',
-            data: [...props.appointments],
-          },
-        }}
+        dataSource={dataSource}
         textExpr="text"
         startDateExpr="startDate"
         endDateExpr="endDate"
@@ -689,6 +734,7 @@ function CalendarBody(props: CalendarBodyProps) {
         onAppointmentTooltipShowing={props.onAppointmentTooltipShowing}
         onAppointmentUpdating={props.onAppointmentUpdating}
         onCellClick={props.onCellClick}
+        onContentReady={onContentReady}
       >
         <View type="week" name="week" />
         <View type="workWeek" name="workWeek" />
@@ -709,6 +755,24 @@ function CalendarBody(props: CalendarBodyProps) {
         />
       </Scheduler>
     </div>
+  )
+}
+
+function sameCalendarBodyProps(
+  previous: CalendarBodyProps,
+  next: CalendarBodyProps,
+): boolean {
+  return (
+    previous.view === next.view &&
+    previous.anchor === next.anchor &&
+    previous.now === next.now &&
+    previous.rows === next.rows &&
+    previous.unfiltered === next.unfiltered &&
+    previous.appointments === next.appointments &&
+    previous.resources === next.resources &&
+    previous.closed === next.closed &&
+    previous.hasSchedule === next.hasSchedule &&
+    previous.span === next.span
   )
 }
 
@@ -837,4 +901,22 @@ function daysBetween(from: string, to: string): string[] {
   const days: string[] = []
   for (let day = from; day <= to; day = addDays(day, 1)) days.push(day)
   return days
+}
+
+function scrollTarget(
+  now: string,
+  span: readonly [string, string],
+  appointments: readonly CalendarAppointment[],
+  anchor: string,
+): Date {
+  const today = now.slice(0, 10)
+  if (today >= span[0] && today <= span[1]) return wallClockToDate(now)
+  const first = appointments.reduce<Date | null>(
+    (earliest, appointment) =>
+      earliest === null || appointment.startDate < earliest
+        ? appointment.startDate
+        : earliest,
+    null,
+  )
+  return first ?? wallClockToDate(`${anchor} 08:00`)
 }
