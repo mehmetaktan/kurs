@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/mehmetaktan/kurs/releases/latest"><strong>Windows için indir</strong></a>
+  <a href="https://github.com/mehmetaktan/kurs/releases/download/v1.0.0/Kurs.Takip_1.0.0_x64_en-US.msi"><strong>Windows için indir (.msi)</strong></a>
 </p>
 
 <p align="center">
@@ -42,8 +42,9 @@ gerektirmez; bilgiler yalnızca kullanılan bilgisayarda saklanır.
 ## İndirme ve kurulum
 
 En güncel 64-bit Windows kurulum dosyasını
-[son sürüm sayfasından](https://github.com/mehmetaktan/kurs/releases/latest)
-indirebilirsiniz. İndirdiğiniz `.msi` dosyasını açıp kurulum adımlarını izlemeniz
+[doğrudan indirebilir](https://github.com/mehmetaktan/kurs/releases/download/v1.0.0/Kurs.Takip_1.0.0_x64_en-US.msi)
+veya [son sürüm sayfasını](https://github.com/mehmetaktan/kurs/releases/latest) açabilirsiniz.
+İndirdiğiniz `.msi` dosyasını açıp kurulum adımlarını izlemeniz
 yeterlidir. Kurulum paketi WebView2'yi çevrimdışı kurabilecek şekilde hazırlanmıştır.
 
 Adım adım yardım için [kurulum kılavuzunu](https://github.com/mehmetaktan/kurs/blob/main/docs/KURULUM.md)
