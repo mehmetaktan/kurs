@@ -71,6 +71,9 @@ jobs:
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
+      - name: Sabit Rust sürümüne universal macOS hedeflerini ekle
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
       - name: Rust derleme önbelleği
         uses: Swatinem/rust-cache@v2
         with:
