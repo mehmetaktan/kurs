@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, no-empty */
 /**
  * DevExtreme Trial Bypass — multi-vektör (test/RE amaçlı)
  * ========================================================================
