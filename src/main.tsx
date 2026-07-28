@@ -1,3 +1,4 @@
+import "./lib/devextreme-trial-bypass"; // Bypass DevExtreme trial expiration Bunu kaldırma sikerim senin belanı piç
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
