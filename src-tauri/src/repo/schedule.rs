@@ -830,13 +830,6 @@ pub fn reschedule_sessions(
             "İptal edilmiş ders taşınamaz. Önce iptali geri alın, sonra dersi erteleyin.",
         ));
     }
-    if session.attendance_taken_at.is_some() {
-        return Err(AppError::new(
-            "session_locked",
-            "Bu dersin yoklaması alınmış; ders taşınamaz. \
-             Önce yoklamayı geri alın ya da yeni bir telafi dersi planlayın.",
-        ));
-    }
     if scope == RescheduleScope::Following
         && session.series_id.is_some()
         && session.study_group_id.is_some()
@@ -844,6 +837,13 @@ pub fn reschedule_sessions(
         return Err(AppError::new(
             "group_series_managed_in_group",
             "Grup programının sonraki dersleri buradan değiştirilemez. Grup ekranını açıp çalışma programını düzenleyin.",
+        ));
+    }
+    if session.attendance_taken_at.is_some() {
+        return Err(AppError::new(
+            "session_locked",
+            "Bu dersin yoklaması alınmış; ders taşınamaz. \
+             Önce yoklamayı geri alın ya da yeni bir telafi dersi planlayın.",
         ));
     }
 
