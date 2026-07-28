@@ -624,10 +624,7 @@ pub fn cancel_session(conn: &Connection, session_id: i64, reason: Option<&str>) 
     repo::in_transaction(conn, |conn| {
         let session: crate::model::Session = repo::require(conn, session_id)?;
         if session.status == "cancelled" {
-            return Err(AppError::new(
-                "session.alreadyCancelled",
-                "Bu ders zaten iptal edilmiş. İptali geri alabilir veya dersi silebilirsiniz.",
-            ));
+            return Ok(());
         }
         let cancelled_on = clock::date_string(clock::today_local());
         repo::finance::cancel_session_financials(conn, session_id, &cancelled_on)?;
