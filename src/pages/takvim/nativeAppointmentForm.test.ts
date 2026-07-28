@@ -16,6 +16,40 @@ const catalogs: CalendarCatalogs = {
   teachers: [],
 }
 
+const interactiveCatalogs: CalendarCatalogs = {
+  ...catalogs,
+  groups: [
+    {
+      id: 8,
+      name: 'Grup A',
+      subjectId: 1,
+      subjectName: 'Matematik',
+      subjectColor: null,
+      teacherId: 2,
+      teacherName: 'Ayşe Demir',
+      capacity: 8,
+      memberCount: 3,
+      weekly: [],
+      isActive: true,
+      archived: false,
+      startsOn: '2026-07-01',
+      endsOn: null,
+      nextSessionAt: null,
+    },
+  ],
+  teachers: [
+    {
+      id: 2,
+      fullName: 'Ayşe Demir',
+      color: '#2563eb',
+      phone: null,
+      email: null,
+      isActive: true,
+      sortOrder: 0,
+    },
+  ],
+}
+
 describe('DevExtreme ders formu adaptörü', () => {
   it('yeni dersi mevcut SessionInput sözleşmesine çevirir', () => {
     expect(
@@ -68,6 +102,7 @@ describe('DevExtreme ders formu adaptörü', () => {
       '2026-07-22 10:00',
       {
         onAttendance: vi.fn(),
+        onPayment: vi.fn(),
         onReschedule: vi.fn(),
         onCancel: vi.fn(),
         onArchive: vi.fn(),
@@ -89,13 +124,19 @@ describe('DevExtreme ders formu adaptörü', () => {
     const option = vi.fn()
     const updateData = vi.fn()
     const itemOption = vi.fn()
+    const editorOption = vi.fn()
     configureNativeAppointmentForm(
       {
         appointmentData: {
           startDate: wallClockToDate('2026-07-22 16:00'),
           endDate: wallClockToDate('2026-07-22 17:00'),
         },
-        form: { option, updateData, itemOption },
+        form: {
+          option,
+          updateData,
+          itemOption,
+          getEditor: vi.fn(() => ({ option: editorOption })),
+        },
         popup: { hide: vi.fn() },
       } as unknown as AppointmentFormOpeningEvent,
       catalogs,
@@ -108,6 +149,7 @@ describe('DevExtreme ders formu adaptörü', () => {
       '2026-07-22 10:00',
       {
         onAttendance: vi.fn(),
+        onPayment: vi.fn(),
         onReschedule: vi.fn(),
         onCancel: vi.fn(),
         onArchive: vi.fn(),
@@ -129,6 +171,89 @@ describe('DevExtreme ders formu adaptörü', () => {
       ?.editorOptions?.onValueChanged?.({ value: 'group' })
     expect(itemOption).toHaveBeenCalledWith('studyGroupId', 'visible', true)
     expect(itemOption).toHaveBeenCalledWith('studentId', 'visible', false)
-    expect(updateData).not.toHaveBeenCalled()
+    expect(updateData).toHaveBeenCalledWith('studentId', null)
+    expect(editorOption).toHaveBeenCalledWith('disabled', false)
+  })
+
+  it('yeni dersi birebir açar, hücrenin öğretmenini korur ve grup seçimini yansıtır', () => {
+    let formData: Record<string, unknown> = {}
+    const option = vi.fn((name: string, value?: unknown) => {
+      if (name !== 'formData') return undefined
+      if (value !== undefined) formData = value as Record<string, unknown>
+      return formData
+    })
+    const updateData = vi.fn((name: string, value: unknown) => {
+      formData[name] = value
+    })
+    const itemOption = vi.fn()
+    const subjectEditorOption = vi.fn()
+    const teacherEditorOption = vi.fn()
+    const getEditor = vi.fn((name: string) => ({
+      option:
+        name === 'subjectId' ? subjectEditorOption : teacherEditorOption,
+    }))
+
+    configureNativeAppointmentForm(
+      {
+        appointmentData: {
+          startDate: wallClockToDate('2026-07-22 16:00'),
+          endDate: wallClockToDate('2026-07-22 17:00'),
+          teacherId: 2,
+        },
+        form: { option, updateData, itemOption, getEditor },
+        popup: { hide: vi.fn() },
+      } as unknown as AppointmentFormOpeningEvent,
+      interactiveCatalogs,
+      {
+        dayStart: '08:00',
+        dayEnd: '22:00',
+        slotMinutes: 30,
+        defaultSessionMinutes: 60,
+      },
+      '2026-07-22 10:00',
+      {
+        onAttendance: vi.fn(),
+        onPayment: vi.fn(),
+        onReschedule: vi.fn(),
+        onCancel: vi.fn(),
+        onArchive: vi.fn(),
+      },
+    )
+
+    expect(formData).toMatchObject({
+      kind: 'solo',
+      teacherId: 2,
+      studyGroupId: null,
+    })
+    const items = option.mock.calls.find(([name]) => name === 'items')?.[1] as Array<{
+      dataField?: string
+      editorOptions?: {
+        disabled?: boolean
+        dataSource?: unknown[]
+        onValueChanged?: (event: { value: unknown }) => void
+      }
+    }>
+    const subject = items.find((item) => item.dataField === 'subjectId')
+    const teacher = items.find((item) => item.dataField === 'teacherId')
+    expect(subject?.editorOptions).toMatchObject({
+      disabled: false,
+      dataSource: interactiveCatalogs.subjects,
+    })
+    expect(teacher?.editorOptions).toMatchObject({
+      disabled: false,
+      dataSource: interactiveCatalogs.teachers,
+    })
+
+    items
+      .find((item) => item.dataField === 'kind')
+      ?.editorOptions?.onValueChanged?.({ value: 'group' })
+    items
+      .find((item) => item.dataField === 'studyGroupId')
+      ?.editorOptions?.onValueChanged?.({ value: 8 })
+
+    expect(updateData).toHaveBeenCalledWith('subjectId', 1)
+    expect(updateData).toHaveBeenCalledWith('teacherId', 2)
+    expect(subjectEditorOption).toHaveBeenLastCalledWith('disabled', true)
+    expect(teacherEditorOption).toHaveBeenLastCalledWith('disabled', true)
   })
 })

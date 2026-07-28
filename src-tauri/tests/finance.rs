@@ -1,6 +1,8 @@
 mod common;
 
-use kurs_takip_lib::model::{Attendance, Guardian, Package, PriceRule, Session, StudentGuardian};
+use kurs_takip_lib::model::{
+    Attendance, Enrollment, Guardian, Package, PriceRule, Session, StudentGuardian,
+};
 use kurs_takip_lib::repo;
 use kurs_takip_lib::repo::finance::{
     InstallmentInput, PackageCloseMode, PackageSaleInput, PaymentAllocationInput, PaymentInput,
@@ -201,6 +203,14 @@ fn gecersiz_para_ve_paket_tarifesi_reddedilir() {
             .code,
         "priceRule.unitPrice"
     );
+    let zero = rule_input(subject_id, 0, "2026-01-01");
+    assert_eq!(
+        repo::finance::save_price_rule(&conn, &zero)
+            .unwrap_err()
+            .code,
+        "priceRule.unitPrice",
+        "0 TL ders başı tarife sessizce ücretsiz ders sayılmamalı"
+    );
 
     let mut package = rule_input(subject_id, 20_000, "2026-01-01");
     package.pricing_model = "package".into();
@@ -399,6 +409,213 @@ fn yoklama_fiyati_once_kayit_snapshotundan_sonra_seanstan_cozulur() {
             .code,
         "price_not_found"
     );
+}
+
+#[test]
+fn yoklama_fiyati_kayit_ve_seans_snapshoti_yoksa_tarihteki_tarifeden_cozulur() {
+    let conn = common::conn();
+    let subject_id = common::subject(&conn, "Tarifeli Matematik");
+    repo::finance::save_price_rule(&conn, &rule_input(subject_id, 42_500, "2026-01-01")).unwrap();
+
+    let enrollment_student = common::student(&conn, "Kayıt Fiyatlı");
+    common::enrollment(
+        &conn,
+        enrollment_student,
+        None,
+        subject_id,
+        "2026-01-01",
+        None,
+    )
+    .unwrap();
+    let (_, enrollment_attendance) = solo_attendance(
+        &conn,
+        enrollment_student,
+        subject_id,
+        "2026-03-10",
+        "present",
+        Some(40_000),
+        false,
+    );
+    assert_eq!(
+        repo::finance::resolve_unit_price(&conn, enrollment_attendance).unwrap(),
+        25_000,
+        "kayıt snapshot'ı seans ve tarife fiyatından önce gelmeli"
+    );
+
+    let session_student = common::student(&conn, "Seans Fiyatlı");
+    let (_, session_attendance) = solo_attendance(
+        &conn,
+        session_student,
+        subject_id,
+        "2026-03-11",
+        "present",
+        Some(40_000),
+        false,
+    );
+    assert_eq!(
+        repo::finance::resolve_unit_price(&conn, session_attendance).unwrap(),
+        40_000,
+        "seans snapshot'ı tarifeden önce gelmeli"
+    );
+
+    let tariff_student = common::student(&conn, "Tarife Fiyatlı");
+    let (_, tariff_attendance) = solo_attendance(
+        &conn,
+        tariff_student,
+        subject_id,
+        "2026-03-12",
+        "present",
+        None,
+        false,
+    );
+    assert_eq!(
+        repo::finance::resolve_unit_price(&conn, tariff_attendance).unwrap(),
+        42_500,
+        "eski tek seferlik ders, tarihini kapsayan tarifeyle açılabilmeli"
+    );
+
+    let last_day_student = common::student(&conn, "Kaydının Son Günündeki Öğrenci");
+    common::enrollment(
+        &conn,
+        last_day_student,
+        None,
+        subject_id,
+        "2026-01-01",
+        Some("2026-03-13"),
+    )
+    .unwrap();
+    let (_, last_day_attendance) = solo_attendance(
+        &conn,
+        last_day_student,
+        subject_id,
+        "2026-03-13",
+        "present",
+        None,
+        false,
+    );
+    assert_eq!(
+        repo::finance::resolve_unit_price(&conn, last_day_attendance).unwrap(),
+        25_000,
+        "end_on dahildir; kayıt son gününde tarifeye düşmemeli"
+    );
+}
+
+#[test]
+fn grup_yoklamasi_kayit_snapshoti_yoksa_yalniz_grup_tarifesine_duser() {
+    let conn = common::conn();
+    let subject_id = common::subject(&conn, "Grup Tarifesi Branşı");
+    let group_id = common::group(&conn, "Tarifeli Grup", subject_id);
+    let student_id = common::student(&conn, "Paket Kaydı Kalmış Öğrenci");
+    repo::academic::insert_enrollment(
+        &conn,
+        &Enrollment {
+            id: None,
+            student_id,
+            study_group_id: Some(group_id),
+            subject_id,
+            teacher_id: Some(1),
+            price_rule_id: None,
+            pricing_model: "package".into(),
+            unit_price: 0,
+            start_on: "2026-01-01".into(),
+            end_on: None,
+            status: "active".into(),
+            created_at: None,
+            updated_at: None,
+            deleted_at: None,
+        },
+    )
+    .unwrap();
+    let mut group_rule = rule_input(subject_id, 31_000, "2026-01-01");
+    group_rule.name = "Grup ders başı".into();
+    group_rule.is_group = Some(true);
+    repo::finance::save_price_rule(&conn, &group_rule).unwrap();
+
+    let session_id = common::group_session(&conn, group_id, subject_id, "2026-03-12");
+    let attendance_id = repo::academic::insert_attendance(
+        &conn,
+        &Attendance {
+            id: None,
+            session_id,
+            student_id,
+            status: "present".into(),
+            marked_at: Some("2026-03-12 17:01".into()),
+            note: None,
+            created_at: None,
+            updated_at: None,
+            deleted_at: None,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(
+        repo::finance::resolve_unit_price(&conn, attendance_id).unwrap(),
+        31_000
+    );
+}
+
+#[test]
+fn ders_oncesi_tahsilat_avans_kalir_yoklamadaki_borcla_ayni_bakiyede_kapanir() {
+    let conn = common::conn();
+    let subject_id = common::subject(&conn, "Ön Ödemeli Matematik");
+    let student_id = common::student(&conn, "Ön Ödemeli Öğrenci");
+    repo::finance::save_price_rule(&conn, &rule_input(subject_id, 42_500, "2026-01-01")).unwrap();
+
+    let payment = repo::finance::record_payment(
+        &conn,
+        &PaymentInput {
+            student_id,
+            paid_on: "2026-03-01".into(),
+            amount: 42_500,
+            method: "cash".into(),
+            receipt_no: "2026-ON-ODEME".into(),
+            note: Some("Ders öncesi tahsilat".into()),
+            allocations: Vec::new(),
+        },
+    )
+    .unwrap();
+    assert_eq!(payment.advance_kurus, 42_500);
+    assert_eq!(balance(&conn, student_id), 42_500);
+
+    let (_, attendance_id) = solo_attendance(
+        &conn,
+        student_id,
+        subject_id,
+        "2026-03-12",
+        "present",
+        None,
+        false,
+    );
+    assert_eq!(
+        balance(&conn, student_id),
+        42_500,
+        "ders planlamak veya yoklama satırını hazırlamak borç doğurmamalı"
+    );
+
+    repo::finance::charge_session(&conn, attendance_id, common::TODAY).unwrap();
+    assert_eq!(
+        balance(&conn, student_id),
+        0,
+        "yoklamada doğan borç aynı defterdeki avansı kendiliğinden dengelemeli"
+    );
+    let entries: Vec<(String, i64)> = conn
+        .prepare(
+            "SELECT kind, amount FROM ledger_entry \
+             WHERE student_id = ?1 ORDER BY id",
+        )
+        .unwrap()
+        .query_map([student_id], |row| Ok((row.get(0)?, row.get(1)?)))
+        .unwrap()
+        .collect::<rusqlite::Result<_>>()
+        .unwrap();
+    assert_eq!(
+        entries,
+        vec![
+            ("payment".into(), 42_500),
+            ("session_charge".into(), -42_500)
+        ]
+    );
+    common::assert_ledger_invariant(&conn);
 }
 
 #[test]
@@ -949,10 +1166,10 @@ fn cari_ekstre_tarih_filtresinde_acilis_bakiyesini_korur() {
     )
     .unwrap();
     assert_eq!(rows.len(), 2);
-    assert_eq!(rows[0].credit_kurus, 40_000);
-    assert_eq!(rows[0].balance_kurus, -60_000, "Şubat devri korunmalı");
-    assert_eq!(rows[1].debit_kurus, 25_000);
-    assert_eq!(rows[1].balance_kurus, -85_000);
+    assert_eq!(rows[0].debit_kurus, 25_000);
+    assert_eq!(rows[0].balance_kurus, -85_000);
+    assert_eq!(rows[1].credit_kurus, 40_000);
+    assert_eq!(rows[1].balance_kurus, -60_000, "Şubat devri korunmalı");
 }
 
 #[test]
@@ -960,6 +1177,7 @@ fn cari_ekstre_csvsi_bomlu_turkce_ve_excel_icin_kacisli() {
     let rows = vec![repo::finance::StatementRow {
         entry_id: 1,
         entry_date: "2026-03-05".into(),
+        occurred_at: "2026-03-05 14:30".into(),
         kind: "payment".into(),
         memo: Some("Öğrenci; \"İpek\" tahsilatı".into()),
         debit_kurus: 0,

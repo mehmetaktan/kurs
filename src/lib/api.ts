@@ -331,6 +331,7 @@ export interface StatementQuery {
 export interface StatementRow {
   entryId: number
   entryDate: string
+  occurredAt: string
   kind: 'session_charge' | 'installment_charge' | 'payment' | 'reversal' | 'adjustment'
   memo: string | null
   debitKurus: number
@@ -871,6 +872,10 @@ export function cancelSession(sessionId: number, reason: string | null = null): 
   return call<void>('cancel_session', { sessionId, reason })
 }
 
+export function restoreCancelledSession(sessionId: number): Promise<void> {
+  return call<void>('restore_cancelled_session', { sessionId })
+}
+
 /** Taşımanın kapsamı (R3.8). Silmeden farklı: `'all'` yok — geçmiş ders taşınmaz. */
 export type RescheduleScope = 'only' | 'following'
 
@@ -940,6 +945,8 @@ export interface DaySessionRow {
   markedCount: number
   isMakeup: boolean
   cancelReason: string | null
+  rescheduledOnce?: boolean
+  restoreAllowed?: boolean
 }
 
 /**
@@ -948,6 +955,14 @@ export interface DaySessionRow {
  */
 export function fetchDaySessions(day: string | null = null): Promise<DaySessionRow[]> {
   return call<DaySessionRow[]>('day_sessions', { day })
+}
+
+export function fetchDashboardSessions(now: string): Promise<DaySessionRow[]> {
+  return call<DaySessionRow[]>('dashboard_sessions', { now })
+}
+
+export function fetchDashboardStudentIds(now: string): Promise<number[]> {
+  return call<number[]>('dashboard_student_ids', { now })
 }
 
 // ─── Faz 6 §1 — yoklama paneli ─────────────────────────────────────────────
@@ -1026,6 +1041,10 @@ export function saveAttendance(input: SaveAttendanceInput): Promise<SaveAttendan
   return call<SaveAttendanceReport>('save_attendance', { input })
 }
 
+export function undoAttendance(sessionId: number, today: string): Promise<void> {
+  return call<void>('undo_attendance', { sessionId, today })
+}
+
 export interface MakeupSessionInput {
   attendanceId: number
   teacherId: number | null
@@ -1039,13 +1058,30 @@ export function saveMakeupSession(input: MakeupSessionInput): Promise<SaveSessio
 }
 
 export interface MakeupDebtRow {
+  attendanceId: number
   studentId: number
   fullName: string
+  subjectId: number
+  subjectName: string
+  teacherId: number | null
+  sourceStartsAt: string
+  makeupSessionId: number | null
   pendingCount: number
 }
 
 export function fetchMakeupDebts(): Promise<MakeupDebtRow[]> {
   return call<MakeupDebtRow[]>('makeup_debts')
+}
+
+export interface UpcomingPaymentRow {
+  studentId: number
+  fullName: string
+  lessonCount: number
+  amountKurus: number
+}
+
+export function fetchUpcomingPayments(now: string): Promise<UpcomingPaymentRow[]> {
+  return call<UpcomingPaymentRow[]>('upcoming_payments', { now })
 }
 
 export interface StudentLessonRow {

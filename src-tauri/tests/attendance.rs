@@ -857,14 +857,14 @@ fn save_attendance_dort_halkali_duzeltmede_iki_finans_degismezini_korur() {
             .iter()
             .map(|row| row.entry_date.as_str())
             .collect::<Vec<_>>(),
-        ["2026-03-20", "2026-04-01", "2026-04-02", "2026-04-03"]
+        ["2026-04-03", "2026-04-02", "2026-04-01", "2026-03-20"]
     );
     assert_eq!(
         statement
             .iter()
             .map(|row| row.balance_kurus)
             .collect::<Vec<_>>(),
-        [-25_000, 0, -25_000, 0]
+        [0, -25_000, 0, -25_000]
     );
 }
 
@@ -1052,11 +1052,12 @@ fn telafi_baglantisi_idempotenttir_borc_cift_sayilmaz_ve_islenince_ikinci_etki_y
         1
     );
 
-    // İptal edilmiş telafi borcu kapatmaz ve yeni planlamayı engellemez.
+    // İptal edilen plan mazereti korur ama telafi taahhüdünü listeden çıkarır;
+    // aynı kaynak için daha sonra yeni bir plan yapılabilir.
     repo::schedule::cancel_session(&conn, makeup_session, Some("Saat uyuşmadı")).unwrap();
     assert_eq!(
         repo::attendance::pending_makeup_count(&conn, student_id).unwrap(),
-        1
+        0
     );
     let source_detail =
         repo::attendance::attendance_detail(&conn, original_session, common::TODAY).unwrap();
@@ -1118,7 +1119,7 @@ fn telafi_baglantisi_idempotenttir_borc_cift_sayilmaz_ve_islenince_ikinci_etki_y
 }
 
 #[test]
-fn bekleyen_telafi_listesi_kisiyi_tek_satirda_dogru_sayar() {
+fn bekleyen_telafi_listesi_kaynak_yoklama_basina_satir_dondurur() {
     let conn = common::conn();
     let subject_id = common::subject(&conn, "Telafi Sayacı");
     let first = common::student(&conn, "İki Telafi");
@@ -1135,21 +1136,24 @@ fn bekleyen_telafi_listesi_kisiyi_tek_satirda_dogru_sayar() {
     }
 
     let rows = repo::attendance::makeup_debt_rows(&conn).unwrap();
-    assert_eq!(rows.len(), 2);
+    assert_eq!(rows.len(), 3);
     assert_eq!(
         rows.iter()
-            .find(|row| row.student_id == first)
-            .unwrap()
-            .pending_count,
+            .filter(|row| row.student_id == first)
+            .map(|row| row.pending_count)
+            .sum::<i64>(),
         2
     );
     assert_eq!(
         rows.iter()
-            .find(|row| row.student_id == second)
-            .unwrap()
-            .pending_count,
+            .filter(|row| row.student_id == second)
+            .map(|row| row.pending_count)
+            .sum::<i64>(),
         1
     );
+    assert!(rows
+        .iter()
+        .all(|row| row.pending_count == 1 && row.attendance_id > 0));
 }
 
 #[test]

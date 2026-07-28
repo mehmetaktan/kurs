@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { tr } from '../../i18n/tr'
 import {
+  cancelSession,
   fetchAttendanceDetail,
   saveAttendance,
+  undoAttendance,
   type AppError,
   type AttendanceDetail,
   type DaySessionRow,
@@ -53,6 +55,8 @@ export function AttendanceDrawer({ row, now, onClose, onSaved }: Props) {
   const [error, setError] = useState<AppError | null>(null)
   const [busy, setBusy] = useState(false)
   const [confirmDiscard, setConfirmDiscard] = useState(false)
+  const [confirmUndo, setConfirmUndo] = useState(false)
+  const [cancelMakeupId, setCancelMakeupId] = useState<number | null>(null)
   const [makeup, setMakeup] = useState<MakeupSource | null>(null)
   const requestRef = useRef(0)
   const toast = useToast()
@@ -179,12 +183,50 @@ export function AttendanceDrawer({ row, now, onClose, onSaved }: Props) {
           }
         }),
       })
+      window.dispatchEvent(new Event('kurs:debts-changed'))
       setInitialDrafts(drafts)
       toast(tr.attendance.saved)
       if (row !== null) await load(row)
       onSaved()
     } catch (err) {
       setError(err as AppError)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const undo = async () => {
+    if (row === null) return
+    setBusy(true)
+    setError(null)
+    try {
+      await undoAttendance(row.id, now.slice(0, 10))
+      window.dispatchEvent(new Event('kurs:debts-changed'))
+      toast(tr.attendance.undone)
+      setConfirmUndo(false)
+      onClose()
+      onSaved()
+    } catch (err) {
+      setError(err as AppError)
+      setConfirmUndo(false)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const cancelMakeup = async () => {
+    if (cancelMakeupId === null) return
+    setBusy(true)
+    setError(null)
+    try {
+      await cancelSession(cancelMakeupId, tr.makeup.cancelPlan)
+      toast(tr.makeup.cancelled)
+      setCancelMakeupId(null)
+      if (row !== null) await load(row)
+      onSaved()
+    } catch (err) {
+      setError(err as AppError)
+      setCancelMakeupId(null)
     } finally {
       setBusy(false)
     }
@@ -207,7 +249,7 @@ export function AttendanceDrawer({ row, now, onClose, onSaved }: Props) {
             <p className={styles.effect} aria-live="polite">
               {attendanceEffectText(effect)}
             </p>
-            <Button
+              <Button
               variant="primary"
               block
               disabled={!effect.complete || busy}
@@ -246,6 +288,15 @@ export function AttendanceDrawer({ row, now, onClose, onSaved }: Props) {
               <Button variant="primary" block disabled={busy} onClick={markAllPresent}>
                 {tr.attendance.allPresent}
               </Button>
+              {row?.attendanceTaken && row.presentCount === 0 && (
+                <Button
+                  block
+                  disabled={busy || dirty}
+                  onClick={() => setConfirmUndo(true)}
+                >
+                  {tr.attendance.undo}
+                </Button>
+              )}
               <div className={styles.list}>
                 {sortedRows.map((item) => {
                   const draft = drafts[item.studentId] ?? { status: null, note: '' }
@@ -295,7 +346,16 @@ export function AttendanceDrawer({ row, now, onClose, onSaved }: Props) {
                             )}
                           </>
                         ) : (
-                          <span className={styles.makeupPlanned}>{tr.makeup.planned}</span>
+                          <>
+                            <span className={styles.makeupPlanned}>{tr.makeup.planned}</span>
+                            <Button
+                              size="small"
+                              disabled={busy || dirty}
+                              onClick={() => setCancelMakeupId(item.makeupSessionId ?? null)}
+                            >
+                              {tr.makeup.cancelPlan}
+                            </Button>
+                          </>
                         )
                       )}
                     </section>
@@ -321,6 +381,28 @@ export function AttendanceDrawer({ row, now, onClose, onSaved }: Props) {
           onClose()
         }}
         onCancel={() => setConfirmDiscard(false)}
+      />
+      <ConfirmDialog
+        open={confirmUndo}
+        title={tr.attendance.undoTitle}
+        description={tr.attendance.undoBody}
+        confirmLabel={tr.attendance.undoConfirm}
+        confirmHint={tr.attendance.undoHint}
+        cancelLabel={tr.actions.cancel}
+        destructive
+        onConfirm={() => void undo()}
+        onCancel={() => setConfirmUndo(false)}
+      />
+      <ConfirmDialog
+        open={cancelMakeupId !== null}
+        title={tr.makeup.cancelTitle}
+        description={tr.makeup.cancelBody}
+        confirmLabel={tr.makeup.cancelPlan}
+        confirmHint={tr.makeup.cancelHint}
+        cancelLabel={tr.actions.cancel}
+        destructive
+        onConfirm={() => void cancelMakeup()}
+        onCancel={() => setCancelMakeupId(null)}
       />
       <SessionForm
         open={makeup !== null}

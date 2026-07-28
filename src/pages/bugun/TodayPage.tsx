@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { tr } from '../../i18n/tr'
 import {
-  fetchDaySessions,
+  fetchDashboardSessions,
+  fetchDashboardStudentIds,
+  cancelSession,
   fetchBackupStatus,
   fetchDebtorRows,
   fetchHasSchedule,
   fetchLocalNow,
   fetchMakeupDebts,
+  fetchUpcomingPayments,
   fetchReportOverview,
   fetchStudentList,
   createBackupNow,
@@ -17,8 +20,9 @@ import {
   type MakeupDebtRow,
   type ReportOverview,
   type StudentRow,
+  type UpcomingPaymentRow,
 } from '../../lib/api'
-import { formatDate, formatDateWithWeekday, formatLira, formatTime } from '../../lib/format'
+import { formatDate, formatLira, formatTime } from '../../lib/format'
 import { navigate } from '../../lib/router'
 import { PageContent } from '../../shell/AppShell'
 import { PageHeader } from '../../shell/PageHeader'
@@ -27,6 +31,7 @@ import {
   Badge,
   Button,
   Card,
+  ConfirmDialog,
   EmptyState,
   ErrorState,
   LoadingState,
@@ -38,7 +43,7 @@ import {
 import type { Column } from '../../ui'
 import { AttendanceDrawer } from '../dersler/AttendanceDrawer'
 import { SessionActions, type SessionAction } from '../dersler/SessionActions'
-import { SessionForm } from '../dersler/SessionForm'
+import { SessionForm, type MakeupSource } from '../dersler/SessionForm'
 import { subjectColorOf } from '../tanimlar/palette'
 import { sortTrBy } from '../../lib/sortTr'
 import {
@@ -50,6 +55,7 @@ import {
 } from './today'
 import styles from './Today.module.css'
 import { sortDebtors, visibleReceivableKurus } from '../odemeler/debtors'
+import { PaymentModal } from '../odemeler/PaymentModal'
 import { canTakeAttendance } from '../dersler/attendancePolicy'
 
 /**
@@ -70,6 +76,8 @@ export function TodayPage() {
   const [debtError, setDebtError] = useState<AppError | null>(null)
   const [makeupDebts, setMakeupDebts] = useState<MakeupDebtRow[] | null>(null)
   const [makeupError, setMakeupError] = useState<AppError | null>(null)
+  const [upcomingPayments, setUpcomingPayments] = useState<UpcomingPaymentRow[] | null>(null)
+  const [upcomingError, setUpcomingError] = useState<AppError | null>(null)
   const [overview, setOverview] = useState<ReportOverview | null>(null)
   const [overviewError, setOverviewError] = useState<AppError | null>(null)
   const [students, setStudents] = useState<StudentRow[] | null>(null)
@@ -83,39 +91,61 @@ export function TodayPage() {
   const [editing, setEditing] = useState<DaySessionRow | null>(null)
   const [action, setAction] = useState<{ row: DaySessionRow; kind: SessionAction } | null>(null)
   const [attendanceRow, setAttendanceRow] = useState<DaySessionRow | null>(null)
+  const [paymentTarget, setPaymentTarget] = useState<{
+    studentId: number
+    amountKurus: number
+  } | null>(null)
+  const [dashboardMakeup, setDashboardMakeup] = useState<MakeupSource | null>(null)
+  const [cancelMakeup, setCancelMakeup] = useState<MakeupDebtRow | null>(null)
 
   const load = useCallback(async () => {
     setError(null)
     setDebtError(null)
     setMakeupError(null)
+    setUpcomingError(null)
     setOverviewError(null)
     setPackageError(null)
     setBackupError(null)
     setDebtors(null)
     setMakeupDebts(null)
+    setUpcomingPayments(null)
     setOverview(null)
     setStudents(null)
     setBackupStatus(null)
     try {
       const stamp = await fetchLocalNow()
       setNow(stamp)
-      const [today, schedule] = await Promise.all([
-        fetchDaySessions(stamp.slice(0, 10)),
+      const [windowRows, windowStudentIds, schedule] = await Promise.all([
+        fetchDashboardSessions(stamp),
+        fetchDashboardStudentIds(stamp),
         fetchHasSchedule(),
       ])
-      setRows(today)
+      const studentIds = new Set(windowStudentIds)
+      setRows(windowRows)
       setHasSchedule(schedule)
       try {
         const debtRows = await fetchDebtorRows({ search: null, filter: 'all', today: stamp.slice(0, 10) })
-        setDebtors(sortDebtors(debtRows.filter((row) => !row.archived), 'debt_desc'))
+        setDebtors(sortDebtors(
+          debtRows.filter((row) => !row.archived && studentIds.has(row.studentId)),
+          'debt_desc',
+        ))
       } catch (err) {
         setDebtError(err as AppError)
       }
       try {
         const makeupRows = await fetchMakeupDebts()
-        setMakeupDebts(sortTrBy(makeupRows, (row) => row.fullName))
+        setMakeupDebts(sortTrBy(
+          makeupRows.filter((row) => studentIds.has(row.studentId)),
+          (row) => row.fullName,
+        ))
       } catch (err) {
         setMakeupError(err as AppError)
+      }
+      try {
+        const paymentRows = await fetchUpcomingPayments(stamp)
+        setUpcomingPayments(sortTrBy(paymentRows, (row) => row.fullName))
+      } catch (err) {
+        setUpcomingError(err as AppError)
       }
       try {
         setOverview(await fetchReportOverview(stamp))
@@ -123,7 +153,10 @@ export function TodayPage() {
         setOverviewError(err as AppError)
       }
       try {
-        setStudents(await fetchStudentList({ today: stamp.slice(0, 10) }))
+        setStudents(
+          (await fetchStudentList({ today: stamp.slice(0, 10) }))
+            .filter((row) => studentIds.has(row.id)),
+        )
       } catch (err) {
         setPackageError(err as AppError)
       }
@@ -179,6 +212,14 @@ export function TodayPage() {
 
   /** Satıra tıklamak dersi açar (EKRANLAR §1 "Yapılabilenler"). */
   const openEdit = (row: DaySessionRow) => {
+    if (row.status === 'cancelled') {
+      if (row.restoreAllowed === false) {
+        toast(tr.sessions.restore.movedSource)
+        return
+      }
+      setAction({ row, kind: 'restore' })
+      return
+    }
     setEditing(row)
     setFormOpen(true)
   }
@@ -205,11 +246,24 @@ export function TodayPage() {
     }
   }
 
+  const confirmCancelMakeup = async () => {
+    const sessionId = cancelMakeup?.makeupSessionId
+    if (sessionId === null || sessionId === undefined) return
+    try {
+      await cancelSession(sessionId, tr.makeup.cancelPlan)
+      toast(tr.makeup.cancelled)
+      setCancelMakeup(null)
+      await load()
+    } catch (caught) {
+      setMakeupError(caught as AppError)
+    }
+  }
+
   return (
     <>
       <PageHeader
         title={tr.pages.today.title}
-        subtitle={today === null ? undefined : formatDateWithWeekday(today)}
+        subtitle={today === null ? undefined : tr.today.windowSubtitle}
         action={
           <Button variant="primary" onClick={openNew}>
             {tr.today.newSession}
@@ -221,6 +275,8 @@ export function TodayPage() {
         <TodaySummary
           overview={overview}
           error={overviewError}
+          debtors={debtors}
+          debtError={debtError}
           makeups={makeupDebts}
           makeupError={makeupError}
           endingPackages={students === null ? null : endingPackages}
@@ -300,8 +356,35 @@ export function TodayPage() {
 
           {/* Tasarımın yan bölümleri korunur; açık telafi borcu da günlük iş akışına eklenir. */}
           <aside className={styles.side}>
-            <DebtorSection rows={debtors} error={debtError} />
-            <MakeupDebtSection rows={makeupDebts} error={makeupError} />
+            <DebtorSection
+              rows={debtors}
+              error={debtError}
+              onCollect={(row) => setPaymentTarget({
+                studentId: row.studentId,
+                amountKurus: row.debtKurus,
+              })}
+            />
+            <UpcomingPaymentSection
+              rows={upcomingPayments}
+              error={upcomingError}
+              onCollect={(row) => setPaymentTarget({
+                studentId: row.studentId,
+                amountKurus: row.amountKurus,
+              })}
+            />
+            <MakeupDebtSection
+              rows={makeupDebts}
+              error={makeupError}
+              onPlan={(row) => setDashboardMakeup({
+                attendanceId: row.attendanceId,
+                studentId: row.studentId,
+                studentName: row.fullName,
+                subjectId: row.subjectId,
+                subjectName: row.subjectName,
+                teacherId: row.teacherId,
+              })}
+              onCancel={setCancelMakeup}
+            />
             <PackageSection rows={students === null ? null : endingPackages} error={packageError} />
             <BackupSection
               status={backupStatus}
@@ -346,6 +429,39 @@ export function TodayPage() {
           onSaved={() => void load()}
         />
       )}
+      <PaymentModal
+        open={paymentTarget !== null}
+        initialStudentId={paymentTarget?.studentId ?? null}
+        initialAmountKurus={paymentTarget?.amountKurus ?? null}
+        onClose={() => setPaymentTarget(null)}
+        onSaved={() => {
+          setPaymentTarget(null)
+          void load()
+        }}
+      />
+      {now !== null && (
+        <SessionForm
+          open={dashboardMakeup !== null}
+          today={now.slice(0, 10)}
+          makeup={dashboardMakeup}
+          onClose={() => setDashboardMakeup(null)}
+          onSaved={() => {
+            setDashboardMakeup(null)
+            void load()
+          }}
+        />
+      )}
+      <ConfirmDialog
+        open={cancelMakeup !== null}
+        title={tr.makeup.cancelTitle}
+        description={tr.makeup.cancelBody}
+        confirmLabel={tr.makeup.cancelPlan}
+        confirmHint={tr.makeup.cancelHint}
+        cancelLabel={tr.actions.cancel}
+        destructive
+        onConfirm={() => void confirmCancelMakeup()}
+        onCancel={() => setCancelMakeup(null)}
+      />
     </>
   )
 }
@@ -353,6 +469,8 @@ export function TodayPage() {
 function TodaySummary({
   overview,
   error,
+  debtors,
+  debtError,
   makeups,
   makeupError,
   endingPackages,
@@ -360,6 +478,8 @@ function TodaySummary({
 }: {
   overview: ReportOverview | null
   error: AppError | null
+  debtors: DebtorRow[] | null
+  debtError: AppError | null
   makeups: MakeupDebtRow[] | null
   makeupError: AppError | null
   endingPackages: StudentRow[] | null
@@ -367,6 +487,8 @@ function TodaySummary({
 }) {
   const pendingMakeupCount =
     makeups?.reduce((total, row) => total + row.pendingCount, 0) ?? null
+  const windowReceivable =
+    debtors?.reduce((total, row) => total + row.debtKurus, 0) ?? null
   const noStudents = overview !== null && overview.activeStudentCount === 0
 
   return (
@@ -392,34 +514,34 @@ function TodaySummary({
           path="/odemeler"
           label={tr.today.summary.receivable}
           value={
-            overview === null || overview.ledgerEntryCount === 0
+            windowReceivable === null || windowReceivable === 0
               ? null
-              : formatLira(overview.totalReceivableKurus)
+              : formatLira(windowReceivable)
           }
-          tone={overview !== null && overview.totalReceivableKurus > 0 ? 'danger' : 'default'}
+          tone={windowReceivable !== null && windowReceivable > 0 ? 'danger' : 'default'}
           caption={
-            overview === null
+            debtors === null
               ? tr.today.summary.loading
-              : overview.ledgerEntryCount === 0
+              : windowReceivable === 0
                 ? tr.today.summary.noLedger
-                : tr.today.summary.receivableCaption
+                : tr.today.windowSubtitle
           }
         />
         <SummaryCard
           path="/odemeler"
           label={tr.today.summary.debtors}
           value={
-            overview === null || overview.ledgerEntryCount === 0
+            debtors === null
               ? null
-              : String(overview.debtorCount)
+              : String(debtors.length)
           }
-          tone={overview !== null && overview.debtorCount > 0 ? 'danger' : 'default'}
+          tone={debtors !== null && debtors.length > 0 ? 'danger' : 'default'}
           caption={
-            overview === null
+            debtors === null
               ? tr.today.summary.loading
-              : overview.ledgerEntryCount === 0
+              : debtors.length === 0
                 ? tr.today.summary.noLedger
-                : tr.today.summary.debtorsCaption
+                : tr.today.windowSubtitle
           }
         />
         <SummaryCard
@@ -454,6 +576,7 @@ function TodaySummary({
         />
       </div>
       {error && <ErrorState inline message={error.message} details={error.details} />}
+      {debtError && <ErrorState inline message={debtError.message} details={debtError.details} />}
       {makeupError && (
         <ErrorState inline message={makeupError.message} details={makeupError.details} />
       )}
@@ -492,9 +615,13 @@ function SummaryCard({
 function MakeupDebtSection({
   rows,
   error,
+  onPlan,
+  onCancel,
 }: {
   rows: MakeupDebtRow[] | null
   error: AppError | null
+  onPlan: (row: MakeupDebtRow) => void
+  onCancel: (row: MakeupDebtRow) => void
 }) {
   const total = rows?.reduce((sum, row) => sum + row.pendingCount, 0) ?? 0
   return (
@@ -511,12 +638,69 @@ function MakeupDebtSection({
       {rows !== null && !error && rows.length > 0 && (
         <div className={styles.makeupList}>
           {rows.map((row) => (
-            <div className={styles.makeupRow} key={row.studentId}>
-              <span>{row.fullName}</span>
-              <strong>
-                {row.pendingCount} {tr.makeup.list.rowSuffix}
-              </strong>
+            <div className={styles.makeupActionRow} key={row.attendanceId}>
+              <span>
+                <strong>{row.fullName}</strong>
+                <small>
+                  {row.subjectName}{tr.units.separator}
+                  {formatDate(row.sourceStartsAt.slice(0, 10))}
+                </small>
+              </span>
+              <Button
+                size="small"
+                onClick={() => row.makeupSessionId === null ? onPlan(row) : onCancel(row)}
+              >
+                {row.makeupSessionId === null ? tr.makeup.plan : tr.makeup.cancelPlan}
+              </Button>
             </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function UpcomingPaymentSection({
+  rows,
+  error,
+  onCollect,
+}: {
+  rows: UpcomingPaymentRow[] | null
+  error: AppError | null
+  onCollect: (row: UpcomingPaymentRow) => void
+}) {
+  const total = rows?.reduce((sum, row) => sum + row.amountKurus, 0) ?? 0
+  return (
+    <Card className={styles.sideCard}>
+      <SectionHeader
+        title={tr.today.upcomingPayments.heading}
+        meta={rows === null ? null : `${rows.length} ${tr.today.upcomingPayments.countSuffix}${tr.units.separator}${formatLira(total)}`}
+      />
+      {rows === null && !error && <LoadingState inline />}
+      {error && <ErrorState inline message={error.message} details={error.details} />}
+      {rows !== null && !error && rows.length === 0 && (
+        <p className={styles.sideBody}>{tr.today.upcomingPayments.empty}</p>
+      )}
+      {rows !== null && !error && rows.length > 0 && (
+        <div className={styles.paymentActionList}>
+          {rows.map((row) => (
+            <button
+              type="button"
+              className={styles.paymentActionRow}
+              key={row.studentId}
+              onClick={() => onCollect(row)}
+            >
+              <span className={styles.paymentActionInfo}>
+                <strong>{row.fullName}</strong>
+                <small>
+                  {row.lessonCount} {tr.today.upcomingPayments.lessonSuffix}
+                </small>
+              </span>
+              <span className={styles.paymentActionAmount}>{formatLira(row.amountKurus)}</span>
+              <span className={styles.paymentActionLabel}>
+                {tr.today.upcomingPayments.collect}
+              </span>
+            </button>
           ))}
         </div>
       )}
@@ -625,13 +809,23 @@ function buildColumns(
       align: 'end',
       render: (row) => (
         <span className={styles.rowActions}>
-          <Button size="small" onClick={() => onAction(row, 'reschedule')}>
-            {tr.sessions.actions.reschedule}
-          </Button>
-          {row.status !== 'cancelled' && (
-            <Button size="small" onClick={() => onAction(row, 'cancel')}>
-              {tr.sessions.actions.cancel}
-            </Button>
+          {row.status === 'cancelled' ? (
+            row.restoreAllowed !== false && (
+              <Button size="small" onClick={() => onAction(row, 'restore')}>
+                {tr.sessions.actions.restore}
+              </Button>
+            )
+          ) : (
+            <>
+              {row.rescheduledOnce !== true && (
+                <Button size="small" onClick={() => onAction(row, 'reschedule')}>
+                  {tr.sessions.actions.reschedule}
+                </Button>
+              )}
+              <Button size="small" onClick={() => onAction(row, 'cancel')}>
+                {tr.sessions.actions.cancel}
+              </Button>
+            </>
           )}
           <Button size="small" onClick={() => onAction(row, 'remove')}>
             {tr.sessions.actions.remove}
@@ -717,7 +911,15 @@ function TodayEmptyState({
   )
 }
 
-function DebtorSection({ rows, error }: { rows: DebtorRow[] | null; error: AppError | null }) {
+function DebtorSection({
+  rows,
+  error,
+  onCollect,
+}: {
+  rows: DebtorRow[] | null
+  error: AppError | null
+  onCollect: (row: DebtorRow) => void
+}) {
   const total = rows === null ? 0 : visibleReceivableKurus(rows)
   return (
     <Card className={styles.sideCard}>
@@ -729,13 +931,25 @@ function DebtorSection({ rows, error }: { rows: DebtorRow[] | null; error: AppEr
       {error && <ErrorState inline message={error.message} details={error.details} />}
       {rows !== null && !error && rows.length === 0 && <p className={styles.sideBody}>{tr.today.debtors.empty}</p>}
       {rows !== null && !error && rows.length > 0 && (
-        <div className={styles.debtorList}>
+        <div className={styles.paymentActionList}>
           {rows.map((row) => (
-            <div className={styles.debtorRow} key={row.studentId}>
-              <span>{row.fullName}</span>
-              <strong>{formatLira(row.debtKurus)}</strong>
-              <small>{row.daysOverdue && row.daysOverdue > 0 ? `${row.daysOverdue} ${tr.today.debtors.daysOverdue}` : tr.today.debtors.current}</small>
-            </div>
+            <button
+              type="button"
+              className={styles.paymentActionRow}
+              key={row.studentId}
+              onClick={() => onCollect(row)}
+            >
+              <span className={styles.paymentActionInfo}>
+                <strong>{row.fullName}</strong>
+                <small>
+                  {row.daysOverdue && row.daysOverdue > 0
+                    ? `${row.daysOverdue} ${tr.today.debtors.daysOverdue}`
+                    : tr.today.debtors.current}
+                </small>
+              </span>
+              <span className={styles.paymentActionAmount}>{formatLira(row.debtKurus)}</span>
+              <span className={styles.paymentActionLabel}>{tr.payments.takePayment}</span>
+            </button>
           ))}
         </div>
       )}

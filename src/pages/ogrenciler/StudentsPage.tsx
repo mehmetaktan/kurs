@@ -67,7 +67,7 @@ export function StudentsPage() {
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [subjectId, setSubjectId] = useState<number | null>(null)
   const [groupId, setGroupId] = useState<number | null>(null)
-  const [chip, setChip] = useState<StudentChip>('all')
+  const [chip, setChip] = useState<StudentChip>('active')
   const [page, setPage] = useState(1)
 
   const [selected, setSelected] = useState<StudentRow | null>(null)

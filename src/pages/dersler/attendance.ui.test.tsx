@@ -134,7 +134,11 @@ describe('Yoklama paneli', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Hepsi geldi' }))
 
     expect(screen.getAllByRole('button', { name: 'Geldi', pressed: true })).toHaveLength(2)
-    expect(screen.getByText('1 ders hakkı düşecek, 250,00 ₺ borç yazılacak.')).toBeTruthy()
+    expect(
+      screen.getByText(
+        '1 ders hakkı düşecek, 250,00 ₺ ders ücreti işlenecek.',
+      ),
+    ).toBeTruthy()
     expect((screen.getByRole('button', { name: 'Kaydet' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
@@ -171,7 +175,9 @@ describe('Yoklama paneli', () => {
     })
     draw()
 
-    expect(await screen.findByText('Ders hakkı ve borç değişmeyecek.')).toBeTruthy()
+    expect(
+      await screen.findByText('Ders hakkı ve ders ücreti değişmeyecek.'),
+    ).toBeTruthy()
   })
 
   it('geldi → mazeretli düzeltmesini hak iadesi ve borç silme olarak gösterir', async () => {
@@ -187,7 +193,9 @@ describe('Yoklama paneli', () => {
     }
 
     expect(
-      screen.getByText('1 ders hakkı geri verilecek, 250,00 ₺ borç silinecek.'),
+      screen.getByText(
+        '1 ders hakkı geri verilecek, 250,00 ₺ ders ücreti geri alınacak.',
+      ),
     ).toBeTruthy()
   })
 
@@ -200,7 +208,9 @@ describe('Yoklama paneli', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Hepsi geldi' }))
 
     expect(
-      screen.getByText('1 ders hakkı düşecek, 250,00 ₺ borç yazılacak.'),
+      screen.getByText(
+        '1 ders hakkı düşecek, 250,00 ₺ ders ücreti işlenecek.',
+      ),
     ).toBeTruthy()
   })
 

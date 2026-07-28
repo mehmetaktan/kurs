@@ -143,6 +143,7 @@ export function PackageSaleModal({
     setFieldError(null)
     try {
       await sellPackage(result.input)
+      window.dispatchEvent(new Event('kurs:debts-changed'))
       toast(tr.students.packages.saved)
       onSaved()
     } catch (caught) {
@@ -153,7 +154,22 @@ export function PackageSaleModal({
   }
 
   return (
-    <Modal open={open} title={tr.students.packages.title} onClose={onClose} dismissLabel={false}>
+    <Modal
+      open={open}
+      title={tr.students.packages.title}
+      onClose={onClose}
+      dismissLabel={false}
+      actions={
+        rules && draft && rules.length > 0 ? (
+          <div className={styles.formActions}>
+            <Button onClick={onClose}>{tr.actions.cancel}</Button>
+            <Button variant="primary" disabled={saving} onClick={() => void submit()}>
+              {saving ? tr.students.packages.saving : tr.actions.save}
+            </Button>
+          </div>
+        ) : undefined
+      }
+    >
       {rules === null && !error && <LoadingState inline />}
       {error && <ErrorState inline message={error.message} details={error.details} />}
       {rules && draft && (
@@ -200,10 +216,6 @@ export function PackageSaleModal({
                   <span>{draft.lessonCount} {tr.students.packages.summaryLessons}{tr.units.separator}{formatLira(parseKurus(draft.totalPrice) ?? 0)}{tr.units.separator}{draft.installments.length} {tr.students.packages.summaryInstallments}{tr.units.separator}{tr.students.packages.summaryFirstDue} {formatDate(draft.installments[0]?.dueOn)}</span>
                 </div>
               )}
-              <div className={styles.formActions}>
-                <Button onClick={onClose}>{tr.actions.cancel}</Button>
-                <Button variant="primary" disabled={saving} onClick={() => void submit()}>{saving ? tr.students.packages.saving : tr.actions.save}</Button>
-              </div>
             </>
           )}
         </div>

@@ -111,6 +111,11 @@ const api = vi.hoisted(() => ({
   applyTemplate: vi.fn(),
   fetchAttendanceDetail: vi.fn(),
   saveAttendance: vi.fn(),
+  reserveReceiptNo: vi.fn(),
+  fetchOpenInstallments: vi.fn(),
+  suggestPaymentAllocations: vi.fn(),
+  recordPayment: vi.fn(),
+  openReceiptPdf: vi.fn(),
 }))
 
 vi.mock('../../lib/api', () => api)
@@ -212,6 +217,9 @@ beforeEach(() => {
   api.fetchTeachers.mockResolvedValue([])
   api.fetchDefaultMinutes.mockResolvedValue(60)
   api.fetchIsClosedDay.mockResolvedValue(false)
+  api.reserveReceiptNo.mockResolvedValue('2026-1')
+  api.fetchOpenInstallments.mockResolvedValue([])
+  api.suggestPaymentAllocations.mockResolvedValue([])
   api.fetchTemplatePreview.mockResolvedValue({
     weekStart: '2026-07-20',
     weekEnd: '2026-07-26',
@@ -221,11 +229,11 @@ beforeEach(() => {
 })
 
 describe('DevExtreme Scheduler yüzeyi', () => {
-  it('haftayı varsayılan açar ve DevExtreme araç çubuğunu kullanır', async () => {
+  it('günü varsayılan açar ve DevExtreme araç çubuğunu kullanır', async () => {
     draw()
     await screen.findByTestId('scheduler-mock')
-    expect(api.fetchRangeSessions).toHaveBeenCalledWith('2026-07-20', '2026-07-26')
-    expect(schedulerProps().currentView).toBe('week')
+    expect(api.fetchRangeSessions).toHaveBeenCalledWith('2026-07-22', '2026-07-22')
+    expect(schedulerProps().currentView).toBe('day')
     expect(schedulerProps().toolbar).toEqual({
       visible: true,
       multiline: true,
@@ -420,6 +428,9 @@ describe('DevExtreme Scheduler yüzeyi', () => {
               buttonOptions: expect.objectContaining({ text: 'Yoklama al' }),
             }),
             expect.objectContaining({
+              buttonOptions: expect.objectContaining({ text: 'Tahsilat al' }),
+            }),
+            expect.objectContaining({
               buttonOptions: expect.objectContaining({ text: 'Ertele' }),
             }),
             expect.objectContaining({
@@ -432,6 +443,133 @@ describe('DevExtreme Scheduler yüzeyi', () => {
         }),
       ]),
     )
+  })
+
+  it('birebir ders formundan tahsilatı ilgili öğrenci seçili açar', async () => {
+    api.fetchRangeSessions.mockResolvedValue([
+      row({
+        id: 1,
+        startsAt: '2026-07-22 16:00',
+        kind: 'solo',
+        studyGroupId: null,
+        studentId: 7,
+        title: 'İpek Şahin',
+      }),
+    ])
+    api.fetchStudentList.mockResolvedValue([
+      {
+        id: 7,
+        fullName: 'İpek Şahin',
+        school: null,
+        grade: null,
+        phone: null,
+        isActive: true,
+        archived: false,
+        guardianName: null,
+        guardianPhone: null,
+        guardianCount: 0,
+        balanceKurus: 0,
+        debtKurus: 0,
+        oldestDueOn: null,
+        remainingLessons: null,
+        processedLessons: 0,
+        attendedLessons: 0,
+        lastSessionDate: null,
+        subjectIds: [1],
+        groupIds: [],
+      },
+    ])
+    draw()
+    await screen.findByTestId('scheduler-mock')
+    const option = vi.fn()
+    const hide = vi.fn()
+    const handler = schedulerProps().onAppointmentFormOpening as (
+      event: Record<string, unknown>,
+    ) => void
+    handler({
+      appointmentData: firstAppointment(),
+      form: { option, itemOption: vi.fn(), updateData: vi.fn() },
+      popup: { hide, on: vi.fn() },
+    })
+    const items = option.mock.calls.find(([name]) => name === 'items')?.[1] as Array<{
+      itemType?: string
+      items?: Array<{
+        buttonOptions?: { text?: string; onClick?: () => void }
+      }>
+    }>
+    const payment = items
+      .find((item) => item.itemType === 'group')
+      ?.items?.find((item) => item.buttonOptions?.text === 'Tahsilat al')
+
+    await act(async () => payment?.buttonOptions?.onClick?.())
+
+    expect(hide).toHaveBeenCalled()
+    await waitFor(() =>
+      expect(api.fetchOpenInstallments).toHaveBeenCalledWith(7),
+    )
+    expect(screen.getByText('Tahsilat al')).toBeTruthy()
+  })
+
+  it('yeni ders formuna yüklenen branş ve öğretmen kataloglarını taşır', async () => {
+    api.fetchSubjects.mockResolvedValue([
+      {
+        id: 4,
+        name: 'Fizik',
+        color: null,
+        defaultMin: 75,
+        sortOrder: 0,
+      },
+    ])
+    api.fetchTeachers.mockResolvedValue([
+      {
+        id: 3,
+        fullName: 'Bora Kaya',
+        color: '#2563eb',
+        phone: null,
+        email: null,
+        isActive: true,
+        sortOrder: 0,
+      },
+    ])
+    draw()
+    await screen.findByTestId('scheduler-mock')
+
+    const option = vi.fn()
+    const handler = schedulerProps().onAppointmentFormOpening as (
+      event: Record<string, unknown>,
+    ) => void
+    handler({
+      appointmentData: {
+        startDate: wallClockToDate('2026-07-22 14:00'),
+        endDate: wallClockToDate('2026-07-22 15:00'),
+        teacherId: 3,
+      },
+      form: { option, itemOption: vi.fn(), updateData: vi.fn() },
+      popup: { hide: vi.fn(), on: vi.fn() },
+    })
+
+    expect(option).toHaveBeenCalledWith(
+      'formData',
+      expect.objectContaining({ kind: 'solo', teacherId: 3 }),
+    )
+    const items = option.mock.calls.find(([name]) => name === 'items')?.[1] as Array<{
+      dataField?: string
+      editorOptions?: { dataSource?: unknown[]; disabled?: boolean }
+    }>
+    expect(
+      items.find((item) => item.dataField === 'subjectId')?.editorOptions,
+    ).toMatchObject({
+      dataSource: [expect.objectContaining({ id: 4, name: 'Fizik' })],
+      disabled: false,
+    })
+    expect(
+      items.find((item) => item.dataField === 'teacherId')?.editorOptions,
+    ).toMatchObject({
+      dataSource: [
+        expect.objectContaining({ id: 3, fullName: 'Bora Kaya' }),
+      ],
+      disabled: false,
+    })
   })
 
   it('şablona bağlı taşıma için kapsam sorar', async () => {

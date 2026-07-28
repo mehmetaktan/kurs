@@ -18,7 +18,7 @@ use crate::model::{
 };
 use crate::repo::attendance::{
     AttendanceDetail, MakeupDebtRow, SaveAttendanceInput, SaveAttendanceReport,
-    StudentLessonOverview,
+    StudentLessonOverview, UpcomingPaymentRow,
 };
 use crate::repo::finance::{
     PackageCloseMode, PackageCloseReport, PackageOverview, PackageSaleInput,
@@ -636,9 +636,12 @@ pub fn add_group_member(
     student_id: i64,
     start_on: Option<String>,
 ) -> AppResult<i64> {
+    let today = clock::today_local();
     state.with_conn(|conn| {
-        let day = start_on.clone().unwrap_or_else(clock::today_local_string);
-        repo::schedule::add_group_member(conn, group_id, student_id, &day)
+        let day = start_on
+            .clone()
+            .unwrap_or_else(|| clock::date_string(today));
+        repo::schedule::add_group_member_and_generate(conn, group_id, student_id, &day, today)
     })
 }
 
@@ -649,9 +652,10 @@ pub fn end_group_membership(
     enrollment_id: i64,
     end_on: Option<String>,
 ) -> AppResult<()> {
+    let today = clock::today_local();
     state.with_conn(|conn| {
-        let day = end_on.clone().unwrap_or_else(clock::today_local_string);
-        repo::schedule::end_group_membership(conn, enrollment_id, &day)
+        let day = end_on.clone().unwrap_or_else(|| clock::date_string(today));
+        repo::schedule::end_group_membership_and_generate(conn, enrollment_id, &day, today)
     })
 }
 
@@ -682,6 +686,11 @@ pub fn cancel_session(
     reason: Option<String>,
 ) -> AppResult<()> {
     state.with_conn(|conn| repo::schedule::cancel_session(conn, session_id, reason.as_deref()))
+}
+
+#[tauri::command]
+pub fn restore_cancelled_session(state: State<'_, AppState>, session_id: i64) -> AppResult<()> {
+    state.with_conn(|conn| repo::schedule::restore_cancelled_session(conn, session_id))
 }
 
 /// Kapsam **çağırandan** gelir ve varsayılanı en dar olan (`only`) — kullanıcıya net
@@ -746,6 +755,19 @@ pub fn day_sessions(
     })
 }
 
+#[tauri::command]
+pub fn dashboard_sessions(
+    state: State<'_, AppState>,
+    now: String,
+) -> AppResult<Vec<DaySessionRow>> {
+    state.with_conn(|conn| repo::schedule::dashboard_rows(conn, &now))
+}
+
+#[tauri::command]
+pub fn dashboard_student_ids(state: State<'_, AppState>, now: String) -> AppResult<Vec<i64>> {
+    state.with_conn(|conn| repo::attendance::dashboard_student_ids(conn, &now))
+}
+
 // ---------------------------------------------------------------------------
 // Faz 6 §1–§2 — yoklama paneli ve tek atomik kaydetme yolu
 // ---------------------------------------------------------------------------
@@ -768,6 +790,15 @@ pub fn save_attendance(
 }
 
 #[tauri::command]
+pub fn undo_attendance(
+    state: State<'_, AppState>,
+    session_id: i64,
+    today: String,
+) -> AppResult<()> {
+    state.with_conn(|conn| repo::attendance::undo_attendance(conn, session_id, &today))
+}
+
+#[tauri::command]
 pub fn save_makeup_session(
     state: State<'_, AppState>,
     input: MakeupSessionInput,
@@ -778,6 +809,14 @@ pub fn save_makeup_session(
 #[tauri::command]
 pub fn makeup_debts(state: State<'_, AppState>) -> AppResult<Vec<MakeupDebtRow>> {
     state.with_conn(repo::attendance::makeup_debt_rows)
+}
+
+#[tauri::command]
+pub fn upcoming_payments(
+    state: State<'_, AppState>,
+    now: String,
+) -> AppResult<Vec<UpcomingPaymentRow>> {
+    state.with_conn(|conn| repo::attendance::upcoming_payment_rows(conn, &now))
 }
 
 /// Öğrenci detayı > Dersler: geçmiş, devam özeti ve açık telafiler tek projeksiyonda.

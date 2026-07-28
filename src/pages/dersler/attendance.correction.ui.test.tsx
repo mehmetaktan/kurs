@@ -199,7 +199,9 @@ describe('kalıcı yoklama düzeltmesi', () => {
     // 1. halka: pending → Geldi.
     fireEvent.click(screen.getByRole('button', { name: 'Hepsi geldi' }))
     expect(
-      screen.getByText('1 ders hakkı düşecek, 250,00 ₺ borç yazılacak.'),
+      screen.getByText(
+        '1 ders hakkı düşecek, 250,00 ₺ ders ücreti işlenecek.',
+      ),
     ).toBeTruthy()
     const firstSave = screen.getByRole('button', { name: 'Kaydet' })
     fireEvent.click(firstSave)
@@ -208,16 +210,22 @@ describe('kalıcı yoklama düzeltmesi', () => {
     fireEvent.click(firstSave)
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
     expect(savedInputs()).toHaveLength(1)
-    expect(await screen.findByText('Ders hakkı ve borç değişmeyecek.')).toBeTruthy()
+    expect(
+      await screen.findByText('Ders hakkı ve ders ücreti değişmeyecek.'),
+    ).toBeTruthy()
 
     // 2. halka: Geldi → Mazeretli; iki sayaç da geri alma yönünü gösterir.
     selectForBoth('Mazeretli')
     expect(
-      screen.getByText('1 ders hakkı geri verilecek, 250,00 ₺ borç silinecek.'),
+      screen.getByText(
+        '1 ders hakkı geri verilecek, 250,00 ₺ ders ücreti geri alınacak.',
+      ),
     ).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }))
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(2))
-    expect(await screen.findByText('Ders hakkı ve borç değişmeyecek.')).toBeTruthy()
+    expect(
+      await screen.findByText('Ders hakkı ve ders ücreti değişmeyecek.'),
+    ).toBeTruthy()
 
     // Bu noktada başka bir ekranda planlanmış telafi, kaynak durum değiştirilse
     // bile bağlantı olarak korunur; kısayol yalnızca exact excused durumunda görünür.
@@ -229,22 +237,30 @@ describe('kalıcı yoklama düzeltmesi', () => {
     // 3. halka: Mazeretli → Geldi; kalıcı yeniden yükleme ileri yönü getirir.
     fireEvent.click(screen.getByRole('button', { name: 'Hepsi geldi' }))
     expect(
-      screen.getByText('1 ders hakkı düşecek, 250,00 ₺ borç yazılacak.'),
+      screen.getByText(
+        '1 ders hakkı düşecek, 250,00 ₺ ders ücreti işlenecek.',
+      ),
     ).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }))
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(3))
-    expect(await screen.findByText('Ders hakkı ve borç değişmeyecek.')).toBeTruthy()
+    expect(
+      await screen.findByText('Ders hakkı ve ders ücreti değişmeyecek.'),
+    ).toBeTruthy()
     expect(screen.queryByText('Telafi planlandı')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Telafi planla' })).toBeNull()
 
     // 4. halka: tekrar Mazeretli; bağlı plan tek kalır, yeni kısayol açılmaz.
     selectForBoth('Mazeretli')
     expect(
-      screen.getByText('1 ders hakkı geri verilecek, 250,00 ₺ borç silinecek.'),
+      screen.getByText(
+        '1 ders hakkı geri verilecek, 250,00 ₺ ders ücreti geri alınacak.',
+      ),
     ).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }))
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(4))
-    expect(await screen.findByText('Ders hakkı ve borç değişmeyecek.')).toBeTruthy()
+    expect(
+      await screen.findByText('Ders hakkı ve ders ücreti değişmeyecek.'),
+    ).toBeTruthy()
     const packaged = screen.getByText('Paketli Öğrenci').closest('section') as HTMLElement
     expect(within(packaged).getByText('Telafi planlandı')).toBeTruthy()
     expect(within(packaged).queryByRole('button', { name: 'Telafi planla' })).toBeNull()

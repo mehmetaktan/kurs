@@ -13,8 +13,8 @@ beforeEach(() => {
   Object.values(api).forEach((fn) => fn.mockReset())
   api.fetchLocalNow.mockResolvedValue('2026-03-20 10:00')
   api.fetchStatementRows.mockResolvedValue([
-    { entryId: 1, entryDate: '2026-03-01', kind: 'installment_charge', memo: 'Mart taksiti', debitKurus: 100_000, creditKurus: 0, balanceKurus: -100_000, paymentId: null, paymentCancelled: false },
-    { entryId: 2, entryDate: '2026-03-05', kind: 'payment', memo: 'Tahsilat', debitKurus: 0, creditKurus: 40_000, balanceKurus: -60_000, paymentId: 9, paymentCancelled: false },
+    { entryId: 1, entryDate: '2026-03-01', occurredAt: '2026-03-01 10:00', kind: 'installment_charge', memo: 'Mart taksiti', debitKurus: 100_000, creditKurus: 0, balanceKurus: -100_000, paymentId: null, paymentCancelled: false },
+    { entryId: 2, entryDate: '2026-03-05', occurredAt: '2026-03-05 14:30', kind: 'payment', memo: 'Tahsilat', debitKurus: 0, creditKurus: 40_000, balanceKurus: -60_000, paymentId: 9, paymentCancelled: false },
   ])
   api.exportStatementCsv.mockResolvedValue('/data/exports/cari-ekstre.csv')
   api.cancelPayment.mockResolvedValue(3)

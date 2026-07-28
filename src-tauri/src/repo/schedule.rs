@@ -18,7 +18,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use chrono::{Datelike, Days, NaiveDate, NaiveDateTime, NaiveTime};
+use chrono::{Datelike, Days, Duration, NaiveDate, NaiveDateTime, NaiveTime};
 use rusqlite::{params, Connection, OptionalExtension, Row};
 use serde::{Deserialize, Serialize};
 
@@ -32,6 +32,22 @@ use crate::text;
 const DEFAULT_HORIZON_WEEKS: i64 = 16;
 /// `setting.default_session_minutes` okunamazsa kullanılan süre (PRD S4).
 pub const DEFAULT_SESSION_MINUTES: i64 = 60;
+const MOVED_SOURCE_REASON: &str = "Grup programındaki bu ders başka bir zamana taşındı.";
+const RESCHEDULED_ONCE_REASON: &str = "Bu ders daha önce bir kez ertelendi.";
+
+fn was_rescheduled_once(reason: Option<&str>) -> bool {
+    reason.is_some_and(|value| value.starts_with(RESCHEDULED_ONCE_REASON))
+}
+
+fn reschedule_marker(original_starts_at: &str) -> String {
+    format!("{RESCHEDULED_ONCE_REASON}|{original_starts_at}")
+}
+
+fn reschedule_origin(reason: Option<&str>) -> Option<&str> {
+    reason?
+        .strip_prefix(RESCHEDULED_ONCE_REASON)?
+        .strip_prefix('|')
+}
 
 // ===========================================================================
 // Seans üretimi — §1.14 "Seanslar ne kadar ileriye üretilir"
@@ -101,6 +117,17 @@ pub fn generate_sessions(conn: &Connection, today: NaiveDate) -> AppResult<Gener
             } else {
                 let (starts_at, ends_at) =
                     slot_bounds(day, &series.start_time, series.duration_min)?;
+                // Grup programı, o tarihte derse katılacak en az bir öğrenci varsa
+                // gerçek seansa dönüşür. Böylece üyesiz yeni bir grubun çalışma
+                // programı takvimi boş derslerle doldurmaz; ileride başlayan üyelikler
+                // de yalnız kendi başlangıç tarihlerinden itibaren slot üretir.
+                if let Some(group_id) = series.study_group_id {
+                    if repo::academic::group_members_on(conn, group_id, &key)?.is_empty() {
+                        archive_empty_group_slot(conn, series_id, &starts_at)?;
+                        day = add_days(day, 7)?;
+                        continue;
+                    }
+                }
                 if slot_exists(conn, series_id, &starts_at)? {
                     report.existing += 1;
                 } else {
@@ -123,6 +150,26 @@ fn slot_exists(conn: &Connection, series_id: i64, starts_at: &str) -> AppResult<
         |row| row.get(0),
     )?;
     Ok(count > 0)
+}
+
+/// Eski üreticinin yazdığı üyesiz grup slotlarını güvenli biçimde görünümden düşürür.
+///
+/// Yalnız henüz işlenmemiş, iptal edilmemiş ve yoklama satırı bulunmayan planlı ders
+/// arşivlenir. Böylece geçmiş veya kullanıcı işlemi taşıyan bir satır kaybolmaz; gruba
+/// daha sonra öğrenci eklenirse kısmi benzersiz indeks slotu yeniden üretime açar.
+fn archive_empty_group_slot(conn: &Connection, series_id: i64, starts_at: &str) -> AppResult<()> {
+    let now = clock::now_local();
+    conn.execute(
+        "UPDATE session SET deleted_at = ?3, updated_at = ?3 \
+         WHERE series_id = ?1 AND starts_at = ?2 AND deleted_at IS NULL \
+           AND status = 'planned' AND attendance_taken_at IS NULL \
+           AND NOT EXISTS ( \
+             SELECT 1 FROM attendance a \
+             WHERE a.session_id = session.id AND a.deleted_at IS NULL \
+           )",
+        params![series_id, starts_at, now],
+    )?;
+    Ok(())
 }
 
 /// Şablondan tek bir seans yazar.
@@ -172,8 +219,9 @@ fn insert_from_series(
     Ok(())
 }
 
-/// Birebir seansın ücret snapshot'ı: o tarihte geçerli, aynı branştaki canlı kaydın
-/// birim ücreti. Kayıt yoksa `None` — sıfır yazılmaz (yukarıdaki gerekçe).
+/// Birebir seansın ücret snapshot'ı: paket kaydı varsa paket tüketileceği için `None`;
+/// ders başı kayıt varsa kayıt snapshot'ı; ikisi de yoksa ders tarihindeki birebir
+/// tarife kullanılır. Hiçbir dal sessizce sıfır yazmaz (yukarıdaki gerekçe).
 fn solo_unit_price(
     conn: &Connection,
     student_id: i64,
@@ -574,6 +622,13 @@ fn archive_unprocessed(conn: &Connection, series_id: i64, from: Option<&str>) ->
 /// değişikliğiyle aynı transaction'da yapılır (`VERI-MODELI §4`).
 pub fn cancel_session(conn: &Connection, session_id: i64, reason: Option<&str>) -> AppResult<()> {
     repo::in_transaction(conn, |conn| {
+        let session: crate::model::Session = repo::require(conn, session_id)?;
+        if session.status == "cancelled" {
+            return Err(AppError::new(
+                "session.alreadyCancelled",
+                "Bu ders zaten iptal edilmiş. İptali geri alabilir veya dersi silebilirsiniz.",
+            ));
+        }
         let cancelled_on = clock::date_string(clock::today_local());
         repo::finance::cancel_session_financials(conn, session_id, &cancelled_on)?;
         conn.execute(
@@ -581,10 +636,15 @@ pub fn cancel_session(conn: &Connection, session_id: i64, reason: Option<&str>) 
              WHERE session_id = ?1 AND deleted_at IS NULL",
             params![session_id, clock::now_local()],
         )?;
+        let stored_reason = if was_rescheduled_once(session.cancel_reason.as_deref()) {
+            session.cancel_reason.as_deref()
+        } else {
+            reason
+        };
         let changed = conn.execute(
             "UPDATE session SET status = 'cancelled', cancel_reason = ?2, updated_at = ?3 \
              WHERE id = ?1 AND deleted_at IS NULL",
-            params![session_id, reason, clock::now_local()],
+            params![session_id, stored_reason, clock::now_local()],
         )?;
         if changed == 0 {
             return Err(AppError::new(
@@ -594,6 +654,40 @@ pub fn cancel_session(conn: &Connection, session_id: i64, reason: Option<&str>) 
         }
         Ok(())
     })
+}
+
+/// Yoklaması alınmadan iptal edilmiş dersi yeniden planlandı durumuna getirir.
+pub fn restore_cancelled_session(conn: &Connection, session_id: i64) -> AppResult<()> {
+    let session: crate::model::Session = repo::require(conn, session_id)?;
+    if session.status != "cancelled" {
+        return Err(AppError::new(
+            "session.notCancelled",
+            "Bu ders iptal edilmiş değil. Listeyi yenileyip tekrar deneyin.",
+        ));
+    }
+    if session.attendance_taken_at.is_some() {
+        return Err(AppError::new(
+            "session.cancelLocked",
+            "Yoklaması alınmış iptal ders geri açılamaz. Yeni bir telafi dersi planlayın.",
+        ));
+    }
+    if session.cancel_reason.as_deref() == Some(MOVED_SOURCE_REASON) {
+        return Err(AppError::new(
+            "session.movedSource",
+            "Bu satır ertelenen dersin eski saatini gösterir ve geri açılamaz. Yeni tarihteki dersi kullanın.",
+        ));
+    }
+    let restored_reason = if was_rescheduled_once(session.cancel_reason.as_deref()) {
+        session.cancel_reason.as_deref()
+    } else {
+        None
+    };
+    conn.execute(
+        "UPDATE session SET status = 'planned', cancel_reason = ?2, updated_at = ?3 \
+         WHERE id = ?1 AND deleted_at IS NULL",
+        params![session_id, restored_reason, clock::now_local()],
+    )?;
+    Ok(())
 }
 
 /// Erteleme — tarih/saat değişir, şablon bağı (`series_id`) korunur.
@@ -611,6 +705,12 @@ pub fn reschedule_session(
     duration_min: i64,
 ) -> AppResult<()> {
     let session: crate::model::Session = repo::require(conn, session_id)?;
+    if session.status == "cancelled" {
+        return Err(AppError::new(
+            "session.cancelled",
+            "İptal edilmiş ders taşınamaz. Önce iptali geri alın, sonra dersi erteleyin.",
+        ));
+    }
     if session.attendance_taken_at.is_some() {
         return Err(AppError::new(
             "session_locked",
@@ -623,10 +723,47 @@ pub fn reschedule_session(
     reject_closed_day(conn, day)?;
     let time = &starts_at[10.min(starts_at.len())..];
     let (starts, ends) = slot_bounds(day, time.trim(), duration_min)?;
+    let moved = starts != session.starts_at;
+    if moved
+        && was_rescheduled_once(session.cancel_reason.as_deref())
+        && reschedule_origin(session.cancel_reason.as_deref()) != Some(starts.as_str())
+    {
+        return Err(AppError::new(
+            "session.rescheduledOnce",
+            "Bu ders daha önce bir kez ertelendi. Yeniden taşımak yerine dersi iptal edip yeni bir ders planlayın.",
+        ));
+    }
+    let day_changed = session.session_date.as_deref() != Some(&starts[..10]);
+    let unit_price = if day_changed && !session.is_makeup {
+        match session.student_id {
+            Some(student_id) => solo_unit_price(conn, student_id, session.subject_id, &starts)?,
+            None => session.unit_price,
+        }
+    } else {
+        session.unit_price
+    };
+    let next_reason = if moved {
+        if was_rescheduled_once(session.cancel_reason.as_deref()) {
+            None
+        } else {
+            Some(reschedule_marker(&session.starts_at))
+        }
+    } else {
+        session.cancel_reason.clone()
+    };
 
     conn.execute(
-        "UPDATE session SET starts_at = ?2, ends_at = ?3, updated_at = ?4 WHERE id = ?1",
-        params![session_id, starts, ends, clock::now_local()],
+        "UPDATE session SET starts_at = ?2, ends_at = ?3, unit_price = ?4, \
+                            cancel_reason = ?5, updated_at = ?6 \
+         WHERE id = ?1",
+        params![
+            session_id,
+            starts,
+            ends,
+            unit_price,
+            next_reason,
+            clock::now_local()
+        ],
     )?;
     Ok(())
 }
@@ -690,6 +827,19 @@ pub fn reschedule_sessions(
     today: NaiveDate,
 ) -> AppResult<RescheduleReport> {
     let session: crate::model::Session = repo::require(conn, session_id)?;
+    if session.status == "cancelled" {
+        return Err(AppError::new(
+            "session.cancelled",
+            "İptal edilmiş ders taşınamaz. Önce iptali geri alın, sonra dersi erteleyin.",
+        ));
+    }
+    if session.attendance_taken_at.is_some() {
+        return Err(AppError::new(
+            "session_locked",
+            "Bu dersin yoklaması alınmış; ders taşınamaz. \
+             Önce yoklamayı geri alın ya da yeni bir telafi dersi planlayın.",
+        ));
+    }
     if scope == RescheduleScope::Following
         && session.series_id.is_some()
         && session.study_group_id.is_some()
@@ -721,14 +871,6 @@ pub fn reschedule_sessions(
         }
         (RescheduleScope::Following, Some(series_id)) => series_id,
     };
-
-    if session.attendance_taken_at.is_some() {
-        return Err(AppError::new(
-            "session_locked",
-            "Bu dersin yoklaması alınmış; ders taşınamaz. \
-             Önce yoklamayı geri alın ya da yeni bir telafi dersi planlayın.",
-        ));
-    }
 
     let day = parse_date(&starts_at[..10.min(starts_at.len())])?;
     reject_closed_day(conn, day)?;
@@ -788,10 +930,22 @@ fn move_group_occurrence(
     starts_at: &str,
     duration_min: i64,
 ) -> AppResult<()> {
+    if session.status == "cancelled" {
+        return Err(AppError::new(
+            "session.cancelled",
+            "İptal edilmiş ders taşınamaz. Önce iptali geri alın, sonra dersi erteleyin.",
+        ));
+    }
     if session.attendance_taken_at.is_some() {
         return Err(AppError::new(
             "session_locked",
             "Bu dersin yoklaması alınmış; ders taşınamaz. Önce yoklamayı geri alın ya da yeni bir telafi dersi planlayın.",
+        ));
+    }
+    if was_rescheduled_once(session.cancel_reason.as_deref()) {
+        return Err(AppError::new(
+            "session.rescheduledOnce",
+            "Bu ders daha önce bir kez ertelendi. Yeniden taşımak yerine dersi iptal edip yeni bir ders planlayın.",
         ));
     }
     let day = parse_date(&starts_at[..10.min(starts_at.len())])?;
@@ -802,11 +956,7 @@ fn move_group_occurrence(
         conn.execute(
             "UPDATE session SET status = 'cancelled', cancel_reason = ?2, updated_at = ?3 \
              WHERE id = ?1 AND deleted_at IS NULL",
-            params![
-                session.id,
-                "Grup programındaki bu ders başka bir zamana taşındı.",
-                clock::now_local()
-            ],
+            params![session.id, MOVED_SOURCE_REASON, clock::now_local()],
         )?;
         let mut replacement = session.clone();
         replacement.id = None;
@@ -816,7 +966,7 @@ fn move_group_occurrence(
         replacement.session_date = None;
         replacement.kind = None;
         replacement.status = "planned".into();
-        replacement.cancel_reason = None;
+        replacement.cancel_reason = Some(reschedule_marker(&session.starts_at));
         replacement.created_at = None;
         replacement.updated_at = None;
         replacement.deleted_at = None;
@@ -865,6 +1015,8 @@ pub struct DaySessionRow {
     pub marked_count: i64,
     pub is_makeup: bool,
     pub cancel_reason: Option<String>,
+    pub rescheduled_once: bool,
+    pub restore_allowed: bool,
 }
 
 /// Bir günün dersleri, saat sırasıyla (R1.1).
@@ -872,6 +1024,27 @@ pub fn day_rows(conn: &Connection, day: &str) -> AppResult<Vec<DaySessionRow>> {
     session_rows_between(conn, day, day)
 }
 
+/// Dashboard'un kayan zaman penceresi: yerel saatten 24 saat önce ve 24 saat sonra.
+pub fn dashboard_rows(conn: &Connection, now: &str) -> AppResult<Vec<DaySessionRow>> {
+    let center = NaiveDateTime::parse_from_str(now, "%Y-%m-%d %H:%M").map_err(|_| {
+        AppError::new(
+            "dashboard.now",
+            "Dashboard saati okunamadı. Ekranı yenileyip tekrar deneyin.",
+        )
+    })?;
+    let from = center - Duration::hours(24);
+    let to = center + Duration::hours(24);
+    let from_text = from.format("%Y-%m-%d %H:%M").to_string();
+    let to_text = to.format("%Y-%m-%d %H:%M").to_string();
+    Ok(session_rows_between(
+        conn,
+        &from.date().format("%Y-%m-%d").to_string(),
+        &to.date().format("%Y-%m-%d").to_string(),
+    )?
+    .into_iter()
+    .filter(|row| row.starts_at >= from_text && row.starts_at <= to_text)
+    .collect())
+}
 /// Haftalık program tanımlı mı — **Bugün ekranının iki boş durumunu ayıran tek şey**.
 ///
 /// R1.7: program yoksa ekran boş liste değil **yönlendirme** gösterir. Program varken de
@@ -931,6 +1104,7 @@ pub fn session_rows_between(
     )?;
 
     let rows = stmt.query_map(params![from, to], |row| {
+        let cancel_reason: Option<String> = row.get(19)?;
         Ok(DaySessionRow {
             id: row.get(0)?,
             series_id: row.get(1)?,
@@ -951,7 +1125,9 @@ pub fn session_rows_between(
             present_count: row.get(16)?,
             marked_count: row.get(17)?,
             is_makeup: row.get(18)?,
-            cancel_reason: row.get(19)?,
+            rescheduled_once: was_rescheduled_once(cancel_reason.as_deref()),
+            restore_allowed: cancel_reason.as_deref() != Some(MOVED_SOURCE_REASON),
+            cancel_reason,
         })
     })?;
 
@@ -1184,6 +1360,12 @@ fn update_single_session(
     ends_at: &str,
 ) -> AppResult<()> {
     let mut session: crate::model::Session = repo::require(conn, id)?;
+    if session.status == "cancelled" {
+        return Err(AppError::new(
+            "session.cancelled",
+            "İptal edilmiş ders değiştirilemez. Önce iptali geri alın, sonra dersi düzenleyin.",
+        ));
+    }
     if session.attendance_taken_at.is_some() {
         return Err(AppError::new(
             "session_locked",
@@ -1192,10 +1374,35 @@ fn update_single_session(
         ));
     }
 
+    let moved = session.starts_at != starts_at;
+    if moved
+        && was_rescheduled_once(session.cancel_reason.as_deref())
+        && reschedule_origin(session.cancel_reason.as_deref()) != Some(starts_at)
+    {
+        return Err(AppError::new(
+            "session.rescheduledOnce",
+            "Bu ders daha önce bir kez ertelendi. Yeniden taşımak yerine dersi iptal edip yeni bir ders planlayın.",
+        ));
+    }
+    let pricing_changed = session.subject_id != input.subject_id
+        || session.session_date.as_deref() != Some(&starts_at[..10]);
+    if pricing_changed && !session.is_makeup {
+        session.unit_price = match session.student_id {
+            Some(student_id) => solo_unit_price(conn, student_id, input.subject_id, starts_at)?,
+            None => None,
+        };
+    }
     session.subject_id = input.subject_id;
     session.teacher_id = input.teacher_id;
     session.starts_at = starts_at.to_string();
     session.ends_at = ends_at.to_string();
+    if moved {
+        session.cancel_reason = if was_rescheduled_once(session.cancel_reason.as_deref()) {
+            None
+        } else {
+            Some(reschedule_marker(&session.starts_at))
+        };
+    }
     repo::academic::update_session(conn, id, &session)
 }
 
@@ -2114,7 +2321,31 @@ pub fn add_group_member(
     start_on: &str,
 ) -> AppResult<i64> {
     let group: StudyGroup = repo::require(conn, group_id)?;
-    let tariff = repo::finance::resolve_tariff(conn, group.subject_id, true, start_on.trim())?;
+    let start = start_on.trim();
+
+    // Kullanıcı aynı gün "gruptan çıkar" deyip fikrini değiştirirse kapalı satırın
+    // bitiş günü ile yeni başlangıç günü çakışır. İkinci bir geçmiş satırı açmak yerine
+    // bu işlemi çıkarmayı geri alma olarak yorumla; geçmiş yoklama ve ücret bağlantıları
+    // da aynı enrollment üzerinde kalır.
+    let closed_id = conn
+        .query_row(
+            "SELECT id FROM enrollment \
+             WHERE student_id = ?1 AND study_group_id = ?2 AND deleted_at IS NULL \
+               AND status = 'closed' AND end_on = ?3 \
+             ORDER BY end_on DESC, id DESC LIMIT 1",
+            params![student_id, group_id, start],
+            |row| row.get::<_, i64>(0),
+        )
+        .optional()?;
+    if let Some(enrollment_id) = closed_id {
+        let mut enrollment: Enrollment = repo::require(conn, enrollment_id)?;
+        enrollment.end_on = None;
+        enrollment.status = "active".into();
+        repo::academic::update_enrollment(conn, enrollment_id, &enrollment)?;
+        return Ok(enrollment_id);
+    }
+
+    let tariff = repo::finance::resolve_tariff(conn, group.subject_id, true, start)?;
 
     repo::academic::insert_enrollment(
         conn,
@@ -2127,7 +2358,7 @@ pub fn add_group_member(
             price_rule_id: Some(tariff.price_rule_id),
             pricing_model: "per_session".into(),
             unit_price: tariff.unit_price,
-            start_on: start_on.trim().to_string(),
+            start_on: start.to_string(),
             end_on: None,
             status: "active".into(),
             created_at: None,
@@ -2135,6 +2366,24 @@ pub fn add_group_member(
             deleted_at: None,
         },
     )
+}
+
+/// Üyeliği açar ve grup programının artık dolu olan slotlarını aynı işlemde üretir.
+///
+/// `today` üyelik başlangıcı değildir: geçmişe ders icat etmemek için üretim penceresinin
+/// başlangıcıdır. Üyeliğin kendi `start_on` değeri ayrıca tarih bazında süzülür.
+pub fn add_group_member_and_generate(
+    conn: &Connection,
+    group_id: i64,
+    student_id: i64,
+    start_on: &str,
+    today: NaiveDate,
+) -> AppResult<i64> {
+    repo::in_transaction(conn, |conn| {
+        let enrollment_id = add_group_member(conn, group_id, student_id, start_on)?;
+        generate_sessions(conn, today)?;
+        Ok(enrollment_id)
+    })
 }
 
 /// Gruptan çıkarma — kayıt **silinmez**, bitiş tarihi yazılır (R5.8).
@@ -2165,6 +2414,21 @@ pub fn end_group_membership(conn: &Connection, enrollment_id: i64, end_on: &str)
         params![enrollment_id, end, clock::now_local()],
     )?;
     Ok(())
+}
+
+/// Üyeliği kapatır ve artık katılımcısı kalmayan gelecek grup slotlarını aynı işlemde
+/// temizler. `generate_sessions` yalnız güvenli, işlenmemiş satırları soft-archive eder.
+pub fn end_group_membership_and_generate(
+    conn: &Connection,
+    enrollment_id: i64,
+    end_on: &str,
+    today: NaiveDate,
+) -> AppResult<()> {
+    repo::in_transaction(conn, |conn| {
+        end_group_membership(conn, enrollment_id, end_on)?;
+        generate_sessions(conn, today)?;
+        Ok(())
+    })
 }
 
 // ---------------------------------------------------------------------------

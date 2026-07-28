@@ -9,7 +9,7 @@ import {
   type AppError,
   type StatementRow,
 } from '../../lib/api'
-import { formatDate, formatLira } from '../../lib/format'
+import { formatDate, formatLira, formatTime } from '../../lib/format'
 import { paginate } from '../../lib/paginate'
 import {
   Badge,
@@ -57,7 +57,12 @@ export function StatementPanel({ studentId }: { studentId: number }) {
     const paymentId = cancelling?.paymentId
     if (!paymentId) return
     setCancelling(null)
-    try { await cancelPayment(paymentId); toast(tr.payments.statement.cancelDone); await load() }
+    try {
+      await cancelPayment(paymentId)
+      window.dispatchEvent(new Event('kurs:debts-changed'))
+      toast(tr.payments.statement.cancelDone)
+      await load()
+    }
     catch (caught) { setError(caught as AppError) }
   }
   const openReceipt = async (paymentId: number) => {
@@ -66,7 +71,12 @@ export function StatementPanel({ studentId }: { studentId: number }) {
   }
 
   const columns: readonly Column<StatementRow>[] = [
-    { key: 'date', header: tr.payments.statement.columns.date, width: '105px', render: (row) => formatDate(row.entryDate) },
+    {
+      key: 'date',
+      header: tr.payments.statement.columns.date,
+      width: '138px',
+      render: (row) => `${formatDate(row.entryDate)} ${formatTime(row.occurredAt)}`,
+    },
     { key: 'description', header: tr.payments.statement.columns.description, width: 'minmax(180px,1fr)', render: (row) => <div className={styles.statementDescription}><span>{row.memo ?? tr.payments.statement.kinds[row.kind]}</span>{row.paymentCancelled && row.kind === 'payment' && <Badge tone="neutral">{tr.payments.statement.cancelled}</Badge>}</div> },
     { key: 'debit', header: tr.payments.statement.columns.debit, width: '110px', align: 'end', render: (row) => row.debitKurus > 0 ? formatLira(row.debitKurus) : '—' },
     { key: 'credit', header: tr.payments.statement.columns.credit, width: '110px', align: 'end', render: (row) => row.creditKurus > 0 ? formatLira(row.creditKurus) : '—' },

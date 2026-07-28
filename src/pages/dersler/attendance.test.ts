@@ -141,7 +141,9 @@ describe('yoklama etki özeti', () => {
       debtToRemoveKurus: 0,
       complete: true,
     })
-    expect(attendanceEffectText(summary)).toBe('Ders hakkı ve borç değişmeyecek.')
+    expect(attendanceEffectText(summary)).toBe(
+      'Ders hakkı ve ders ücreti değişmeyecek.',
+    )
   })
 
   it('geldi → mazeretli düzeltmesini geri verme ve borç silme yönünde anlatır', () => {
@@ -151,7 +153,7 @@ describe('yoklama etki özeti', () => {
     }
     const summary = attendanceEffectSummary(PERSISTED_PRESENT, drafts)
     expect(attendanceEffectText(summary)).toBe(
-      '1 ders hakkı geri verilecek, 250,00 ₺ borç silinecek.',
+      '1 ders hakkı geri verilecek, 250,00 ₺ ders ücreti geri alınacak.',
     )
   })
 
@@ -163,7 +165,7 @@ describe('yoklama etki özeti', () => {
     }
     const summary = attendanceEffectSummary(persisted, drafts)
     expect(attendanceEffectText(summary)).toBe(
-      '1 ders hakkı düşecek, 250,00 ₺ borç yazılacak.',
+      '1 ders hakkı düşecek, 250,00 ₺ ders ücreti işlenecek.',
     )
   })
 })

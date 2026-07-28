@@ -65,6 +65,7 @@ export function GroupDetailPage({ groupId }: { groupId: number }) {
   const [formOpen, setFormOpen] = useState(false)
   const [confirmArchive, setConfirmArchive] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
+  const [addingStudentId, setAddingStudentId] = useState<number | null>(null)
   const [removing, setRemoving] = useState<GroupMember | null>(null)
   const [removeEndOn, setRemoveEndOn] = useState<string | null>(null)
   const toast = useToast()
@@ -213,7 +214,14 @@ export function GroupDetailPage({ groupId }: { groupId: number }) {
           {tab === 'members' && (
             <MembersTab
               members={members}
-              onAdd={() => setAddOpen(true)}
+              onAdd={() => {
+                setAddingStudentId(null)
+                setAddOpen(true)
+              }}
+              onRejoin={(member) => {
+                setAddingStudentId(member.studentId)
+                setAddOpen(true)
+              }}
               onRemove={setRemoving}
             />
           )}
@@ -242,6 +250,7 @@ export function GroupDetailPage({ groupId }: { groupId: number }) {
       <AddMemberDialog
         open={addOpen}
         detail={detail}
+        initialStudentId={addingStudentId}
         onClose={() => setAddOpen(false)}
         onAdded={() => {
           setAddOpen(false)
@@ -361,12 +370,17 @@ function SummaryStrip({ detail }: { detail: GroupDetail }) {
 function MembersTab({
   members,
   onAdd,
+  onRejoin,
   onRemove,
 }: {
   members: GroupMember[]
   onAdd: () => void
+  onRejoin: (member: GroupMember) => void
   onRemove: (member: GroupMember) => void
 }) {
+  const currentStudentIds = new Set(
+    members.filter((member) => member.isCurrent).map((member) => member.studentId),
+  )
   const columns: Column<GroupMember>[] = [
     {
       key: 'name',
@@ -417,12 +431,15 @@ function MembersTab({
       align: 'end',
       render: (row) => (
         <span className={styles.rowActions}>
-          {/* Ayrılmış üyede düğme yok: kayıt kapalı, ikinci kez kapatılamaz (R5.8). */}
-          {row.isCurrent && (
+          {row.isCurrent ? (
             <Button size="small" onClick={() => onRemove(row)}>
               {tr.groups.detail.members.remove}
             </Button>
-          )}
+          ) : !currentStudentIds.has(row.studentId) ? (
+            <Button size="small" onClick={() => onRejoin(row)}>
+              {tr.groups.detail.members.rejoin}
+            </Button>
+          ) : null}
         </span>
       ),
     },
@@ -631,12 +648,14 @@ function NotesTab({
 function AddMemberDialog({
   open,
   detail,
+  initialStudentId,
   onClose,
   onAdded,
   onError,
 }: {
   open: boolean
   detail: GroupDetail
+  initialStudentId: number | null
   onClose: () => void
   onAdded: () => void
   onError: (error: AppError) => void
@@ -650,13 +669,13 @@ function AddMemberDialog({
 
   useEffect(() => {
     if (!open) return
-    setStudentId('')
+    setStudentId(initialStudentId === null ? '' : String(initialStudentId))
     setStartOn(null)
     setConfirming(false)
     void fetchStudentList()
       .then(setStudents)
       .catch(() => setStudents([]))
-  }, [open])
+  }, [initialStudentId, open])
 
   const currentIds = new Set(
     detail.members.filter((member) => member.isCurrent).map((member) => member.studentId),

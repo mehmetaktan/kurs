@@ -92,4 +92,22 @@ describe('tahsilat modalı', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Makbuzu aç / yazdır' }))
     await waitFor(() => expect(api.openReceiptPdf).toHaveBeenCalledWith(9))
   })
+
+  it('borç olmadan alınan ödemenin yoklamada mahsuplaşacak avans olduğunu açıklar', async () => {
+    api.fetchOpenInstallments.mockResolvedValue([])
+    draw()
+    await screen.findByDisplayValue('2026-14')
+    expect(
+      await screen.findByText(
+        'Bu öğrencinin açık taksidi yok. Tahsilat önce mevcut ders borcunu kapatır; artan tutar avans kalır. Ders henüz işlenmediyse ücret yoklamada bakiyeden otomatik düşer.',
+      ),
+    ).toBeTruthy()
+
+    fireEvent.change(screen.getByLabelText('Tutar'), {
+      target: { value: '250,00' },
+    })
+    expect(
+      await screen.findByText(/taksitlere bağlanmayacak; mevcut ders borcunu kapatacak/),
+    ).toBeTruthy()
+  })
 })

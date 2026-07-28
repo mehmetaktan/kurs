@@ -35,12 +35,19 @@ type Method = 'cash' | 'card' | 'transfer'
 interface PaymentModalProps {
   open: boolean
   initialStudentId?: number | null
+  initialAmountKurus?: number | null
   onClose: () => void
   onSaved?: (report: PaymentReport) => void
 }
 
 /** E13 — makbuz numarasını açılışta ayıran, FIFO mahsup önerili tahsilat formu. */
-export function PaymentModal({ open, initialStudentId = null, onClose, onSaved }: PaymentModalProps) {
+export function PaymentModal({
+  open,
+  initialStudentId = null,
+  initialAmountKurus = null,
+  onClose,
+  onSaved,
+}: PaymentModalProps) {
   const [students, setStudents] = useState<StudentRow[] | null>(null)
   const [studentId, setStudentId] = useState<number | null>(initialStudentId)
   const [amountText, setAmountText] = useState('')
@@ -66,7 +73,7 @@ export function PaymentModal({ open, initialStudentId = null, onClose, onSaved }
     setError(null)
     setStudents(null)
     setStudentId(initialStudentId)
-    setAmountText('')
+    setAmountText(initialAmountKurus && initialAmountKurus > 0 ? formatKurus(initialAmountKurus) : '')
     setMethod('cash')
     setNote('')
     setInstallments([])
@@ -86,7 +93,7 @@ export function PaymentModal({ open, initialStudentId = null, onClose, onSaved }
       })
       .catch((caught: AppError) => live && setError(caught))
     return () => { live = false }
-  }, [initialStudentId, open])
+  }, [initialAmountKurus, initialStudentId, open])
 
   const amount = parseKurus(amountText)
 
@@ -147,6 +154,7 @@ export function PaymentModal({ open, initialStudentId = null, onClose, onSaved }
         note: note.trim() || null,
         allocations,
       })
+      window.dispatchEvent(new Event('kurs:debts-changed'))
       toast(tr.payments.modal.saved)
       onSaved?.(report)
       setSavedReport(report)

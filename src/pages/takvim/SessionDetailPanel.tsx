@@ -48,23 +48,41 @@ export function SessionDetailPanel({
           {row.attendanceTaken && <Badge tone="neutral">{tr.calendar.locked}</Badge>}
         </div>
         <div className={styles.detailActions}>
-          <Button variant="primary" onClick={() => onEdit(row)}>
-            {tr.calendar.details.edit}
-          </Button>
-          <Button onClick={() => onAttendance(row)}>
-            {row.attendanceTaken
-              ? tr.calendar.details.attendanceView
-              : tr.calendar.details.attendanceTake}
-          </Button>
-          <Button
-            disabled={row.attendanceTaken}
-            onClick={() => onAction(row, 'reschedule')}
-          >
-            {tr.calendar.details.reschedule}
-          </Button>
-          <Button onClick={() => onAction(row, 'cancel')}>
-            {tr.calendar.details.cancel}
-          </Button>
+          {(row.status !== 'cancelled' || row.attendanceTaken) && (
+            <Button onClick={() => onAttendance(row)}>
+              {row.attendanceTaken
+                ? tr.calendar.details.attendanceView
+                : tr.calendar.details.attendanceTake}
+            </Button>
+          )}
+          {row.status === 'cancelled' ? (
+            row.restoreAllowed !== false && (
+              <Button
+                variant="primary"
+                disabled={row.attendanceTaken}
+                onClick={() => onAction(row, 'restore')}
+              >
+                {tr.sessions.actions.restore}
+              </Button>
+            )
+          ) : (
+            <>
+              <Button variant="primary" onClick={() => onEdit(row)}>
+                {tr.calendar.details.edit}
+              </Button>
+              {row.rescheduledOnce !== true && (
+                <Button
+                  disabled={row.attendanceTaken}
+                  onClick={() => onAction(row, 'reschedule')}
+                >
+                  {tr.calendar.details.reschedule}
+                </Button>
+              )}
+              <Button onClick={() => onAction(row, 'cancel')}>
+                {tr.calendar.details.cancel}
+              </Button>
+            </>
+          )}
           <Button variant="danger" onClick={() => onAction(row, 'remove')}>
             {tr.calendar.details.archive}
           </Button>

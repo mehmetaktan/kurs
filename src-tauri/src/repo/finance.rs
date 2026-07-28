@@ -244,8 +244,9 @@ pub fn resolve_tariff(
 }
 
 /// Yoklama için ücret snapshot'ını açıkça çözer (`VERI-MODELI §5`). Önce o dersteki
-/// canlı ders başı kaydı, yoksa seans snapshot'ı; ikisi de yoksa hata. İki kayıt varsa
-/// sessizce ilkini seçmez.
+/// canlı ders başı kaydı, sonra seans snapshot'ı, son olarak ders tarihindeki tarife
+/// kullanılır. Böylece tarife sonradan tanımlanmış eski tek seferlik dersler yoklamayı
+/// kilitlemez. İki kayıt varsa sessizce ilkini seçmez.
 pub fn resolve_unit_price(conn: &Connection, attendance_id: i64) -> AppResult<i64> {
     let (student_id, subject_id, group_id, session_day, session_price): (
         i64,
@@ -291,7 +292,7 @@ pub fn resolve_unit_price(conn: &Connection, attendance_id: i64) -> AppResult<i6
 /// Yoklama önizlemesi bu fonksiyonu çağırır; kaydetme yolu ise `resolve_unit_price`
 /// üzerinden yine buraya gelir. Böylece ekrandaki borç özetiyle gerçek defter yazımı
 /// iki ayrı fiyat kuralı geliştiremez.
-fn resolve_session_unit_price(
+pub(crate) fn resolve_session_unit_price(
     conn: &Connection,
     student_id: i64,
     subject_id: i64,
@@ -312,13 +313,24 @@ fn resolve_session_unit_price(
         )?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     match prices.as_slice() {
-        [price] => Ok(*price),
-        [] => session_price.ok_or_else(|| {
-            AppError::new(
-                "price_not_found",
-                "Bu ders için tarife bulunamadı. Ders başı ücret yazmak için öğrencinin kaydını veya seans ücretini düzeltin.",
-            )
-        }),
+        [price] if *price > 0 => Ok(*price),
+        [_] | [] => {
+            if let Some(price) = session_price.filter(|price| *price > 0) {
+                return Ok(price);
+            }
+            resolve_tariff(conn, subject_id, group_id.is_some(), session_day)
+                .map(|tariff| tariff.unit_price)
+                .map_err(|error| {
+                    if matches!(error.code.as_str(), "price_rule_not_found") {
+                        AppError::new(
+                            "price_not_found",
+                            "Bu ders için geçerli bir tarife bulunamadı. Tanımlar → Tarifeler bölümünden ders tarihini kapsayan bir ders başı tarife ekleyin.",
+                        )
+                    } else {
+                        error
+                    }
+                })
+        }
         _ => Err(AppError::new(
             "ambiguous_enrollment",
             format!("Bu ders için birden fazla geçerli kayıt bulundu. Öğrencinin {session_day} tarihindeki kayıt aralıklarını düzeltin."),
@@ -480,6 +492,12 @@ fn validate_price_rule(input: &PriceRuleInput) -> AppResult<()> {
         return Err(AppError::new(
             "priceRule.unitPrice",
             "Birim ücret negatif olamaz. Tutarı kontrol edin.",
+        ));
+    }
+    if input.pricing_model == "per_session" && input.unit_price == 0 {
+        return Err(AppError::new(
+            "priceRule.unitPrice",
+            "Ders başı birim ücret 0 TL olamaz. Pozitif bir tutar girin.",
         ));
     }
     if input.default_installments < 1 {
@@ -1733,6 +1751,7 @@ pub struct StatementQuery {
 pub struct StatementRow {
     pub entry_id: i64,
     pub entry_date: String,
+    pub occurred_at: String,
     pub kind: String,
     pub memo: Option<String>,
     pub debit_kurus: i64,
@@ -1758,30 +1777,32 @@ pub fn statement_rows(conn: &Connection, query: &StatementQuery) -> AppResult<Ve
         ));
     }
     let mut stmt = conn.prepare(
-        "SELECT l.id, l.entry_date, l.kind, l.memo, l.amount, l.payment_id, \
+        "SELECT l.id, l.entry_date, l.created_at, l.kind, l.memo, l.amount, l.payment_id, \
                 CASE WHEN l.kind = 'payment' THEN EXISTS( \
                   SELECT 1 FROM ledger_entry r WHERE r.reverses_id = l.id \
                     AND r.deleted_at IS NULL \
                 ) ELSE 0 END \
          FROM ledger_entry l \
          WHERE l.student_id = ?1 AND l.deleted_at IS NULL \
-         ORDER BY l.entry_date, l.id",
+         ORDER BY l.entry_date, l.created_at, l.id",
     )?;
     let rows = stmt.query_map([query.student_id], |row| {
         Ok((
             row.get::<_, i64>(0)?,
             row.get::<_, String>(1)?,
             row.get::<_, String>(2)?,
-            row.get::<_, Option<String>>(3)?,
-            row.get::<_, i64>(4)?,
-            row.get::<_, Option<i64>>(5)?,
-            row.get::<_, bool>(6)?,
+            row.get::<_, String>(3)?,
+            row.get::<_, Option<String>>(4)?,
+            row.get::<_, i64>(5)?,
+            row.get::<_, Option<i64>>(6)?,
+            row.get::<_, bool>(7)?,
         ))
     })?;
     let mut balance = 0_i64;
     let mut out = Vec::new();
     for row in rows {
-        let (entry_id, entry_date, kind, memo, amount, payment_id, payment_cancelled) = row?;
+        let (entry_id, entry_date, occurred_at, kind, memo, amount, payment_id, payment_cancelled) =
+            row?;
         balance = balance.checked_add(amount).ok_or_else(|| {
             AppError::new(
                 "statement.balance",
@@ -1809,6 +1830,7 @@ pub fn statement_rows(conn: &Connection, query: &StatementQuery) -> AppResult<Ve
         out.push(StatementRow {
             entry_id,
             entry_date,
+            occurred_at,
             kind,
             memo,
             debit_kurus,
@@ -1818,12 +1840,13 @@ pub fn statement_rows(conn: &Connection, query: &StatementQuery) -> AppResult<Ve
             payment_cancelled,
         });
     }
+    out.reverse();
     Ok(out)
 }
 
 /// Excel'in Türkçe karakterleri doğru açması için UTF-8 BOM'lu cari ekstre CSV'si.
 pub fn statement_csv(rows: &[StatementRow]) -> Vec<u8> {
-    let mut csv = String::from("\u{feff}Tarih;Açıklama;Borç;Alacak;Bakiye\r\n");
+    let mut csv = String::from("\u{feff}Tarih ve saat;Açıklama;Borç;Alacak;Bakiye\r\n");
     for row in rows {
         let description = row.memo.as_deref().unwrap_or(match row.kind.as_str() {
             "session_charge" => "Ders ücreti",
@@ -1834,7 +1857,7 @@ pub fn statement_csv(rows: &[StatementRow]) -> Vec<u8> {
         });
         csv.push_str(&format!(
             "{};{};{};{};{}\r\n",
-            csv_cell(&row.entry_date),
+            csv_cell(&row.occurred_at),
             csv_cell(description),
             crate::money::format_kurus(row.debit_kurus),
             crate::money::format_kurus(row.credit_kurus),

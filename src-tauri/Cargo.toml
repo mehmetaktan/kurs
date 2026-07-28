@@ -2,7 +2,7 @@
 name = "kurs-takip"
 # Uygulama sürümünün kaynağı kökteki package.json'dır. Bu crate kopyasını
 # `npm run verify:version` ve identity testi sapmaya karşı mühürler.
-version = "1.0.0"
+version = "1.0.1"
 description = "Kurs Takip — öğrenci, ders ve tahsilat takibi"
 authors = ["Aktansoft"]
 edition = "2021"

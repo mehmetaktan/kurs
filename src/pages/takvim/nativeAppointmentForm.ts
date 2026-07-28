@@ -37,6 +37,7 @@ export interface NativeAppointmentDraft {
 
 export interface NativeFormActions {
   onAttendance: (row: CalendarAppointment['row']) => void
+  onPayment: (studentId: number | null) => void
   onReschedule: (row: CalendarAppointment['row']) => void
   onCancel: (row: CalendarAppointment['row']) => void
   onArchive: (row: CalendarAppointment['row']) => void
@@ -55,7 +56,7 @@ export function configureNativeAppointmentForm(
   actions: NativeFormActions,
 ): void {
   const appointment = event.appointmentData as
-    | Partial<CalendarAppointment>
+    | (Partial<CalendarAppointment> & Partial<NativeAppointmentDraft>)
     | undefined
   const existing = appointment?.row
   const startDate =
@@ -70,14 +71,25 @@ export function configureNativeAppointmentForm(
     id: existing?.id,
     startDate,
     endDate,
-    kind: existing?.kind === 'solo' ? 'solo' : 'group',
-    subjectId: existing?.subjectId ?? null,
-    teacherId: existing?.teacherId ?? null,
-    studyGroupId: existing?.studyGroupId ?? null,
-    studentId: existing?.studentId ?? null,
+    // Grup tekrarının sahibi GroupForm'dur; takvimdeki yeni tek ders için en doğal
+    // varsayılan birebirdir. Hücre/popup açıkça grup hedefi taşıyorsa onu koruruz.
+    kind:
+      existing !== undefined
+        ? existing.kind === 'solo'
+          ? 'solo'
+          : 'group'
+        : appointment?.kind === 'group' || appointment?.studyGroupId != null
+          ? 'group'
+          : 'solo',
+    subjectId: existing?.subjectId ?? appointment?.subjectId ?? null,
+    teacherId: existing?.teacherId ?? appointment?.teacherId ?? null,
+    studyGroupId: existing?.studyGroupId ?? appointment?.studyGroupId ?? null,
+    studentId: existing?.studentId ?? appointment?.studentId ?? null,
     source: appointment as CalendarAppointment | undefined,
   }
   const editing = existing !== undefined
+  const groupFieldsLocked =
+    draft.kind === 'group' && draft.studyGroupId !== null
 
   event.form.option('formData', draft)
   event.form.option('labelLocation', 'top')
@@ -97,8 +109,26 @@ export function configureNativeAppointmentForm(
         onValueChanged: ({ value }: { value: 'group' | 'solo' }) => {
           event.form.itemOption('studyGroupId', 'visible', value === 'group')
           event.form.itemOption('studentId', 'visible', value === 'solo')
-          event.form.itemOption('subjectId', 'editorOptions.disabled', value === 'group')
-          event.form.itemOption('teacherId', 'editorOptions.disabled', value === 'group')
+          if (value === 'group') {
+            event.form.updateData('studentId', null)
+            const formData = event.form.option(
+              'formData',
+            ) as NativeAppointmentDraft | undefined
+            setEditorDisabled(
+              event,
+              'subjectId',
+              formData?.studyGroupId != null,
+            )
+            setEditorDisabled(
+              event,
+              'teacherId',
+              formData?.studyGroupId != null,
+            )
+          } else {
+            event.form.updateData('studyGroupId', null)
+            setEditorDisabled(event, 'subjectId', false)
+            setEditorDisabled(event, 'teacherId', false)
+          }
         },
       },
     },
@@ -119,6 +149,10 @@ export function configureNativeAppointmentForm(
           if (group) {
             event.form.updateData('subjectId', group.subjectId)
             event.form.updateData('teacherId', group.teacherId)
+          }
+          if (!editing) {
+            setEditorDisabled(event, 'subjectId', group !== undefined)
+            setEditorDisabled(event, 'teacherId', group !== undefined)
           }
         },
       },
@@ -146,7 +180,7 @@ export function configureNativeAppointmentForm(
         valueExpr: 'id',
         displayExpr: 'name',
         searchEnabled: true,
-        disabled: draft.kind === 'group',
+        disabled: groupFieldsLocked,
         onValueChanged: ({ value }: { value: number | null }) => {
           const subject = catalogs.subjects.find((item) => item.id === value)
           const formData = event.form.option('formData') as NativeAppointmentDraft
@@ -174,7 +208,7 @@ export function configureNativeAppointmentForm(
         displayExpr: 'fullName',
         searchEnabled: true,
         showClearButton: true,
-        disabled: draft.kind === 'group',
+        disabled: groupFieldsLocked,
       },
     },
     {
@@ -184,6 +218,7 @@ export function configureNativeAppointmentForm(
       editorOptions: {
         type: 'datetime',
         interval: settings.slotMinutes,
+        disabled: existing?.rescheduledOnce === true,
       },
     },
     {
@@ -205,9 +240,16 @@ export function configureNativeAppointmentForm(
               actionButton(tr.calendar.details.attendanceTake, () =>
                 actions.onAttendance(existing),
               ),
-              actionButton(tr.calendar.details.reschedule, () =>
-                actions.onReschedule(existing),
+              actionButton(tr.payments.takePayment, () =>
+                actions.onPayment(existing.studentId),
               ),
+              ...(existing.rescheduledOnce === true
+                ? []
+                : [
+                    actionButton(tr.calendar.details.reschedule, () =>
+                      actions.onReschedule(existing),
+                    ),
+                  ]),
               actionButton(tr.calendar.details.cancel, () =>
                 actions.onCancel(existing),
               ),
@@ -256,4 +298,15 @@ function actionButton(text: string, onClick: () => void) {
       onClick,
     },
   }
+}
+
+function setEditorDisabled(
+  event: AppointmentFormOpeningEvent,
+  dataField: 'subjectId' | 'teacherId',
+  disabled: boolean,
+): void {
+  // DevExtreme `itemOption('x', 'editorOptions.disabled', ...)` bazı sürümlerde
+  // alanı yeniden kurup seçili değeri kaybedebiliyor. Açılmış formda doğrudan editor
+  // instance'ını güncellemek hem değeri hem dataSource referansını korur.
+  event.form.getEditor(dataField)?.option('disabled', disabled)
 }

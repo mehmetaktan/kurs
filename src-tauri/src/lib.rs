@@ -340,16 +340,21 @@ pub fn run() {
             // Faz 5A — seans işlemleri
             commands::session_conflicts,
             commands::cancel_session,
+            commands::restore_cancelled_session,
             commands::delete_sessions,
             commands::reschedule_session,
             // Faz 5B — Bugün ekranı, ders ekle/düzenle, şablondan oluştur
             commands::local_now,
             commands::day_sessions,
+            commands::dashboard_sessions,
+            commands::dashboard_student_ids,
             // Faz 6 §1–§2 — yoklama paneli ve atomik finans/hak kaydetme yolu
             commands::attendance_detail,
             commands::save_attendance,
+            commands::undo_attendance,
             commands::save_makeup_session,
             commands::makeup_debts,
+            commands::upcoming_payments,
             commands::student_lesson_overview,
             // Faz 10 §0 — rapor özeti ve basit tablolar
             commands::report_overview,

@@ -542,7 +542,7 @@ export const tr = {
       exportCsv: 'CSV dışa aktar',
       exported: 'Cari ekstre Dışa Aktarımlar klasörüne kaydedildi.',
       tableLabel: 'Cari ekstre hareketleri',
-      columns: { date: 'Tarih', description: 'Açıklama', debit: 'Borç', credit: 'Alacak', balance: 'Bakiye', action: 'İşlem' },
+      columns: { date: 'Tarih ve saat', description: 'Açıklama', debit: 'Borç', credit: 'Alacak', balance: 'Bakiye', action: 'İşlem' },
       kinds: { session_charge: 'Ders ücreti', installment_charge: 'Taksit', payment: 'Tahsilat', reversal: 'İptal / düzeltme', adjustment: 'Düzeltme' },
       cancelled: 'İptal',
       cancel: 'İptal et',
@@ -569,10 +569,10 @@ export const tr = {
       notePlaceholder: 'İsteğe bağlı kısa açıklama',
       installments: 'Açık taksitlere mahsup',
       installmentsHint: 'En eski vadeden başlayarak önerildi; tutarları değiştirebilirsiniz.',
-      noInstallments: 'Bu öğrencinin açık taksidi yok; tahsilat bakiyede avans olarak kalır.',
+      noInstallments: 'Bu öğrencinin açık taksidi yok. Tahsilat önce mevcut ders borcunu kapatır; artan tutar avans kalır. Ders henüz işlenmediyse ücret yoklamada bakiyeden otomatik düşer.',
       installmentOpen: 'açık',
       allocation: 'Mahsup',
-      advance: 'avans olarak kalacak.',
+      advance: 'taksitlere bağlanmayacak; mevcut ders borcunu kapatacak, artanı avans kalacak.',
       save: 'Tahsilatı kaydet',
       saving: 'Kaydediliyor…',
       saved: 'Tahsilat kaydedildi.',
@@ -909,6 +909,7 @@ export const tr = {
         current: 'Grupta',
         left: 'Ayrıldı',
         remove: 'Gruptan çıkar',
+        rejoin: 'Yeniden ekle',
         empty: 'Bu grupta henüz öğrenci yok',
         emptyBody: 'Öğrenci ekleyince katılım tarihi kaydedilir; o tarihten önceki derslerden sorumlu olmaz.',
         picker: {
@@ -980,6 +981,7 @@ export const tr = {
   today: {
     newSession: 'Yeni ders',
     fromTemplate: 'Şablondan oluştur',
+    windowSubtitle: 'Son 24 saat ve gelecek 24 saat',
     summary: {
       label: 'Kurs özeti',
       open: 'ilgili ekranı aç',
@@ -987,10 +989,10 @@ export const tr = {
       collected: 'Bu ay tahsil edilen',
       currentMonth: 'İçinde bulunduğumuz ay',
       noCollection: 'Bu ay henüz tahsilat yok',
-      receivable: 'Kursun toplam alacağı',
-      receivableCaption: 'Arşivlenmiş öğrenciler dahil',
-      debtors: 'Borçlu öğrenci',
-      debtorsCaption: 'Kurs genelindeki tüm borçlular',
+      receivable: 'Akıştaki öğrencilerin borcu',
+      receivableCaption: '48 saatlik ders akışındaki öğrenciler',
+      debtors: 'Akıştaki borçlu öğrenci',
+      debtorsCaption: '48 saatlik ders akışındaki borçlular',
       noLedger: 'Henüz hesap hareketi yok',
       makeups: 'Bekleyen telafi',
       makeupsCaption: 'Tüm açık telafi borçları',
@@ -1002,7 +1004,7 @@ export const tr = {
     },
 
     lessons: {
-      heading: 'Bugünkü dersler',
+      heading: '48 saatlik ders akışı',
       // Tasarımdaki `54px / 1fr / 128px / 84px / 190px` ders satırının kolonları.
       table: {
         time: 'Saat',
@@ -1027,8 +1029,8 @@ export const tr = {
       cancelled: 'İptal',
       // Geçmişle gelecek arasındaki ayraç — yalnızca ikisi de varsa çıkar (R1.1).
       nowLine: 'Şimdi',
-      empty: 'Bugün planlanmış ders yok.',
-      emptyBody: 'Program tanımlı; bugüne ders düşmemiş.',
+      empty: '48 saatlik akışta planlanmış ders yok.',
+      emptyBody: 'Program tanımlı; bu zaman aralığına ders düşmemiş.',
       // R1.7 — program hiç yoksa boş liste DEĞİL, yönlendirme.
       noSchedule: 'Haftalık ders programı henüz oluşturulmadı',
       noScheduleBody:
@@ -1044,7 +1046,14 @@ export const tr = {
       countSuffix: 'öğrenci',
       daysOverdue: 'gün gecikti',
       current: 'Güncel borç',
-      empty: 'Gecikmiş ödemesi olan öğrenci yok.',
+      empty: 'Bu akışta borcu olan öğrenci yok.',
+    },
+    upcomingPayments: {
+      heading: 'Bekleyen ödemeler',
+      countSuffix: 'öğrenci',
+      lessonSuffix: 'yaklaşan ders',
+      collect: 'Erken tahsil et',
+      empty: 'Bu akışta erkenden tahsil edilebilecek ders ücreti yok.',
     },
     packages: {
       heading: 'Paketi bitmek üzere',
@@ -1084,9 +1093,9 @@ export const tr = {
       pending: 'Etkiyi görmek için her öğrencinin durumunu seçin.',
       lessonCreditsConsume: 'ders hakkı düşecek',
       lessonCreditsRestore: 'ders hakkı geri verilecek',
-      debtAdd: 'borç yazılacak',
-      debtRemove: 'borç silinecek',
-      unchanged: 'Ders hakkı ve borç değişmeyecek.',
+      debtAdd: 'ders ücreti işlenecek',
+      debtRemove: 'ders ücreti geri alınacak',
+      unchanged: 'Ders hakkı ve ders ücreti değişmeyecek.',
       separator: ', ',
       period: '.',
     },
@@ -1096,12 +1105,23 @@ export const tr = {
     discardHint: 'Yoklama değişiklikleri silinir.',
     keepEditing: 'Yoklamaya dön',
     saved: 'Yoklama kaydedildi.',
+    undo: 'Yoklamayı geri al',
+    undoTitle: 'Yoklama geri alınsın mı?',
+    undoBody: 'Yoklama ve varsa ders ücreti veya ders hakkı etkisi geri alınır. Ders yeniden planlandı durumuna döner ve ertelenebilir.',
+    undoConfirm: 'Yoklamayı geri al',
+    undoHint: 'Katılan öğrenci olmayan yoklama arşivlenir; geçmiş finans hareketleri ters kayıtla korunur.',
+    undone: 'Yoklama geri alındı. Ders şimdi ertelenebilir.',
   },
 
   // Faz 6 §3 — mazeretli yoklamanın telafi planı ve kursun açık telafi borcu.
   makeup: {
     plan: 'Telafi planla',
     planned: 'Telafi planlandı',
+    cancelPlan: 'Telafi planını iptal et',
+    cancelled: 'Telafi planı iptal edildi.',
+    cancelTitle: 'Telafi planı iptal edilsin mi?',
+    cancelBody: 'Mazeret kaydı korunur; yalnızca planlanan telafi dersi iptal edilir.',
+    cancelHint: 'Öğrenci Bekleyen telafiler listesinden kalkar.',
     saveAttendanceFirst: 'Önce yoklama değişikliklerini kaydedin, sonra telafiyi planlayın.',
     saved: 'Telafi dersi programa eklendi.',
     alreadyPlanned: 'Bu yoklama için telafi zaten planlanmış.',
@@ -1184,7 +1204,17 @@ export const tr = {
     actions: {
       reschedule: 'Ertele',
       cancel: 'İptal et',
+      restore: 'İptali geri al',
       remove: 'Sil',
+    },
+
+    restore: {
+      title: 'Dersin iptali geri alınsın mı?',
+      body: 'Ders aynı tarih ve saatte yeniden planlandı durumuna döner. Sonra isterseniz erteleyebilirsiniz.',
+      bodyRescheduled: 'Ders aynı tarih ve saatte yeniden planlandı durumuna döner. Daha önce ertelendiği için yeniden taşınamaz.',
+      confirm: 'İptali geri al',
+      done: 'Ders iptali geri alındı.',
+      movedSource: 'Bu satır ertelenen dersin eski saatini gösterir. Yeni tarihteki dersi kullanın.',
     },
 
     reschedule: {
@@ -1474,6 +1504,7 @@ export const tr = {
     moveBlocked: {
       closed: 'Bu gün kapalı. Açık bir gün seçip yeniden deneyin.',
       locked: 'Yoklaması alınmış ders taşınamaz veya süresi değiştirilemez.',
+      rescheduledOnce: 'Bu ders daha önce bir kez ertelendi. Gerekirse iptal edip yeni bir ders planlayın.',
       failed: 'Ders taşınamadı. Takvimi yenileyip yeniden deneyin.',
     },
     // Ay ızgarasının hücre altyazısı: "3 ders".

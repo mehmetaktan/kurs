@@ -101,11 +101,53 @@
 .debtorRow > span { overflow: hidden; font-weight: var(--font-weight-semibold); text-overflow: ellipsis; white-space: nowrap; }
 .debtorRow > strong { color: var(--color-danger); font-variant-numeric: tabular-nums; }
 .debtorRow > small { grid-column: 1 / -1; color: var(--color-text-muted); }
+.paymentActionList { display: grid; gap: var(--space-1); margin-top: var(--space-2); }
+.paymentActionRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-1) var(--space-3);
+  align-items: center;
+  width: 100%;
+  padding: var(--space-3);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-10);
+}
+.paymentActionRow:hover { border-color: var(--color-border-strong); }
+.paymentActionRow:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+.paymentActionInfo { display: grid; min-width: 0; gap: var(--space-1); }
+.paymentActionInfo > strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.paymentActionInfo > small { color: var(--color-text-muted); }
+.paymentActionAmount { font-weight: var(--font-weight-semibold); font-variant-numeric: tabular-nums; }
+.paymentActionLabel {
+  grid-column: 1 / -1;
+  width: max-content;
+  color: var(--color-action-primary);
+  font-size: var(--font-size-meta);
+  font-weight: var(--font-weight-semibold);
+}
 
 .makeupList { display: grid; margin-top: var(--space-2); }
 .makeupRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2); padding: var(--space-2) 0; border-top: 1px solid var(--color-border-subtle); }
 .makeupRow > span { overflow: hidden; font-weight: var(--font-weight-semibold); text-overflow: ellipsis; white-space: nowrap; }
 .makeupRow > strong { color: var(--color-warn-text); font-variant-numeric: tabular-nums; }
+.makeupActionRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: center;
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--color-border-subtle);
+}
+.makeupActionRow > span { display: grid; min-width: 0; gap: var(--space-1); }
+.makeupActionRow strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.makeupActionRow small { color: var(--color-text-muted); }
 
 .packageList { display: grid; margin-top: var(--space-2); }
 .packageRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2); padding: var(--space-2) 0; border-top: 1px solid var(--color-border-subtle); }

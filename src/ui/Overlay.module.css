@@ -11,7 +11,10 @@
 }
 
 .modal {
+  display: flex;
+  flex-direction: column;
   width: var(--measure-modal);
+  max-height: calc(100vh - var(--space-6) - var(--space-6));
   padding: var(--space-5-5) var(--space-6);
   background: var(--color-surface-canvas);
   border: 1px solid var(--color-border-default);
@@ -25,10 +28,14 @@
 }
 
 .modalBody {
+  min-height: 0;
+  overflow-y: auto;
   margin-top: var(--space-2-25);
+  padding-right: var(--space-1);
 }
 
 .modalActions {
+  flex: none;
   display: flex;
   flex-direction: column;
   gap: var(--space-2-25);

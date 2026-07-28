@@ -101,12 +101,21 @@ export function StudentDetailPage({ studentId }: { studentId: number }) {
     if (!closingPackage) return
     const packageId = closingPackage.packageId
     setClosingPackage(null)
-    await run(() => closePackage(packageId, mode), tr.students.packages.closeDone)
+    await run(
+      () => closePackage(packageId, mode),
+      tr.students.packages.closeDone,
+      () => window.dispatchEvent(new Event('kurs:debts-changed')),
+    )
   }
 
-  const run = async (action: () => Promise<unknown>, message: string) => {
+  const run = async (
+    action: () => Promise<unknown>,
+    message: string,
+    onSuccess?: () => void,
+  ) => {
     try {
       await action()
+      onSuccess?.()
       toast(message)
       await load()
     } catch (err) {

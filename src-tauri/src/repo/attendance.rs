@@ -95,6 +95,15 @@ pub struct SaveAttendanceReport {
     pub saved: i64,
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UpcomingPaymentRow {
+    pub student_id: i64,
+    pub full_name: String,
+    pub lesson_count: i64,
+    pub amount_kurus: i64,
+}
+
 #[derive(Debug)]
 struct SessionContext {
     id: i64,
@@ -272,6 +281,68 @@ pub fn save_attendance(
     })
 }
 
+/// Katılan öğrencisi olmayan bir yoklamayı geri alır.
+///
+/// Para ve paket hareketleri önce ters kayıtla düzeltilir; yoklama satırları hard-delete
+/// edilmez, arşivlenir. Böylece ders yeniden `planned` olur ve güvenle ertelenebilir.
+pub fn undo_attendance(conn: &Connection, session_id: i64, today: &str) -> AppResult<()> {
+    parse_day(today, "attendance.today")?;
+    repo::in_transaction(conn, |conn| {
+        let session = session_context(conn, session_id)?;
+        let rows = crate::repo::academic::attendance_of_session(conn, session_id)?;
+        if rows.is_empty() || session.status != "done" {
+            return Err(AppError::new(
+                "attendance.notTaken",
+                "Bu dersin geri alınacak bir yoklaması yok. Listeyi yenileyip tekrar deneyin.",
+            ));
+        }
+        if rows.iter().any(|row| row.status == "present") {
+            return Err(AppError::new(
+                "attendance.hasPresent",
+                "Bu derste katılan öğrenci var. Yoklamayı düzeltin veya yeni bir telafi dersi planlayın.",
+            ));
+        }
+        let has_live_makeup: bool = conn.query_row(
+            "SELECT EXISTS( \
+               SELECT 1 FROM session makeup \
+               JOIN attendance source ON source.id = makeup.makeup_for_attendance_id \
+               WHERE source.session_id = ?1 AND source.deleted_at IS NULL \
+                 AND makeup.deleted_at IS NULL AND makeup.status <> 'cancelled' \
+             )",
+            [session_id],
+            |row| row.get(0),
+        )?;
+        if has_live_makeup {
+            return Err(AppError::new(
+                "attendance.hasMakeup",
+                "Bu yoklamaya bağlı bir telafi dersi var. Önce telafi dersini iptal edin veya silin, sonra yoklamayı geri alın.",
+            ));
+        }
+        for row in &rows {
+            let Some(attendance_id) = row.id else {
+                continue;
+            };
+            if !session.is_makeup {
+                crate::repo::finance::reverse_session_charge(conn, attendance_id, today)?;
+                crate::repo::finance::restore_package_credit(conn, attendance_id)?;
+            }
+        }
+        let now = clock::now_local();
+        conn.execute(
+            "UPDATE attendance SET deleted_at = ?2, updated_at = ?2 \
+             WHERE session_id = ?1 AND deleted_at IS NULL",
+            params![session_id, now],
+        )?;
+        conn.execute(
+            "UPDATE session SET status = 'planned', attendance_taken_at = NULL, \
+                    cancel_reason = NULL, updated_at = ?2 \
+             WHERE id = ?1 AND deleted_at IS NULL",
+            params![session_id, now],
+        )?;
+        Ok(())
+    })
+}
+
 fn attendance_policy(conn: &Connection) -> AppResult<AttendancePolicy> {
     Ok(AttendancePolicy {
         excused_consumes_lesson: crate::repo::setting::value_bool(
@@ -418,17 +489,21 @@ fn participant_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Participant
     })
 }
 
-/// Kursun henüz tamamlamadığı telafi borcu, öğrenci başına tek satır.
+/// Kursun planladığı fakat henüz tamamlamadığı telafi, öğrenci başına tek satır.
 ///
-/// Kaynak **yoklama** sayılır; bağlı seanslarla JOIN yapılmaz. Bu yüzden bozuk/eski bir
-/// veritabanında aynı yoklamaya birden fazla telafi bağlanmış olsa bile borç çift
-/// sayılmaz. Planlı ya da iptal telafi borcu kapatmaz; mevcut şemada çözümün açık kanıtı
-/// canlı ve `done` durumundaki bağlı telafi seansıdır.
+/// Mazeret tek başına telafi sözü değildir. Yalnız canlı ve `planned` durumundaki bağlı
+/// telafi sayılır; iptal edilen plan listeden çıkar, tamamlanan plan kapanır.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct MakeupDebtRow {
+    pub attendance_id: i64,
     pub student_id: i64,
     pub full_name: String,
+    pub subject_id: i64,
+    pub subject_name: String,
+    pub teacher_id: Option<i64>,
+    pub source_starts_at: String,
+    pub makeup_session_id: Option<i64>,
     pub pending_count: i64,
 }
 
@@ -449,10 +524,9 @@ pub struct StudentLessonRow {
     pub is_makeup: bool,
 }
 
-/// Henüz `done` durumundaki canlı bir telafiyle kapanmamış mazeretli yoklama.
+/// Canlı ve planlı bir telafi seansına bağlı mazeretli yoklama.
 ///
-/// Planlanmış telafi varsa tarihi gelir; hiç planlanmamış veya yalnızca iptal edilmiş
-/// telafi varsa iki `makeup_*` alanı da boştur. Kaynak yoklama başına tek satır döner.
+/// Mazeretli olup telafisi planlanmamış öğrenci bu listede yer almaz.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct StudentPendingMakeupRow {
@@ -591,7 +665,7 @@ fn student_pending_makeups(
          LEFT JOIN session makeup ON makeup.id = ( \
              SELECT m.id FROM session m \
              WHERE m.makeup_for_attendance_id = a.id AND m.is_makeup = 1 \
-               AND m.deleted_at IS NULL AND m.status <> 'cancelled' \
+               AND m.deleted_at IS NULL AND m.status = 'planned' \
              ORDER BY m.starts_at, m.id LIMIT 1 \
          ) \
          WHERE a.student_id = ?1 AND a.deleted_at IS NULL AND a.status = 'excused' \
@@ -601,6 +675,11 @@ fn student_pending_makeups(
                AND done_makeup.is_makeup = 1 AND done_makeup.deleted_at IS NULL \
                AND done_makeup.status = 'done' \
            ) \
+           AND (makeup.id IS NOT NULL OR NOT EXISTS ( \
+             SELECT 1 FROM session any_makeup \
+             WHERE any_makeup.makeup_for_attendance_id = a.id \
+               AND any_makeup.is_makeup = 1 AND any_makeup.deleted_at IS NULL \
+           )) \
          ORDER BY source.starts_at DESC, a.id DESC",
     )?;
     let rows = stmt.query_map([student_id], |row| {
@@ -630,24 +709,50 @@ fn parse_student_lessons_now(value: &str) -> AppResult<NaiveDateTime> {
 
 pub fn makeup_debt_rows(conn: &Connection) -> AppResult<Vec<MakeupDebtRow>> {
     let mut stmt = conn.prepare(
-        "SELECT st.id, st.full_name, COUNT(a.id) \
+        "SELECT a.id, st.id, st.full_name, source.subject_id, sub.name, \
+                source.teacher_id, source.starts_at, planned.id \
          FROM attendance a \
          JOIN student st ON st.id = a.student_id AND st.deleted_at IS NULL \
          JOIN session source ON source.id = a.session_id AND source.deleted_at IS NULL \
+         JOIN subject sub ON sub.id = source.subject_id \
+         LEFT JOIN session planned ON planned.id = ( \
+           SELECT p.id FROM session p \
+           WHERE p.makeup_for_attendance_id = a.id AND p.is_makeup = 1 \
+             AND p.deleted_at IS NULL AND p.status = 'planned' \
+           ORDER BY p.starts_at, p.id LIMIT 1 \
+         ) \
          WHERE a.deleted_at IS NULL AND a.status = 'excused' \
            AND NOT EXISTS ( \
-             SELECT 1 FROM session makeup \
-             WHERE makeup.makeup_for_attendance_id = a.id \
-               AND makeup.is_makeup = 1 AND makeup.deleted_at IS NULL \
-               AND makeup.status = 'done' \
+             SELECT 1 FROM session done_makeup \
+             WHERE done_makeup.makeup_for_attendance_id = a.id \
+               AND done_makeup.is_makeup = 1 AND done_makeup.deleted_at IS NULL \
+               AND done_makeup.status = 'done' \
            ) \
-         GROUP BY st.id, st.full_name",
+           AND ( \
+             NOT EXISTS ( \
+               SELECT 1 FROM session any_makeup \
+               WHERE any_makeup.makeup_for_attendance_id = a.id \
+                 AND any_makeup.is_makeup = 1 AND any_makeup.deleted_at IS NULL \
+             ) OR EXISTS ( \
+               SELECT 1 FROM session planned_makeup \
+               WHERE planned_makeup.makeup_for_attendance_id = a.id \
+                 AND planned_makeup.is_makeup = 1 AND planned_makeup.deleted_at IS NULL \
+                 AND planned_makeup.status = 'planned' \
+             ) \
+           ) \
+         ORDER BY source.starts_at DESC, a.id DESC",
     )?;
     let rows = stmt.query_map([], |row| {
         Ok(MakeupDebtRow {
-            student_id: row.get(0)?,
-            full_name: row.get(1)?,
-            pending_count: row.get(2)?,
+            attendance_id: row.get(0)?,
+            student_id: row.get(1)?,
+            full_name: row.get(2)?,
+            subject_id: row.get(3)?,
+            subject_name: row.get(4)?,
+            teacher_id: row.get(5)?,
+            source_starts_at: row.get(6)?,
+            makeup_session_id: row.get(7)?,
+            pending_count: 1,
         })
     })?;
     let mut out = Vec::new();
@@ -657,11 +762,137 @@ pub fn makeup_debt_rows(conn: &Connection) -> AppResult<Vec<MakeupDebtRow>> {
     Ok(out)
 }
 
+/// Bugün henüz yoklaması alınmamış derslerin olası ders-başı ücretleri.
+///
+/// Paketli öğrencilerde önizleme borcu sıfırdır. Aynı öğrencinin gün içindeki dersleri
+/// tek satırda toplanır; kullanıcı bu tutarı yoklamadan önce tahsil edebilir.
+pub fn upcoming_payment_rows(conn: &Connection, now: &str) -> AppResult<Vec<UpcomingPaymentRow>> {
+    let now = parse_student_lessons_now(now)?;
+    let from = now - chrono::Duration::hours(24);
+    let to = now + chrono::Duration::hours(24);
+    let from_text = from.format("%Y-%m-%d %H:%M").to_string();
+    let to_text = to.format("%Y-%m-%d %H:%M").to_string();
+    let mut totals: HashMap<i64, UpcomingPaymentRow> = HashMap::new();
+    let mut simulated_package_usage: HashMap<i64, i64> = HashMap::new();
+    for session in crate::repo::schedule::session_rows_between(
+        conn,
+        &from.date().format("%Y-%m-%d").to_string(),
+        &to.date().format("%Y-%m-%d").to_string(),
+    )? {
+        if session.starts_at < from_text || session.starts_at > to_text {
+            continue;
+        }
+        if session.status != "planned" || session.attendance_taken || session.is_makeup {
+            continue;
+        }
+        let context = session_context(conn, session.id)?;
+        let session_price: Option<i64> = conn.query_row(
+            "SELECT unit_price FROM session WHERE id = ?1 AND deleted_at IS NULL",
+            [session.id],
+            |row| row.get(0),
+        )?;
+        for participant in participant_rows(conn, &context)? {
+            let package = crate::repo::views::active_packages(
+                conn,
+                participant.student_id,
+                &context.session_day,
+            )?
+            .into_iter()
+            .find(|package| {
+                let simulated = simulated_package_usage
+                    .get(&package.package_id)
+                    .copied()
+                    .unwrap_or(0);
+                simulated < package.remaining
+            });
+            if let Some(package) = package {
+                let simulated = simulated_package_usage
+                    .entry(package.package_id)
+                    .or_insert(0);
+                *simulated = simulated.checked_add(1).ok_or_else(|| {
+                    AppError::new(
+                        "upcomingPayments.package",
+                        "Yaklaşan derslerin paket kullanımı hesaplanamadı. Ekranı yenileyip tekrar deneyin.",
+                    )
+                })?;
+                continue;
+            }
+            let debt_if_consumed_kurus = crate::repo::finance::resolve_session_unit_price(
+                conn,
+                participant.student_id,
+                context.subject_id,
+                context.group_id,
+                &context.session_day,
+                session_price,
+            )?;
+            let row = totals
+                .entry(participant.student_id)
+                .or_insert(UpcomingPaymentRow {
+                    student_id: participant.student_id,
+                    full_name: participant.full_name,
+                    lesson_count: 0,
+                    amount_kurus: 0,
+                });
+            row.lesson_count = row.lesson_count.checked_add(1).ok_or_else(|| {
+                AppError::new(
+                    "upcomingPayments.count",
+                    "Yaklaşan ders sayısı hesaplanamadı. Ekranı yenileyip tekrar deneyin.",
+                )
+            })?;
+            row.amount_kurus = row
+                .amount_kurus
+                .checked_add(debt_if_consumed_kurus)
+                .ok_or_else(|| {
+                    AppError::new(
+                        "upcomingPayments.amount",
+                        "Erken tahsilat tutarı hesaplanamadı. Tarifeleri kontrol edip tekrar deneyin.",
+                    )
+                })?;
+        }
+    }
+    for row in totals.values_mut() {
+        let balance_kurus: i64 = conn.query_row(
+            "SELECT balance_kurus FROM v_student_balance WHERE student_id = ?1",
+            [row.student_id],
+            |result| result.get(0),
+        )?;
+        row.amount_kurus = row
+            .amount_kurus
+            .checked_sub(balance_kurus)
+            .ok_or_else(|| {
+                AppError::new(
+                    "upcomingPayments.balance",
+                    "Erken tahsilat tutarı bakiyeyle birlikte hesaplanamadı. Öğrencinin hesabını kontrol edin.",
+                )
+            })?
+            .max(0);
+    }
+    Ok(totals
+        .into_values()
+        .filter(|row| row.amount_kurus > 0)
+        .collect())
+}
+
+/// Dashboard penceresindeki derslerle ilişkili öğrenciler.
+pub fn dashboard_student_ids(conn: &Connection, now: &str) -> AppResult<Vec<i64>> {
+    let mut ids = HashSet::new();
+    for row in crate::repo::schedule::dashboard_rows(conn, now)? {
+        let context = session_context(conn, row.id)?;
+        ids.extend(
+            participant_rows(conn, &context)?
+                .into_iter()
+                .map(|participant| participant.student_id),
+        );
+    }
+    Ok(ids.into_iter().collect())
+}
+
 pub fn pending_makeup_count(conn: &Connection, student_id: i64) -> AppResult<i64> {
     Ok(makeup_debt_rows(conn)?
         .into_iter()
-        .find(|row| row.student_id == student_id)
-        .map_or(0, |row| row.pending_count))
+        .filter(|row| row.student_id == student_id)
+        .map(|row| row.pending_count)
+        .sum())
 }
 
 fn eligible_student_ids(conn: &Connection, session: &SessionContext) -> AppResult<HashSet<i64>> {

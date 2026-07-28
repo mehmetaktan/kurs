@@ -356,14 +356,14 @@ fn bekleyen_telafi_kaynak_yoklama_basina_bir_satirdir() {
 
     let overview =
         repo::attendance::student_lesson_overview(&conn, student_id, NOW).expect("özet okunmalı");
-    assert_eq!(overview.pending_makeups.len(), 3);
+    assert_eq!(overview.pending_makeups.len(), 2);
     assert_eq!(
         overview
             .pending_makeups
             .iter()
             .map(|row| row.attendance_id)
             .collect::<Vec<_>>(),
-        vec![cancelled, planned, unplanned]
+        vec![planned, unplanned]
     );
     let planned_row = overview
         .pending_makeups
@@ -375,10 +375,8 @@ fn bekleyen_telafi_kaynak_yoklama_basina_bir_satirdir() {
         planned_row.makeup_starts_at.as_deref(),
         Some("2026-04-05 10:00")
     );
-    let cancelled_row = overview
+    assert!(overview
         .pending_makeups
         .iter()
-        .find(|row| row.attendance_id == cancelled)
-        .expect("iptal edilen telafinin kaynağı yeniden bekler");
-    assert_eq!(cancelled_row.makeup_session_id, None);
+        .all(|row| row.attendance_id != cancelled));
 }

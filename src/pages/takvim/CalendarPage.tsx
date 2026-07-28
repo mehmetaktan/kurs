@@ -49,6 +49,7 @@ import {
 import { AttendanceDrawer } from '../dersler/AttendanceDrawer'
 import { SessionActions, type SessionAction } from '../dersler/SessionActions'
 import { SessionForm } from '../dersler/SessionForm'
+import { PaymentModal } from '../odemeler/PaymentModal'
 import { addDays, weekStart } from './calendarGrid'
 import {
   dateToDay,
@@ -111,6 +112,13 @@ const NO_GROUPS: string[] = []
 
 type CalendarView = 'month' | 'week' | 'workWeek' | 'day' | 'agenda'
 
+const CALENDAR_PREFERENCE_KEY = 'kurs.calendar.preference.v1'
+
+interface CalendarPreference {
+  view: CalendarView
+  anchor: string
+}
+
 interface PendingUpdate {
   appointment: CalendarAppointment
   start: Date
@@ -122,9 +130,14 @@ interface PendingUpdate {
  * mevcut Tauri komutlarında kalır (ADR-034).
  */
 export function CalendarPage() {
+  const initialPreference = useMemo(readCalendarPreference, [])
   const [now, setNow] = useState<string | null>(null)
-  const [view, setView] = useState<CalendarView>('week')
-  const [anchor, setAnchor] = useState<string | null>(null)
+  const [view, setView] = useState<CalendarView>(
+    initialPreference?.view ?? 'day',
+  )
+  const [anchor, setAnchor] = useState<string | null>(
+    initialPreference?.anchor ?? null,
+  )
   const [rows, setRows] = useState<DaySessionRow[] | null>(null)
   const [closed, setClosed] = useState<ReadonlySet<string>>(new Set())
   const [hasSchedule, setHasSchedule] = useState(true)
@@ -143,6 +156,9 @@ export function CalendarPage() {
   const [draft, setDraft] = useState<{ day: string; startTime: string } | null>(null)
   const [detail, setDetail] = useState<DaySessionRow | null>(null)
   const [attendance, setAttendance] = useState<DaySessionRow | null>(null)
+  const [paymentStudentId, setPaymentStudentId] = useState<
+    number | null | undefined
+  >(undefined)
   const [action, setAction] = useState<{ row: DaySessionRow; kind: SessionAction } | null>(
     null,
   )
@@ -168,7 +184,7 @@ export function CalendarPage() {
       .then(([stamp, settingRows, subjectRows, groupRows, studentRows, teacherRows]) => {
         if (!active) return
         setNow(stamp)
-        setAnchor(stamp.slice(0, 10))
+        setAnchor((current) => current ?? stamp.slice(0, 10))
         setSettings(calendarSettingsOf(settingRows))
         setCatalogs({
           subjects: subjectRows,
@@ -184,6 +200,11 @@ export function CalendarPage() {
       active = false
     }
   }, [])
+
+  useEffect(() => {
+    if (anchor === null) return
+    writeCalendarPreference({ view, anchor })
+  }, [anchor, view])
 
   const span = useMemo(
     () => (anchor === null ? null : rangeOf(view, anchor)),
@@ -332,6 +353,13 @@ export function CalendarPage() {
     ) {
       return
     }
+    if (
+      appointment.row.rescheduledOnce === true &&
+      dateToWallClock(snappedStart) !== appointment.row.startsAt
+    ) {
+      toast(tr.calendar.moveBlocked.rescheduledOnce)
+      return
+    }
     if (closed.has(dateToDay(snappedStart))) {
       toast(tr.calendar.moveBlocked.closed)
       return
@@ -438,6 +466,7 @@ export function CalendarPage() {
               startsAt.slice(0, 10),
               startsAt.slice(11, 16),
               durationMin,
+              kind === 'move' ? false : undefined,
             ),
       )
       toast(
@@ -484,10 +513,19 @@ export function CalendarPage() {
   }
 
   const onAppointmentFormOpening = (event: AppointmentFormOpeningEvent) => {
-    if (settings === null || now === null) return
     const appointment = event.appointmentData as
       | Partial<CalendarAppointment>
       | undefined
+    if (appointment?.row?.status === 'cancelled') {
+      event.cancel = true
+      if (appointment.row.restoreAllowed === false) {
+        toast(tr.sessions.restore.movedSource)
+      } else {
+        setAction({ row: appointment.row, kind: 'restore' })
+      }
+      return
+    }
+    if (settings === null || now === null) return
     const target = appointment?.row?.id ?? 'new'
     nativeFormTarget.current = target
     event.popup.on('hidden', () => {
@@ -499,6 +537,8 @@ export function CalendarPage() {
     }
     configureNativeAppointmentForm(event, catalogs, settings, now, {
       onAttendance: (row) => closeAndRun(() => setAttendance(row)),
+      onPayment: (studentId) =>
+        closeAndRun(() => setPaymentStudentId(studentId)),
       onReschedule: (row) =>
         closeAndRun(() => setAction({ row, kind: 'reschedule' })),
       onCancel: (row) => closeAndRun(() => setAction({ row, kind: 'cancel' })),
@@ -719,6 +759,11 @@ export function CalendarPage() {
           onSaved={refresh}
         />
       )}
+      <PaymentModal
+        open={paymentStudentId !== undefined}
+        initialStudentId={paymentStudentId ?? null}
+        onClose={() => setPaymentStudentId(undefined)}
+      />
       {now !== null && (
         <SessionForm
           open={formOpen}
@@ -1199,19 +1244,57 @@ function isCalendarView(value: string): value is CalendarView {
   return ['month', 'week', 'workWeek', 'day', 'agenda'].includes(value)
 }
 
+function readCalendarPreference(): CalendarPreference | null {
+  try {
+    const raw = window.localStorage.getItem(CALENDAR_PREFERENCE_KEY)
+    if (raw === null) return null
+    const parsed = JSON.parse(raw) as Partial<CalendarPreference>
+    if (
+      typeof parsed.view !== 'string' ||
+      !isCalendarView(parsed.view) ||
+      typeof parsed.anchor !== 'string'
+    ) {
+      return null
+    }
+    wallClockToDate(`${parsed.anchor} 12:00`)
+    return { view: parsed.view, anchor: parsed.anchor }
+  } catch {
+    return null
+  }
+}
+
+function writeCalendarPreference(preference: CalendarPreference): void {
+  try {
+    window.localStorage.setItem(
+      CALENDAR_PREFERENCE_KEY,
+      JSON.stringify(preference),
+    )
+  } catch {
+    // Tercih yazılamazsa takvim çalışmaya devam eder; sonraki açılış Gün görünümüdür.
+  }
+}
+
 function replaceMovedRow(
   rows: readonly DaySessionRow[],
   sessionId: number,
   day: string,
   startTime: string,
   durationMin: number,
+  rescheduledOnce?: boolean,
 ): DaySessionRow[] {
   const startsAt = `${day} ${startTime}`
   const start = wallClockToDate(startsAt)
   const end = new Date(start.getTime() + durationMin * 60_000)
   return rows.map((row) =>
     row.id === sessionId
-      ? { ...row, startsAt, endsAt: dateToWallClock(end) }
+      ? {
+          ...row,
+          startsAt,
+          endsAt: dateToWallClock(end),
+          rescheduledOnce:
+            rescheduledOnce ??
+            (row.rescheduledOnce === true || row.startsAt !== startsAt),
+        }
       : row,
   )
 }

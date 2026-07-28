@@ -171,6 +171,8 @@ fn closed_day(conn: &Connection, day: &str, label: &str) {
 fn tuesday_group(conn: &Connection) -> (i64, i64, i64) {
     let subject_id = common::subject(conn, "Matematik");
     let group_id = common::group(conn, "Grup A", subject_id);
+    let student_id = common::student(conn, "Elif Yılmaz");
+    add_group_member(conn, group_id, student_id, "2026-01-01").expect("üye eklenmeli");
     let series_id = series(conn, group_id, subject_id, SALI, "16:00", TODAY, None);
     (subject_id, group_id, series_id)
 }
@@ -204,6 +206,8 @@ fn birden_fazla_gun_secilebilir() {
     let conn = common::conn();
     let subject_id = common::subject(&conn, "Matematik");
     let group_id = common::group(&conn, "Grup A", subject_id);
+    let student_id = common::student(&conn, "Elif Yılmaz");
+    add_group_member(&conn, group_id, student_id, "2026-01-01").expect("üye eklenmeli");
     let sali = series(&conn, group_id, subject_id, SALI, "16:00", TODAY, None);
     let persembe = series(&conn, group_id, subject_id, PERSEMBE, "18:00", TODAY, None);
 
@@ -215,6 +219,99 @@ fn birden_fazla_gun_secilebilir() {
     assert_eq!(thursdays.len(), 16);
     assert_eq!(thursdays.first().unwrap(), "2026-04-02 18:00");
     assert_eq!(thursdays.last().unwrap(), "2026-07-16 18:00");
+}
+
+#[test]
+fn uyesi_olmayan_grubun_programi_takvime_seans_uretmez() {
+    let conn = common::conn();
+    let subject_id = common::subject(&conn, "Matematik");
+    let group_id = common::group(&conn, "Boş Grup", subject_id);
+    let series_id = series(&conn, group_id, subject_id, SALI, "16:00", TODAY, None);
+
+    let report = schedule::generate_sessions(&conn, today()).expect("üretim çalışmalı");
+
+    assert_eq!(report.created, 0);
+    assert!(sessions_of(&conn, series_id).is_empty());
+}
+
+#[test]
+fn onceden_uretilmis_uyesiz_planli_grup_seanslari_arsivlenir() {
+    let conn = common::conn();
+    let (_, group_id, series_id) = tuesday_group(&conn);
+    schedule::generate_sessions(&conn, today()).expect("ilk üretim çalışmalı");
+    assert_eq!(sessions_of(&conn, series_id).len(), 17);
+
+    let enrollment_id: i64 = conn
+        .query_row(
+            "SELECT id FROM enrollment WHERE study_group_id = ?1 AND deleted_at IS NULL",
+            [group_id],
+            |row| row.get(0),
+        )
+        .expect("üyelik bulunmalı");
+    schedule::end_group_membership(&conn, enrollment_id, "2026-03-30").expect("üyelik kapatılmalı");
+
+    schedule::generate_sessions(&conn, today()).expect("temizlik üretimi çalışmalı");
+
+    assert!(
+        sessions_of(&conn, series_id).is_empty(),
+        "işlenmemiş boş grup slotları takvimde kalmamalı"
+    );
+    let archived: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM session WHERE series_id = ?1 AND deleted_at IS NOT NULL",
+            [series_id],
+            |row| row.get(0),
+        )
+        .expect("arşivlenenler sayılmalı");
+    assert_eq!(archived, 17, "satırlar silinmeden soft-archive edilmeli");
+}
+
+#[test]
+fn son_uye_cikarilinca_gelecek_slotlar_hemen_temizlenir_ve_donuste_uretilir() {
+    let conn = common::conn();
+    let (_, group_id, series_id) = tuesday_group(&conn);
+    schedule::generate_sessions(&conn, today()).expect("ilk üretim çalışmalı");
+    let (enrollment_id, student_id): (i64, i64) = conn
+        .query_row(
+            "SELECT id, student_id FROM enrollment \
+             WHERE study_group_id = ?1 AND deleted_at IS NULL",
+            [group_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .expect("üyelik bulunmalı");
+
+    schedule::end_group_membership_and_generate(&conn, enrollment_id, TODAY, today())
+        .expect("üyelik ve gelecek slotlar kapatılmalı");
+
+    assert_eq!(
+        sessions_of(&conn, series_id),
+        vec!["2026-03-31 16:00"],
+        "ayrılış günü dahil kalır, sonraki boş dersler hemen düşer"
+    );
+
+    schedule::add_group_member_and_generate(&conn, group_id, student_id, TODAY, today())
+        .expect("aynı üyelik yeniden açılıp gelecek slotlar üretilmeli");
+    assert_eq!(sessions_of(&conn, series_id).len(), 17);
+}
+
+#[test]
+fn grup_seanslari_uyeligin_basladigi_tarihten_itibaren_uretilir() {
+    let conn = common::conn();
+    let subject_id = common::subject(&conn, "Matematik");
+    let group_id = common::group(&conn, "Grup A", subject_id);
+    let student_id = common::student(&conn, "Elif Yılmaz");
+    add_group_member(&conn, group_id, student_id, "2026-04-14").expect("üye eklenmeli");
+    let series_id = series(&conn, group_id, subject_id, SALI, "16:00", TODAY, None);
+
+    schedule::generate_sessions(&conn, today()).expect("üretim çalışmalı");
+
+    let days = sessions_of(&conn, series_id);
+    assert_eq!(days.first().map(String::as_str), Some("2026-04-14 16:00"));
+    assert!(
+        days.iter()
+            .all(|starts_at| starts_at.as_str() >= "2026-04-14 16:00"),
+        "üyelik öncesine boş grup seansı üretilmemeli"
+    );
 }
 
 #[test]
@@ -292,6 +389,8 @@ fn gecmise_seans_uretilmez() {
     let conn = common::conn();
     let subject_id = common::subject(&conn, "Matematik");
     let group_id = common::group(&conn, "Grup A", subject_id);
+    let student_id = common::student(&conn, "Elif Yılmaz");
+    add_group_member(&conn, group_id, student_id, "2026-01-01").expect("üye eklenmeli");
     // Şablon ocakta başlamış; bugün 31 Mart.
     let series_id = series(
         &conn,
@@ -319,6 +418,8 @@ fn serinin_bitis_tarihi_ufku_kisaltir() {
     let conn = common::conn();
     let subject_id = common::subject(&conn, "Matematik");
     let group_id = common::group(&conn, "Grup A", subject_id);
+    let student_id = common::student(&conn, "Elif Yılmaz");
+    add_group_member(&conn, group_id, student_id, "2026-01-01").expect("üye eklenmeli");
     let series_id = series(
         &conn,
         group_id,
@@ -1001,6 +1102,34 @@ fn ayni_brans_icin_ikinci_acik_kayit_reddedilir() {
 }
 
 #[test]
+fn ayni_gun_cikarilan_uye_ayni_kayitla_yeniden_etkinlesir() {
+    let conn = common::conn();
+    let subject_id = common::subject(&conn, "Matematik");
+    let group_id = common::group(&conn, "Grup A", subject_id);
+    let student_id = common::student(&conn, "Elif Yılmaz");
+
+    let first = add_group_member(&conn, group_id, student_id, TODAY).expect("ilk kayıt");
+    schedule::end_group_membership(&conn, first, TODAY).expect("gruptan çıkarılmalı");
+
+    let reopened =
+        add_group_member(&conn, group_id, student_id, TODAY).expect("yeniden eklenebilmeli");
+
+    assert_eq!(reopened, first, "aynı günkü çıkarma geri alınmalı");
+    let enrollment: Enrollment = repo::require(&conn, first).expect("kayıt okunmalı");
+    assert_eq!(enrollment.status, "active");
+    assert_eq!(enrollment.end_on, None);
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM enrollment \
+             WHERE student_id = ?1 AND study_group_id = ?2 AND deleted_at IS NULL",
+            [student_id, group_id],
+            |row| row.get(0),
+        )
+        .expect("kayıt sayılmalı");
+    assert_eq!(count, 1, "yinelenen üyelik satırı açılmamalı");
+}
+
+#[test]
 fn ayrildiktan_sonra_gruba_geri_donebilir() {
     let conn = common::conn();
     let subject_id = common::subject(&conn, "Matematik");
@@ -1153,7 +1282,7 @@ fn grup_notlari_uyelerin_notlarindan_derlenir() {
 // ===========================================================================
 
 #[test]
-fn grup_kaydi_sablonu_yazar_ve_seanslari_uretir() {
+fn grup_kaydi_sablonu_yazar_ve_ilk_uyeden_sonra_seanslari_uretir() {
     let conn = common::conn();
     let subject_id = common::subject(&conn, "Matematik");
 
@@ -1178,7 +1307,15 @@ fn grup_kaydi_sablonu_yazar_ve_seanslari_uretir() {
     )
     .expect("grup kaydedilmeli");
 
-    let count: i64 = conn
+    let series_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM session_series \
+             WHERE study_group_id = ?1 AND deleted_at IS NULL",
+            [group_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let empty_count: i64 = conn
         .query_row(
             "SELECT COUNT(*) FROM session WHERE study_group_id = ?1 AND deleted_at IS NULL",
             [group_id],
@@ -1186,8 +1323,28 @@ fn grup_kaydi_sablonu_yazar_ve_seanslari_uretir() {
         )
         .unwrap();
 
-    // R5.5: haftalık program grup oluştururken tanımlanır ve seanslar üretilir.
-    assert_eq!(count, 17);
+    assert_eq!(series_count, 1, "haftalık program grup üzerinde saklanır");
+    assert_eq!(empty_count, 0, "üyesiz grup takvime boş ders yazmaz");
+
+    let student_id = common::student(&conn, "Elif Yılmaz");
+    conn.execute(
+        "INSERT INTO price_rule \
+         (name, subject_id, is_group, pricing_model, unit_price, valid_from) \
+         VALUES ('Grup tarifesi', ?1, 1, 'per_session', 25000, '2020-01-01')",
+        [subject_id],
+    )
+    .expect("grup tarifesi eklenmeli");
+    schedule::add_group_member_and_generate(&conn, group_id, student_id, TODAY, today())
+        .expect("ilk üye ve seansları eklenmeli");
+
+    let member_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM session WHERE study_group_id = ?1 AND deleted_at IS NULL",
+            [group_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(member_count, 17);
 }
 
 #[test]
@@ -1221,6 +1378,10 @@ fn sablon_satiri_silinince_gelecek_seanslar_duser() {
         today(),
     )
     .unwrap();
+
+    let student_id = common::student(&conn, "Elif Yılmaz");
+    add_group_member(&conn, group_id, student_id, TODAY).expect("üye eklenmeli");
+    schedule::generate_sessions(&conn, today()).expect("seanslar üretilmeli");
 
     let detail = schedule::group_detail(&conn, group_id, Some(TODAY.into())).unwrap();
     assert_eq!(detail.group.weekly.len(), 2);
@@ -1541,6 +1702,19 @@ fn group_input(group_id: i64, subject_id: i64, day: &str) -> SessionInput {
     }
 }
 
+fn solo_input(student_id: i64, subject_id: i64, day: &str) -> SessionInput {
+    SessionInput {
+        id: None,
+        subject_id,
+        teacher_id: Some(1),
+        study_group_id: None,
+        student_id: Some(student_id),
+        day: day.into(),
+        start_time: "16:00".into(),
+        duration_min: 60,
+    }
+}
+
 #[test]
 fn tatil_gunune_ders_eklenemez() {
     let conn = common::conn();
@@ -1684,6 +1858,106 @@ fn ders_duzenlenince_saat_ve_sure_degisir() {
         0,
         "ders eski gününden kalkmalı"
     );
+}
+
+#[test]
+fn birebir_dersin_branş_ve_gunu_degisince_ucret_snapshoti_yenilenir() {
+    let conn = common::conn();
+    let first_subject = common::subject(&conn, "Matematik");
+    let next_subject = common::subject(&conn, "Fizik");
+    let student_id = common::student(&conn, "Birebir Öğrenci");
+    common::enrollment(&conn, student_id, None, first_subject, "2026-01-01", None).unwrap();
+    conn.execute(
+        "INSERT INTO price_rule \
+         (name, subject_id, is_group, pricing_model, unit_price, valid_from) \
+         VALUES ('Fizik birebir', ?1, 0, 'per_session', 40000, '2026-04-01')",
+        [next_subject],
+    )
+    .unwrap();
+
+    let report = schedule::save_session(
+        &conn,
+        &solo_input(student_id, first_subject, "2026-04-01"),
+        today(),
+    )
+    .unwrap();
+    let session_id = report.session_id.unwrap();
+    let before: Session = repo::require(&conn, session_id).unwrap();
+    assert_eq!(before.unit_price, Some(25_000));
+
+    let mut update = solo_input(student_id, next_subject, "2026-04-02");
+    update.id = Some(session_id);
+    schedule::save_session(&conn, &update, today()).unwrap();
+
+    let after: Session = repo::require(&conn, session_id).unwrap();
+    assert_eq!(after.subject_id, next_subject);
+    assert_eq!(after.session_date.as_deref(), Some("2026-04-02"));
+    assert_eq!(after.unit_price, Some(40_000));
+}
+
+#[test]
+fn yalniz_ogretmen_degisince_birebir_ucret_snapshoti_korunur() {
+    let conn = common::conn();
+    let subject_id = common::subject(&conn, "Kimya");
+    let student_id = common::student(&conn, "Öğretmen Değiştiren Öğrenci");
+    let teacher_id = common::teacher(&conn, "Yeni Öğretmen");
+    let enrollment_id =
+        common::enrollment(&conn, student_id, None, subject_id, "2026-01-01", None).unwrap();
+    let report = schedule::save_session(
+        &conn,
+        &solo_input(student_id, subject_id, "2026-04-01"),
+        today(),
+    )
+    .unwrap();
+    let session_id = report.session_id.unwrap();
+
+    conn.execute(
+        "UPDATE enrollment SET unit_price = 30000 WHERE id = ?1",
+        [enrollment_id],
+    )
+    .unwrap();
+    let mut update = solo_input(student_id, subject_id, "2026-04-01");
+    update.id = Some(session_id);
+    update.teacher_id = Some(teacher_id);
+    schedule::save_session(&conn, &update, today()).unwrap();
+
+    let session: Session = repo::require(&conn, session_id).unwrap();
+    assert_eq!(session.teacher_id, Some(teacher_id));
+    assert_eq!(
+        session.unit_price,
+        Some(25_000),
+        "öğretmen değişikliği tarihi ücret snapshot'ını yeniden çözmemeli"
+    );
+}
+
+#[test]
+fn birebir_ders_baska_tarife_gunune_tasininca_ucret_snapshoti_yenilenir() {
+    let conn = common::conn();
+    let subject_id = common::subject(&conn, "Biyoloji");
+    let student_id = common::student(&conn, "Tarihi Değişen Öğrenci");
+    conn.execute(
+        "INSERT INTO price_rule \
+         (name, subject_id, is_group, pricing_model, unit_price, valid_from, valid_to) \
+         VALUES ('Eski Biyoloji', ?1, 0, 'per_session', 25000, '2026-01-01', '2026-04-30'), \
+                ('Yeni Biyoloji', ?1, 0, 'per_session', 30000, '2026-05-01', NULL)",
+        [subject_id],
+    )
+    .unwrap();
+    let report = schedule::save_session(
+        &conn,
+        &solo_input(student_id, subject_id, "2026-04-01"),
+        today(),
+    )
+    .unwrap();
+    let session_id = report.session_id.unwrap();
+    let before: Session = repo::require(&conn, session_id).unwrap();
+    assert_eq!(before.unit_price, Some(25_000));
+
+    schedule::reschedule_session(&conn, session_id, "2026-05-02 16:00", 60).unwrap();
+
+    let after: Session = repo::require(&conn, session_id).unwrap();
+    assert_eq!(after.session_date.as_deref(), Some("2026-05-02"));
+    assert_eq!(after.unit_price, Some(30_000));
 }
 
 // ---------------------------------------------------------------------------

@@ -43,17 +43,28 @@ export function AppShell({ currentPath, children }: AppShellProps) {
    */
   useEffect(() => {
     let cancelled = false
-    fetchStudentDebts()
+    const refreshDebtorCount = () => fetchStudentDebts()
       .then((debts) => {
         if (!cancelled) setDebtorCount(debts.length)
       })
       .catch(() => {
         if (!cancelled) setDebtorCount(undefined)
       })
+    void refreshDebtorCount()
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void refreshDebtorCount()
+    }
+    const onChanged = () => void refreshDebtorCount()
+    window.addEventListener('focus', onChanged)
+    window.addEventListener('kurs:debts-changed', onChanged)
+    document.addEventListener('visibilitychange', onVisible)
     return () => {
       cancelled = true
+      window.removeEventListener('focus', onChanged)
+      window.removeEventListener('kurs:debts-changed', onChanged)
+      document.removeEventListener('visibilitychange', onVisible)
     }
-  }, [])
+  }, [currentPath])
 
   return (
     <div className={styles.shell}>

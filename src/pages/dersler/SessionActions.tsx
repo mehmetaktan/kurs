@@ -4,6 +4,7 @@ import {
   cancelSession,
   deleteSessions,
   rescheduleSession,
+  restoreCancelledSession,
   type AppError,
   type DaySessionRow,
   type DeleteReport,
@@ -41,7 +42,7 @@ export const DELETE_SCOPES: readonly {
   { value: 'all', title: tr.sessions.remove.all, hint: tr.sessions.remove.allHint },
 ]
 
-export type SessionAction = 'reschedule' | 'cancel' | 'remove'
+export type SessionAction = 'reschedule' | 'cancel' | 'restore' | 'remove'
 
 interface Props {
   action: SessionAction | null
@@ -59,10 +60,64 @@ export function SessionActions({ action, row, today, onClose, onDone }: Props) {
   if (action === 'cancel') {
     return <CancelModal row={row} onClose={onClose} onDone={onDone} />
   }
+  if (action === 'restore') {
+    return <RestoreModal row={row} onClose={onClose} onDone={onDone} />
+  }
   if (action === 'remove') {
     return <RemoveModal row={row} onClose={onClose} onDone={onDone} />
   }
   return null
+}
+
+function RestoreModal({
+  row,
+  onClose,
+  onDone,
+}: {
+  row: DaySessionRow
+  onClose: () => void
+  onDone: () => void
+}) {
+  const [error, setError] = useState<AppError | null>(null)
+  const [busy, setBusy] = useState(false)
+  const toast = useToast()
+  const submit = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      await restoreCancelledSession(row.id)
+      toast(tr.sessions.restore.done)
+      onDone()
+    } catch (caught) {
+      setError(caught as AppError)
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <Modal
+      open
+      title={tr.sessions.restore.title}
+      description={
+        row.rescheduledOnce === true
+          ? tr.sessions.restore.bodyRescheduled
+          : tr.sessions.restore.body
+      }
+      onClose={onClose}
+      actions={
+        <Button variant="primary" disabled={busy} onClick={() => void submit()}>
+          {tr.sessions.restore.confirm}
+        </Button>
+      }
+    >
+      {error && (
+        <p className={styles.formError} role="alert">
+          {error.message}
+        </p>
+      )}
+      <p className={styles.subject}>{sessionLabel(row)}</p>
+    </Modal>
+  )
 }
 
 /**

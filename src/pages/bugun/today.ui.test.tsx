@@ -4,11 +4,13 @@ import { TodayPage } from './TodayPage'
 
 const api = vi.hoisted(() => ({
   fetchLocalNow: vi.fn(),
-  fetchDaySessions: vi.fn(),
+  fetchDashboardSessions: vi.fn(),
+  fetchDashboardStudentIds: vi.fn(),
   fetchBackupStatus: vi.fn(),
   fetchHasSchedule: vi.fn(),
   fetchDebtorRows: vi.fn(),
   fetchMakeupDebts: vi.fn(),
+  fetchUpcomingPayments: vi.fn(),
   fetchReportOverview: vi.fn(),
   fetchStudentList: vi.fn(),
   createBackupNow: vi.fn(),
@@ -23,15 +25,27 @@ vi.mock('../dersler/TemplateModal', () => ({ TemplateModal: () => null }))
 beforeEach(() => {
   Object.values(api).forEach((fn) => fn.mockReset())
   api.fetchLocalNow.mockResolvedValue('2026-07-26 10:00')
-  api.fetchDaySessions.mockResolvedValue([])
+  api.fetchDashboardSessions.mockResolvedValue([])
+  api.fetchDashboardStudentIds.mockResolvedValue([4, 8, 9])
   api.fetchHasSchedule.mockResolvedValue(true)
   api.fetchDebtorRows.mockResolvedValue([
     { studentId: 4, fullName: 'İpek Şahin', guardianPhone: null, archived: false, debtKurus: 120_000, advanceKurus: 0, oldestDueOn: '2026-07-14', daysOverdue: 12 },
     { studentId: 5, fullName: 'Arşiv Borçlu', guardianPhone: null, archived: true, debtKurus: 80_000, advanceKurus: 0, oldestDueOn: '2026-07-10', daysOverdue: 16 },
   ])
   api.fetchMakeupDebts.mockResolvedValue([
-    { studentId: 8, fullName: 'Zeynep Kaya', pendingCount: 2 },
+    {
+      attendanceId: 20,
+      studentId: 8,
+      fullName: 'Zeynep Kaya',
+      subjectId: 1,
+      subjectName: 'Matematik',
+      teacherId: 2,
+      sourceStartsAt: '2026-07-26 08:00',
+      makeupSessionId: null,
+      pendingCount: 1,
+    },
   ])
+  api.fetchUpcomingPayments.mockResolvedValue([])
   api.fetchReportOverview.mockResolvedValue({
     month: '2026-07',
     collectedKurus: 300_000,
@@ -111,12 +125,12 @@ describe('Bugün borç özeti', () => {
     expect(api.fetchDebtorRows).toHaveBeenCalledWith({ search: null, filter: 'all', today: '2026-07-26' })
   })
 
-  it('bekleyen telafi borcunu öğrenci başına sayısıyla gösterir', async () => {
+  it('bekleyen telafiyi planlama eylemiyle gösterir', async () => {
     render(<TodayPage />)
 
     expect(await screen.findByText('Zeynep Kaya')).toBeTruthy()
-    expect(screen.getByText('2 bekliyor')).toBeTruthy()
-    expect(screen.getByText('2 telafi')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Telafi planla' })).toBeTruthy()
+    expect(screen.getByText('1 telafi')).toBeTruthy()
   })
 
   it('beş özet kartını ve biten paket listesini gösterip ilgili ekrana gider', async () => {
@@ -129,7 +143,7 @@ describe('Bugün borç özeti', () => {
     expect(screen.getByRole('button', { name: 'Bekleyen telafi · ilgili ekranı aç' })).toBeTruthy()
 
     fireEvent.click(
-      screen.getByRole('button', { name: 'Kursun toplam alacağı · ilgili ekranı aç' }),
+      screen.getByRole('button', { name: 'Akıştaki öğrencilerin borcu · ilgili ekranı aç' }),
     )
     expect(window.location.hash).toBe('#/odemeler')
   })
@@ -137,7 +151,7 @@ describe('Bugün borç özeti', () => {
 
 describe('Bugün yoklama girişi', () => {
   it('bitmiş dersin Yoklama al düğmesi E9 panelini açar', async () => {
-    api.fetchDaySessions.mockResolvedValue([
+    api.fetchDashboardSessions.mockResolvedValue([
       {
         id: 12,
         seriesId: null,
